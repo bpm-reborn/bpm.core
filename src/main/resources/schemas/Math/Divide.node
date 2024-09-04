@@ -1,0 +1,40 @@
+# Divide.node
+description: "Divides two values"
+group: Math
+name: Divide
+extends: Base/Node
+
+theme:
+  color: '#167933'
+  width: 140
+  height: 60
+  icon: 0xe55f
+edges:
+  value_a:
+    description: 'The numerator'
+    direction: input
+    type: number
+    value:
+      type: float
+      min: -100
+      max: 100
+      default: 1
+  value_b:
+    description: 'The denominator'
+    direction: input
+    type: number
+    value:
+      type: float
+      min: -100
+      max: 100
+      default: 1
+  result:
+    description: 'The result of the division'
+    direction: output
+    type: number
+
+source: |
+  if value_b == 0 then
+    error("Division by zero")
+  end
+  return value_a / value_b

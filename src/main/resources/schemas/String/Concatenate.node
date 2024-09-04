@@ -1,0 +1,33 @@
+# Concatenate.node
+description: "Concatenates two strings"
+group: String
+name: Concatenate
+extends: Base/Node
+
+theme:
+  color: '#3366cc'
+  width: 160
+  height: 60
+  icon: 0xe55f
+edges:
+  string_a:
+    description: 'The first string'
+    direction: input
+    type: string
+    value:
+      type: string
+      default: ""
+  string_b:
+    description: 'The second string'
+    direction: input
+    type: string
+    value:
+      type: string
+      default: ""
+  result:
+    description: 'The concatenated string'
+    direction: output
+    type: string
+
+source: |
+  return string_a .. string_b

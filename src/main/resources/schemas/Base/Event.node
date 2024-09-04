@@ -1,0 +1,15 @@
+description: 'The base node for all nodes that can be used in a workflow.'
+group: Base
+name: Event
+
+theme:
+  color: '#db8d27'
+  width: 120
+  height: 40
+  icon: 0xf6e3
+
+edges:
+  exec_out:
+    description: 'The output of the execution.'
+    type: exec
+    direction: output

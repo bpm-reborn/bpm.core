@@ -1,0 +1,10 @@
+# Concatenate.node
+description: "A literal value"
+group: Base
+name: Literal
+
+theme:
+  color: '#3366cc'
+  icon: 0xf658
+  height: 40
+  width: 120

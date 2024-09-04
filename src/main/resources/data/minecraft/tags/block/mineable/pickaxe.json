@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "bpm:ender_pipe_controller",
+    "bpm:ender_pipe",
+    "bpm:ender_pipe_proxy"
+  ]
+}

@@ -1,0 +1,40 @@
+# Print.node
+description: "Prints a message to the console."
+group: Actions
+name: Conditional
+extends: Base/Node
+
+theme:
+  color: '#f4d93d'
+  height: 60
+  width: 120
+  icon: 0xf0e8
+
+edges:
+  condition:
+    description: 'The condition to check'
+    direction: input
+    type: boolean
+    value:
+      type: boolean
+      default: false
+  exec_in:
+    description: 'The input execution flow'
+    direction: input
+    type: exec
+  true:
+    description: 'The action to take if the condition is true'
+    direction: output
+    type: exec
+  false:
+    description: 'The action to take if the condition is false'
+    direction: output
+    type: exec
+
+
+source: |
+  if condition then
+    ${EXEC.true}
+  else
+    ${EXEC.false}
+  end

@@ -1,0 +1,28 @@
+# EqualTo.node
+description: "Compares if two values are equal"
+group: Logic
+name: EqualTo
+extends: Base/Node
+
+theme:
+  color: '#6b4c9a'
+  width: 140
+  height: 60
+  icon: 0x003d
+
+edges:
+  value_a:
+    description: 'The first value to compare'
+    direction: input
+    type: any
+  value_b:
+    description: 'The second value to compare'
+    direction: input
+    type: any
+  result:
+    description: 'The result of the comparison'
+    direction: output
+    type: boolean
+
+source: |
+  return value_a == value_b

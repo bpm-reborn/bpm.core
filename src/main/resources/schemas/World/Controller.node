@@ -1,0 +1,26 @@
+description: "Gets the controller block for this workspace"
+group: World
+name: Controller Position
+extends: Base/Node
+
+theme:
+  color: '#3af721'
+  height: 40
+  width: 120
+  icon: 0xf0e7
+edges:
+  location:
+    description: 'The block position'
+    direction: output
+    type: vec3i
+source: |
+  local vector = {
+    x = 0,
+    y = 0,
+    z = 0
+  }
+  local block = Network:getControllerPosition(_Uid)
+  vector.x = block:getX()
+  vector.y = block:getY()
+  vector.z = block:getZ()
+  return vector

@@ -1,0 +1,24 @@
+description: "Get the redstone value at a given location."
+group: Redstone
+name: Get Redstone Value
+extends: Base/Node
+
+theme:
+  color: '#292721'
+  height: 60
+  width: 100
+  icon: 0xf27a
+
+
+edges:
+  location:
+    description: 'The block position'
+    direction: input
+    type: vec3i
+  result:
+    description: 'The redstone value at the given position'
+    direction: output
+    type: number
+
+source: |
+  return World:signalAt(value.x, value.y, value.z)

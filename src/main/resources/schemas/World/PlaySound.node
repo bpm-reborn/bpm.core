@@ -1,0 +1,56 @@
+description: "Plays a sound at the given location"
+group: World
+name: Play Sound
+extends: Base/Node
+
+theme:
+  color: '#292721'
+  height: 60
+  width: 120
+  icon: 0xf27a
+
+edges:
+  exec_in:
+    description: 'Spawn a particle at the given location'
+    direction: input
+    type: exec
+  location:
+    description: 'The location to spawn the particle'
+    direction: input
+    type: vec3f or vec3i
+  soundName:
+    description: 'The sound to play'
+    direction: input
+    type: string
+    value:
+      type: string
+      default: 'block.note_block.harp'
+  volume:
+    description: 'The volume of the sound'
+    direction: input
+    type: number
+    value:
+      type: float
+      default: 1.0
+  pitch:
+    description: 'The pitch of the sound'
+    direction: input
+    type: number
+    value:
+      type: float
+      default: 0
+  exec_out:
+    description: 'Called when the sound is played'
+    direction: output
+    type: exec
+
+source: |
+  local x = location.x + 0.0
+  local y = location.y + 0.0
+  local z = location.z + 0.0
+
+  local type = soundName or 'block.note_block.harp'
+  local volume = count or 1.0
+  local pitch = spread or 0.0
+  World:playSoundAt(x, y, z, type, volume, pitch)
+  ${EXEC.exec_out}

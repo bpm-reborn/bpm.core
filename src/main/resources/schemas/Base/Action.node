@@ -1,0 +1,20 @@
+description: 'The action node represents a single action that can be executed.'
+group: Base
+name: Action
+extends: Base/Node
+
+theme:
+  color: '#a22ac9'
+  width: 120
+  height: 40
+  icon: 0x0021
+
+edges:
+  exec_in:
+    description: 'The action flow input.'
+    type: exec
+    direction: input
+  exec_out:
+    description: 'The action flow output.'
+    type: exec
+    direction: output

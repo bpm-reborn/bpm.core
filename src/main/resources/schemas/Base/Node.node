@@ -1,0 +1,8 @@
+description: 'The base node for all nodes that can be used in a workflow.'
+group: Base
+name: Node
+
+theme:
+  color: '#946ee0'
+  width: 120
+  height: 80

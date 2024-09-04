@@ -1,0 +1,37 @@
+# Add.node
+description: "Adds two values together"
+group: Math
+name: Add
+extends: Base/Node
+
+theme:
+  color: '#167933'
+  width: 140
+  height: 60
+  icon: 0xe55f
+edges:
+  value_a:
+    description: 'The first value to add'
+    direction: input
+    type: number
+    value:
+      type: float
+      min: -100
+      max: 100
+      default: 0
+  value_b:
+    description: 'The second value to add'
+    direction: input
+    type: number
+    value:
+      type: float
+      min: -100
+      max: 100
+      default: 0
+  result:
+    description: 'The result of the addition'
+    direction: output
+    type: number
+
+source: |
+  return value_a + value_b

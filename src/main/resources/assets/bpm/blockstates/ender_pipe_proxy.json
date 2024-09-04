@@ -1,0 +1,28 @@
+{
+  "multipart": [
+    {
+      "when": { "north": "true" },
+      "apply": { "model": "bpm:block/ender_pipe_proxy", "y": 180 }
+    },
+    {
+      "when": { "east": "true" },
+      "apply": { "model": "bpm:block/ender_pipe_proxy", "y": 270 }
+    },
+    {
+      "when": { "south": "true" },
+      "apply": { "model": "bpm:block/ender_pipe_proxy" }
+    },
+    {
+      "when": { "west": "true" },
+      "apply": { "model": "bpm:block/ender_pipe_proxy", "y": 90 }
+    },
+    {
+      "when": { "up": "true" },
+      "apply": { "model": "bpm:block/ender_pipe_proxy", "x": 90 }
+    },
+    {
+      "when": { "down": "true" },
+      "apply": { "model": "bpm:block/ender_pipe_proxy", "x": 270 }
+    }
+  ]
+}

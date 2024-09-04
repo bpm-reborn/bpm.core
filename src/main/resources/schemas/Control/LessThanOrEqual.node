@@ -1,0 +1,28 @@
+# LessThan.node
+description: "Checks if the first value is less than or equal to the second value"
+group: Logic
+name: Less Than Or Equal
+extends: Base/Node
+
+theme:
+  color: '#6b4c9a'
+  width: 140
+  height: 60
+  icon: 0x003e
+
+edges:
+  ValueA:
+    description: 'The first value to compare'
+    direction: input
+    type: number
+  ValueB:
+    description: 'The second value to compare'
+    direction: input
+    type: number
+  Result:
+    description: 'The result of the comparison'
+    direction: output
+    type: boolean
+
+source: |
+  return ValueA < ValueB or ValueA == ValueB

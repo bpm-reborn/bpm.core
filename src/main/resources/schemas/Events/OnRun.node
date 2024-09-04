@@ -1,0 +1,21 @@
+# OnRun.node
+description: "Called once after compilation."
+group: Events
+name: Run
+extends: Base/Node
+theme:
+  color: '#f46ee0'
+  width: 69
+  height: 40
+  icon: 0xf471
+edges:
+  exec_out:
+    description: 'The output execution flow'
+    direction: output
+    type: exec
+
+source: |
+  ${SETUP.{
+    java.import('java.lang.System').out:println('Hello, World!')
+  }}
+  ${EXEC.exec_out}

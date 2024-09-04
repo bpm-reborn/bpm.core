@@ -1,0 +1,37 @@
+# RandomInt.node
+description: "Generates a random number within a specified range"
+group: Random
+name: RNG Int
+extends: Base/Node
+
+theme:
+  color: '#167933'
+  width: 120
+  height: 60
+  icon: 0xe55f
+edges:
+  min:
+    description: 'The minimum value (inclusive)'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: 0
+  max:
+    description: 'The maximum value (inclusive)'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: 1
+  result:
+    description: 'The generated random number'
+    direction: output
+    type: number
+
+source: |
+  ${SETUP.{
+      -- Initialize the random number generator
+      math.randomseed(os.time())
+  }}
+  return min + math.random() * (max - min)

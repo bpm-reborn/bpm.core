@@ -1,0 +1,20 @@
+description: "A number literal. Int or float."
+group: Literals
+name: Float
+extends: Base/Literal
+
+edges:
+  value:
+    description: 'The number'
+    direction: input
+    type: number
+    value:
+      type: float
+      default: 0.0
+  result:
+    description: 'the number'
+    direction: output
+    type: number
+
+source: |
+  return value

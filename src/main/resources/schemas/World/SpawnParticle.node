@@ -1,0 +1,64 @@
+description: "The redstone value at the given position."
+group: Redstone
+name: Spawn Particle
+extends: Base/Node
+
+theme:
+  color: '#292721'
+  height: 60
+  width: 120
+  icon: 0xf27a
+
+edges:
+  exec_in:
+    description: 'Spawn a particle at the given location'
+    direction: input
+    type: exec
+  location:
+    description: 'The location to spawn the particle'
+    direction: input
+    type: vec3f or vec3i
+  type:
+    description: 'The type of particle to spawn'
+    direction: input
+    type: string
+    value:
+      type: string
+      default: 'dust'
+  count:
+    description: 'The number of particles to spawn'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: 1
+  velocity:
+    description: 'The velocity of the particle'
+    direction: input
+    type: vec3f or vec3i
+  spread:
+    description: 'The spread of the particle'
+    direction: input
+    type: number
+    value:
+      type: float
+      default: 0
+  exec_out:
+    description: 'The redstone value at the given position'
+    direction: output
+    type: exec
+
+source: |
+  local x = location.x + 0.0
+  local y = location.y + 0.0
+  local z = location.z + 0.0
+
+  local type = type or 'dust'
+  local vel = velocity or {x = 0.0, y = 0.0, z = 0.0}
+  local count = count or 1
+  local velX = vel.x + 0.0
+  local velY = vel.y + 0.0
+  local velZ = vel.z + 0.0
+  local spread = spread or 0.0
+  World:spawnParticle(x, y, z, count, velX, velY, velZ, spread, type)
+  ${EXEC.exec_out}

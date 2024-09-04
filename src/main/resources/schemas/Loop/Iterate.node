@@ -1,0 +1,43 @@
+description: "Iterates over a given list of values"
+group: Control
+name: Iterate
+extends: Base/Node
+
+
+theme:
+  color: '#f4d93d'
+  height: 80
+  width: 140
+  icon: 0x21bb
+
+edges:
+  exec_in:
+    description: 'The input execution flow'
+    direction: input
+    type: exec
+  exec_out:
+    description: 'The output execution flow after the loop ends'
+    direction: output
+    type: exec
+  body:
+    description: 'The output execution flow after the loop ends'
+    direction: output
+    type: exec
+  var:
+    description: 'The var'
+    direction: input
+    type: string
+    value:
+      type: string
+      default: value
+  list:
+    description: 'The list to iterate over'
+    direction: input
+    type: list
+
+source: |
+  for i, value in ipairs(list) do
+      variables[var] = i
+      ${EXEC.exec_out}
+  end
+  ${EXEC.body}

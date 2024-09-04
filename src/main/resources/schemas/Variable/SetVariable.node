@@ -1,0 +1,35 @@
+description: "Sets the value of a variable."
+group: Variables
+name: Set Variable
+extends: Base/Node
+
+theme:
+  color: '#2C4687'
+  height: 80
+  width: 120
+  icon: 0xf557
+
+edges:
+  exec_in:
+    description: 'The trigger to execute the action.'
+    direction: input
+    type: exec
+  value:
+    description: 'The value to set the variable to.'
+    direction: input
+    type: any
+  name:
+    type: string
+    description: 'The name of the variable to retrieve.'
+    direction: input
+    value:
+      default: ''
+      type: string
+  exec_out:
+    description: 'The retrieved value of the variable.'
+    direction: output
+    type: exec
+
+source: |
+  variables[name] = value
+  ${EXEC.exec_out}

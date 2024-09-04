@@ -1,0 +1,37 @@
+# Multiply.node
+description: "Multiplies two values together"
+group: Math
+name: Multiply
+extends: Base/Node
+
+theme:
+  color: '#167933'
+  width: 140
+  height: 60
+  icon: 0xe55f
+edges:
+  value_a:
+    description: 'The first value to multiply'
+    direction: input
+    type: number
+    value:
+      type: float
+      min: -100
+      max: 100
+      default: 1
+  value_b:
+    description: 'The second value to multiply'
+    direction: input
+    type: number
+    value:
+      type: float
+      min: -100
+      max: 100
+      default: 1
+  result:
+    description: 'The result of the multiplication'
+    direction: output
+    type: number
+
+source: |
+  return value_a * value_b

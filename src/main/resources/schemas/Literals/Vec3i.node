@@ -1,0 +1,35 @@
+description: "A literal for a 3D integer vector."
+group: Literals
+name: Vec3i
+extends: Base/Literal
+
+edges:
+  x:
+    description: 'The vector z value'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: 0
+  y:
+    description: 'The vector y value'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: 0
+  z:
+    description: 'The vector x value'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: 0
+  result:
+    description: 'The vector 3 value'
+    direction: output
+    # TODO: This should be a vector3 type
+    type: vec3i
+
+source: |
+  return {x = x, y = y, z = z}

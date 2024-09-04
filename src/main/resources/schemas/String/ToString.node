@@ -1,0 +1,54 @@
+# Concatenate.node
+description: "Concatenates two strings"
+group: String
+name: To String
+extends: Base/Node
+
+theme:
+  color: '#3366cc'
+  icon: 0xf658
+  height: 40
+  width: 100
+edges:
+  value:
+    description: 'The value'
+    direction: input
+    type: any
+  result:
+    description: 'The string'
+    direction: output
+    type: string
+
+source: |
+  
+  local function dump(o, indent)
+    if type(o) ~= 'table' then
+      return tostring(o)
+    end
+  
+    indent = indent or ""
+    local inner_indent = indent .. "  "
+    local parts = {}
+    local is_array = #o > 0  -- Check if the table is array-like
+    local i = 1
+  
+    for k, v in pairs(o) do
+      local part = inner_indent
+      if is_array and type(k) == 'number' and k == i then
+        -- For array-like tables, just output the value
+        part = part .. dump(v, inner_indent)
+        i = i + 1
+      else
+        -- For associative tables or mixed tables, output the key
+        if type(k) ~= 'number' then
+          k = string.format("%q", k)  -- Properly quote string keys
+        end
+        part = part .. "[" .. k .. "] = " .. dump(v, inner_indent)
+      end
+      table.insert(parts, part)
+    end
+  
+    return "{\n" .. table.concat(parts, ",\n") .. "\n" .. indent .. "}"
+  end
+
+  return dump(value)

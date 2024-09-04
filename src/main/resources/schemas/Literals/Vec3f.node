@@ -1,0 +1,35 @@
+description: "A literal for a 3D float vector."
+group: Literals
+name: Vec3f
+extends: Base/Literal
+
+edges:
+  x:
+    description: 'The vector value'
+    direction: input
+    type: number
+    value:
+      type: float
+      default: 0
+  y:
+    description: 'The vector value'
+    direction: input
+    type: number
+    value:
+      type: float
+      default: 0
+  z:
+    description: 'The vector value'
+    direction: input
+    type: number
+    value:
+      type: float
+      default: 0
+  result:
+    description: 'The integer value'
+    direction: output
+    # TODO: This should be a vector3 type
+    type: vec3f
+
+source: |
+  return {x = x, y = y, z = z}

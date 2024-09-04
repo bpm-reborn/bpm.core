@@ -1,0 +1,65 @@
+{
+  "multipart": [
+    {
+      "apply": { "model": "bpm:block/ender_pipe_controller" }
+    },
+    {
+      "when": { "north": "false", "east": "false", "south": "false", "west": "false", "up": "true", "down": "false" },
+      "apply": { "model": "bpm:block/ender_pipe_edge", "x": 270 }
+    },
+    {
+      "when": { "north": "false", "east": "false", "south": "false", "west": "false", "up": "false", "down": "true" },
+      "apply": { "model": "bpm:block/ender_pipe_edge", "x": 90 }
+    },
+    {
+      "when": { "north": "true", "east": "false", "south": "false", "west": "false", "up": "false", "down": "false" },
+      "apply": { "model": "bpm:block/ender_pipe_edge", "y": 180 }
+    },
+    {
+      "when": { "north": "false", "east": "true", "south": "false", "west": "false", "up": "false", "down": "false" },
+      "apply": { "model": "bpm:block/ender_pipe_edge", "y": 270 }
+    },
+    {
+      "when": { "north": "false", "east": "false", "south": "true", "west": "false", "up": "false", "down": "false" },
+      "apply": { "model": "bpm:block/ender_pipe_edge", "y": 0 }
+    },
+    {
+      "when": { "north": "false", "east": "false", "south": "false", "west": "true", "up": "false", "down": "false" },
+      "apply": { "model": "bpm:block/ender_pipe_edge", "y": 90 }
+    },
+    { "when": { "up": "true" }, "apply": { "model": "bpm:block/ender_pipe_vertical" }},
+    { "when": { "down": "true" }, "apply": { "model": "bpm:block/ender_pipe_vertical", "x": 180 }},
+    { "when": { "north": "true" }, "apply": { "model": "bpm:block/ender_pipe_horizontal" }},
+    { "when": { "east": "true" }, "apply": { "model": "bpm:block/ender_pipe_horizontal", "y": 90 }},
+    { "when": { "south": "true" }, "apply": { "model": "bpm:block/ender_pipe_horizontal", "y": 180 }},
+    { "when": { "west": "true" }, "apply": { "model": "bpm:block/ender_pipe_horizontal", "y": 270 }},
+    {
+      "when": { "OR": [
+        { "north": "true", "east": "true", "south": "false", "west": "false" },
+        { "north": "true", "east": "true", "south": "false", "west": "false", "up": "false", "down": "false" }
+      ]},
+      "apply": { "model": "bpm:block/ender_pipe_corner" }
+    },
+    {
+      "when": { "OR": [
+        { "south": "true", "east": "true", "north": "false", "west": "false" },
+        { "south": "true", "east": "true", "north": "false", "west": "false", "up": "false", "down": "false" }
+      ]},
+      "apply": { "model": "bpm:block/ender_pipe_corner", "y": 90 }
+    },
+    {
+      "when": { "OR": [
+        { "south": "true", "west": "true", "north": "false", "east": "false" },
+        { "south": "true", "west": "true", "north": "false", "east": "false", "up": "false", "down": "false" }
+      ]},
+      "apply": { "model": "bpm:block/ender_pipe_corner", "y": 180 }
+    },
+    {
+      "when": { "OR": [
+        { "north": "true", "west": "true", "south": "false", "east": "false" },
+        { "north": "true", "west": "true", "south": "false", "east": "false", "up": "false", "down": "false" }
+      ]},
+      "apply": { "model": "bpm:block/ender_pipe_corner", "y": 270 }
+    }
+  ]
+}

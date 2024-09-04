@@ -1,0 +1,38 @@
+# Loop.node
+description: "Executes a block of nodes repeatedly while a condition is true"
+group: Flow
+name: Loop
+extends: Base/Node
+
+theme:
+  color: '#f4d93d'
+  height: 80
+  width: 140
+  icon: 0x21bb
+
+edges:
+  exec_in:
+    description: 'The input execution flow'
+    direction: input
+    type: exec
+  condition:
+    description: 'The condition to check before each iteration'
+    direction: input
+    type: boolean
+  body:
+    description: 'The body of the loop to execute'
+    direction: output
+    type: exec
+  exec_out:
+    description: 'The output execution flow after the loop ends'
+    direction: output
+    type: exec
+
+source: |
+  local function ${NODE.name}_${NODE.uid}(condition)
+    local cond = ${LAMBDA.condition}
+    while cond() do
+      ${EXEC.body}
+    end
+    ${EXEC.exec_out}
+  end

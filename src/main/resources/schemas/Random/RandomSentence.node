@@ -1,0 +1,21 @@
+# RandomFloat.node
+description: "Generates a random sentence."
+group: Random
+name: RNG Sentence
+extends: Base/Node
+
+theme:
+  color: '#213752'
+  width: 120
+  height: 40
+  icon: 0xe55f
+edges:
+  result:
+    description: 'The generated random word'
+    direction: output
+    type: string
+source: |
+  ${SETUP.{
+      variables.__Random__ = java.import('noderspace.common.utils.Random')
+  }}
+  return variables.__Random__:randomSentence()

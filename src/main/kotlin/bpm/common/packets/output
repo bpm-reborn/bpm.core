@@ -1,0 +1,51 @@
+Compiled Lua script: -- Initialize Variables
+local variables = {
+  test = "",
+  Count = 0,
+}
+
+-- Setup
+local function setup()
+
+  math.randomseed(os.time())
+
+  java.import('java.lang.System').out:println('Hello, World!')
+
+end
+
+-- Function Declarations
+local String_4d6d5dd8_7fbb_4a89_83cd_bcac7c6c9226
+local Notify_edf45a03_eeb0_4e0a_8da1_0eb0b67bf722
+local Run_ebfc34ca_b01a_4d1a_aba2_e02085f26014
+
+-- Function Implementations
+-- Node: String (4d6d5dd8-7fbb-4a89-83cd-bcac7c6c9226)
+String_4d6d5dd8_7fbb_4a89_83cd_bcac7c6c9226 = function(value)
+
+return value
+
+end
+
+-- Node: Notify (edf45a03-eeb0-4e0a-8da1-0eb0b67bf722)
+Notify_edf45a03_eeb0_4e0a_8da1_0eb0b67bf722 = function(value)
+
+local _Notify = java.import('bpm.server.lua.Notify')
+_Notify:info(value)
+
+end
+
+-- Node: Run (ebfc34ca-b01a-4d1a-aba2-e02085f26014)
+Run_ebfc34ca_b01a_4d1a_aba2_e02085f26014 = function()
+
+
+Notify_edf45a03_eeb0_4e0a_8da1_0eb0b67bf722(String_4d6d5dd8_7fbb_4a89_83cd_bcac7c6c9226("sasf"))
+
+end
+
+-- Main Execution
+setup()
+return {
+  Run = {
+    Run_ebfc34ca_b01a_4d1a_aba2_e02085f26014
+    },
+  }

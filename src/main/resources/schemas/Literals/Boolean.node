@@ -1,0 +1,26 @@
+description: "A boolean literal. Int or float."
+group: Literals
+name: Boolean
+extends: Base/Literal
+
+theme:
+  color: '#3366cc'
+  icon: 0xf658
+  height: 40
+  width: 100
+
+edges:
+  value:
+    description: 'The boolean'
+    direction: input
+    type: boolean
+    value:
+      type: boolean
+      default: 0
+  result:
+    description: 'the boolean'
+    direction: output
+    type: boolean
+
+source: |
+  return value

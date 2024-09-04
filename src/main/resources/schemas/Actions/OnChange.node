@@ -1,0 +1,30 @@
+description: "Checks if the value has changed and executes the output flow if so."
+group: Actions
+name: On Change
+extends: Base/Node
+
+theme:
+  color: '#292721'
+  height: 60
+  width: 80
+  icon: 0xf27a
+edges:
+  exec_in:
+    description: 'The input execution flow'
+    direction: input
+    type: exec
+  value:
+    description: 'The value to detect change for'
+    direction: input
+    type: any
+  exec_out:
+    description: 'The output execution flow'
+    direction: output
+    type: exec
+
+source: |
+  local lastValue = variables["${NODE.name}_${NODE.uid}"] or nil
+  if lastValue ~= value then
+    variables["${NODE.name}_${NODE.uid}"] = value
+    ${EXEC.exec_out}
+  end

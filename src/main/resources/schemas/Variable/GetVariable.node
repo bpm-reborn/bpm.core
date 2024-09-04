@@ -1,0 +1,26 @@
+description: "Gets the value of a variable."
+group: Variables
+name: Get Variable
+extends: Base/Node
+
+theme:
+  color: '#2C4687'
+  height: 40
+  width: 120
+  icon: 0xf557
+
+edges:
+  name:
+    type: string
+    description: 'The name of the variable to retrieve.'
+    direction: input
+    value:
+      default: ''
+      type: string
+  value:
+    description: 'The retrieved value of the variable.'
+    direction: output
+    type: any
+
+source: |
+  return variables[name]

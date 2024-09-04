@@ -1,0 +1,20 @@
+description: "A string literal. Raw text."
+group: Literals
+name: String
+extends: Base/Literal
+
+edges:
+  value:
+    description: 'The string'
+    direction: input
+    type: string
+    value:
+      type: string
+      default: ""
+  result:
+    description: 'The string'
+    direction: output
+    type: string
+
+source: |
+  return value

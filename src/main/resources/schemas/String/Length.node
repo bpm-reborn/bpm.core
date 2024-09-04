@@ -1,0 +1,25 @@
+description: "Returns the length of a string"
+group: String
+name: Length
+extends: Base/Node
+
+theme:
+  color: '#3366cc'
+  width: 140
+  height: 40
+  icon: 0xe55f
+edges:
+  string:
+    description: 'The string to measure'
+    direction: input
+    type: string
+    value:
+      type: string
+      default: ""
+  result:
+    description: 'The length of the string'
+    direction: output
+    type: number
+source: |
+  local str = tostring(string) or ""
+  return string.len(str)

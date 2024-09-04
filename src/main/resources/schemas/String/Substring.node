@@ -1,0 +1,45 @@
+description: "Returns a substring of a string. If the length is negative, the substring will go to the end of the string."
+group: String
+name: Substring
+extends: Base/Node
+
+theme:
+  color: '#3366cc'
+  width: 140
+  height: 80
+  icon: 0xe55f
+edges:
+  string:
+    description: 'The string to measure'
+    direction: input
+    type: string
+    value:
+      type: string
+      default: ""
+  start:
+    description: 'The starting index of the substring'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: 1
+  length:
+    description: 'The length of the substring'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: -1
+
+  result:
+    description: 'The length of the string'
+    direction: output
+    type: number
+source: |
+  local function ${NODE.name}_${NODE.uid}(string, start, length)
+    local str = tostring(string) or ""
+    if length < 0 then
+      return string.sub(str, start)
+    end
+    return string.sub(str, start, start + length - 1)
+  end

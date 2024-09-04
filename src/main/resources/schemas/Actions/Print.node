@@ -1,0 +1,32 @@
+# Print.node
+description: "Prints a message to the console."
+group: Actions
+name: Print
+extends: Base/Node
+
+theme:
+  color: '#292721'
+  height: 60
+  width: 100
+
+edges:
+  exec_in:
+    description: 'The input execution flow'
+    direction: input
+    type: exec
+  value:
+    description: 'The message to print.'
+    direction: input
+    type: any
+  exec_out:
+    description: 'The output execution flow'
+    direction: output
+    type: exec
+
+source: |
+  local _Print = java.import('java.lang.System').out
+  local function ${NODE.name}_${NODE.uid}(value)
+    -- print(value)
+    _Print:println(value)
+    ${EXEC.exec_out}
+  end
