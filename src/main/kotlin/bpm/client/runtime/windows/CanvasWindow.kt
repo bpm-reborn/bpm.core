@@ -129,18 +129,20 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         canvasCtx.updateHoverState(Vector2f(mousePos.x, mousePos.y))
         ImGui.setMouseCursor(canvasCtx.getHoverCursor())
 
+        //println(workspace.needsRecompile)
+
         renderButton(bounds.z - 50f, bounds.y + 20f, FontAwesome.Play, fontSize = 25f, width = 30f, height = 30f) {
             runtime.compile(workspace)
         }
 
-        renderButton(bounds.z - 50f, bounds.y + 60f, FontAwesome.Reply, fontSize = 25f, width = 30f, height = 30f) {
+        renderButton(bounds.z - 50f, bounds.y + 60f, FontAwesome.Rotate, fontSize = 25f, width = 30f, height = 30f) {
             runtime.reloadNodeLibrary()
         }
 
         renderButton(
             bounds.z - 50f,
             bounds.y + 100f,
-            FontAwesome.AlignCenter,
+            FontAwesome.Crosshairs,
             fontSize = 25f,
             width = 30f,
             height = 30f
@@ -1375,7 +1377,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
             val zoomDelta = mouseWheel * 0.10f
             canvasCtx.zoom += zoomDelta
             canvasCtx.zoom = canvasCtx.zoom.coerceIn(0.5f, 2f)
-            println(canvasCtx.zoom)
+            //println(canvasCtx.zoom)
         }
 
 //        if (ImGui.isMouseClicked(ImGuiMouseButton.Right)) {

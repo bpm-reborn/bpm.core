@@ -1,5 +1,7 @@
 {
   "block.bpm.ender_pipe_controller": "Ender Controller",
   "block.bpm.ender_pipe": "Ender Pipe",
-  "block.bpm.ender_pipe_proxy": "Ender Proxy"
+  "block.bpm.ender_pipe_proxy": "Ender Proxy",
+
+  "tab.bpm.title": "BPM"
 }

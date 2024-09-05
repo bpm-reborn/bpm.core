@@ -18,11 +18,18 @@ edges:
     description: 'The message to print.'
     direction: input
     type: string
+  time:
+    description: 'The message to print.'
+    direction: input
+    type: number
+    value:
+      type: float
+      default: 1
   exec_out:
     description: 'The output execution flow'
     direction: output
     type: exec
 
 source: |
-  Notify:info(value)
+  Notify:info(value, time)
   ${EXEC.exec_out}

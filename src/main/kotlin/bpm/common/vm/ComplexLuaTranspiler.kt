@@ -169,18 +169,12 @@ object ComplexLuaTranspiler {
 
     private class IRGenerator {
 
-
-        private fun identifierOnlyString(string: String): String {
-            return string.replace(Regex("[^a-zA-Z0-9_]"), "_")
-        }
-
         fun generate(ast: AST, workspace: Workspace): IR {
             val ir = IR()
 
             // Process variables
             workspace.graph.variables.forEach { (name, property) ->
-                val cleanName = identifierOnlyString(name)
-                ir.variables[cleanName] = when (property) {
+                ir.variables[name] = when (property) {
                     is Property.String -> IRValue.String(multiLineString(property.get()))
                     is Property.Int -> IRValue.Int(property.get())
                     is Property.Float -> IRValue.Float(property.get())
@@ -515,7 +509,7 @@ object ComplexLuaTranspiler {
         private fun generateValue(value: IRValue): String {
             return when (value) {
                 //No need to wrap in braces because it's handled by the multiLineString function
-                is IRValue.String -> multiLineString(value.value.removePrefix("\"").removeSuffix("\""))
+                is IRValue.String -> value.value
                 is IRValue.Int -> value.value.toString()
                 is IRValue.Float -> value.value.toString()
                 is IRValue.Boolean -> value.value.toString()
@@ -524,23 +518,6 @@ object ComplexLuaTranspiler {
         }
 
         private fun sanitizeName(name: String): String = name.replace(Regex("[^a-zA-Z0-9_]"), "_")
-
-
-        private fun multiLineString(input: String): String {
-            if (!input.contains("]]")) {
-                return "[[$input]]"
-            }
-
-            // Find the maximum number of '=' signs in a row within the input
-            val maxEquals = input.split("]").maxOfOrNull { it.count { c -> c == '=' } } ?: 0
-
-            // Use one more '=' than the maximum found to ensure unique delimiters
-            val equalsCount = maxEquals + 1
-            val openDelimiter = "[" + "=".repeat(equalsCount) + "["
-            val closeDelimiter = "]" + "=".repeat(equalsCount) + "]"
-
-            return "$openDelimiter$input$closeDelimiter"
-        }
     }
     // Data classes and enums
     data class Token(val type: TokenType, val value: String)

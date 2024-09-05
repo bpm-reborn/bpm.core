@@ -202,9 +202,8 @@ class Bootstrap(
         copySchemas()
         LOGGER.log(Level.INFO, "Scanning for classes...")
         val gameDir = FMLPaths.GAMEDIR.get()
-//        val schemasPath = gameDir.resolve("schemas")
-        val schemasPath = Path.of("D:\\meng.core\\src\\main\\resources\\schemas")
-//        val schemasPath = Path.of("/Users/jamesraynor/Documents/bpm-dev/src/main/resources/schemas")
+        //val schemasPath = gameDir.resolve("schemas")
+        val schemasPath = Path.of("U:\\Dev\\minecraft\\modding\\mods\\bpm\\src\\main\\resources\\schemas")//gameDir.resolve("schemas")
         if (!schemasPath.toFile().exists()) {
             schemasPath.toFile().mkdir()
         }
