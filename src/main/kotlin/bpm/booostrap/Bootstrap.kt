@@ -203,8 +203,8 @@ class Bootstrap(
         LOGGER.log(Level.INFO, "Scanning for classes...")
         val gameDir = FMLPaths.GAMEDIR.get()
 //        val schemasPath = gameDir.resolve("schemas")
-//        val schemasPath = Path.of("C:\\Users\\jraynor\\IdeaProjects\\bpm-dev\\src\\main\\resources\\schemas")
-        val schemasPath = Path.of("/Users/jamesraynor/Documents/bpm-dev/src/main/resources/schemas")
+        val schemasPath = Path.of("D:\\meng.core\\src\\main\\resources\\schemas")
+//        val schemasPath = Path.of("/Users/jamesraynor/Documents/bpm-dev/src/main/resources/schemas")
         if (!schemasPath.toFile().exists()) {
             schemasPath.toFile().mkdir()
         }

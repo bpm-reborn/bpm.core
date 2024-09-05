@@ -169,12 +169,18 @@ object ComplexLuaTranspiler {
 
     private class IRGenerator {
 
+
+        private fun identifierOnlyString(string: String): String {
+            return string.replace(Regex("[^a-zA-Z0-9_]"), "_")
+        }
+
         fun generate(ast: AST, workspace: Workspace): IR {
             val ir = IR()
 
             // Process variables
             workspace.graph.variables.forEach { (name, property) ->
-                ir.variables[name] = when (property) {
+                val cleanName = identifierOnlyString(name)
+                ir.variables[cleanName] = when (property) {
                     is Property.String -> IRValue.String(multiLineString(property.get()))
                     is Property.Int -> IRValue.Int(property.get())
                     is Property.Float -> IRValue.Float(property.get())
@@ -196,8 +202,21 @@ object ComplexLuaTranspiler {
             return ir
         }
 
-
-
+        private fun multiLineString(input: String): String {
+            val lines = input.split("\n")
+            return if (lines.size > 1) {
+                val formattedLines = lines.mapIndexed { index, line ->
+                    if (index == lines.lastIndex) {
+                        "\"$line\""
+                    } else {
+                        "\"$line\\n\" .."
+                    }
+                }
+                formattedLines.joinToString("\n    ")
+            } else {
+                "\"$input\""
+            }
+        }
 
 
         private fun getTargetNodes(workspace: Workspace, edge: Edge): List<Node> {
@@ -317,21 +336,10 @@ object ComplexLuaTranspiler {
             codeBuilder.append("-- Initialize Variables\n")
             codeBuilder.append("local variables = {\n")
             ir.variables.forEach { (name, value) ->
-                val sanitizedName = sanitizeName(name)
-                val sanitizedValue = when (value) {
-                    is IRValue.String -> generateValue(value)
-                    else -> generateValue(value)
-                }
-                codeBuilder.append("$indent$sanitizedName = $sanitizedValue,\n")
+                codeBuilder.append("$indent$name = ${generateValue(value)},\n")
             }
             codeBuilder.append("}\n\n")
         }
-
-
-//        private fun generateMultiLineString(input: String): String {
-//            val lines = input.split("\n")
-//        }
-
 
         private fun generateSetupFunction(ir: IR, codeBuilder: StringBuilder) {
             codeBuilder.append("-- Setup\n")
@@ -371,25 +379,24 @@ object ComplexLuaTranspiler {
                 if (sourceNode != null) {
                     generateNodeCall(sourceNode)
                 } else {
-                    sanitizeValue(getDefaultValue(inputEdge))
+                    getDefaultValue(inputEdge)
                 }
             } else {
                 "nil"
             }
         }
 
-
         private fun generateFunction(function: IRFunction, ir: IR, codeBuilder: StringBuilder) {
             currentNode = function
             val functionName = sanitizeName("${function.originalName}_${function.id}")
-            val parameters = function.inputEdges.joinToString(", ") { sanitizeName(it) }
+            val parameters = function.inputEdges.joinToString(", ")
 
-            codeBuilder.append("-- Node: ${sanitizeString(function.originalName)} (${function.id})\n")
+            codeBuilder.append("-- Node: ${function.originalName} (${function.id})\n")
             codeBuilder.append("$functionName = function($parameters)\n")
 
             function.body.forEach { statement ->
                 when (statement) {
-                    is IRStatement.Literal -> codeBuilder.append("$indent${sanitizeString(statement.value)}\n")
+                    is IRStatement.Literal -> codeBuilder.append("$indent${statement.value}\n")
                     is IRStatement.ExecReference -> {
                         val targetFunctions = function.outputEdges[statement.name] ?: emptyList()
                         targetFunctions.forEach { (targetId, targetName) ->
@@ -398,34 +405,31 @@ object ComplexLuaTranspiler {
                         }
                     }
 
-                    is IRStatement.VarReference -> codeBuilder.append(
-                        "${indent}local ${sanitizeName(statement.name)} = variables['${
-                            sanitizeString(
-                                statement.name
-                            )
-                        }']\n"
-                    )
-
+                    is IRStatement.VarReference -> codeBuilder.append("${indent}local ${sanitizeName(statement.name)} = variables['${statement.name}']\n")
                     is IRStatement.LambdaReference -> {
                         codeBuilder.append(
-                            "${indent}local ${sanitizeName(statement.name)} = function() return ${
+                            "function() return ${
                                 generateInputNodeCall(
                                     workspace,
                                     statement.name
                                 )
                             } end\n"
                         )
+//                        val targetFunctions = function.outputEdges[statement.name] ?: emptyList()
+//                        if (targetFunctions.isNotEmpty()) {
+//                            codeBuilder.append("${indent}local ${sanitizeName(statement.name)} = function()\n")
+//                            targetFunctions.forEach { (targetId, targetName) ->
+//                                val resolvedCall = generateNodeCall(workspace.graph.getNode(UUID.fromString(targetId))!!)
+//                                codeBuilder.append("$indent$indent$resolvedCall\n")
+//                            }
+//                            codeBuilder.append("${indent}end\n")
+//                        } else {
+//                            codeBuilder.append("${indent}local ${sanitizeName(statement.name)} = function() end\n")
+//                        }
                     }
 
-                    is IRStatement.JavaImport -> codeBuilder.append(
-                        "${indent}local ${sanitizeName(statement.name)} = java.import('${
-                            sanitizeString(
-                                statement.name
-                            )
-                        }')\n"
-                    )
-
-                    is IRStatement.GenericExpression -> codeBuilder.append("$indent${sanitizeString(statement.content)}\n")
+                    is IRStatement.JavaImport -> codeBuilder.append("${indent}local ${sanitizeName(statement.name)} = java.import('${statement.name}')\n")
+                    is IRStatement.GenericExpression -> codeBuilder.append("$indent${statement.content}\n")
                     is IRStatement.NodeReference -> {
                         // Ignore NodeReference as it's already handled in inputEdges
                     }
@@ -435,7 +439,6 @@ object ComplexLuaTranspiler {
             codeBuilder.append("end\n")
         }
 
-
         private fun generateNodeCall(node: Node): String {
             val functionName = sanitizeName("${node.name}_${node.uid}")
             val params = workspace.graph.getEdges(node)
@@ -444,16 +447,30 @@ object ComplexLuaTranspiler {
             return "$functionName($params)"
         }
 
-
         private fun generateInputNodeCall(edge: Edge): String {
             val sourceNode = getSourceNode(workspace, edge)
             return if (sourceNode != null) {
                 generateNodeCall(sourceNode)
             } else {
-                sanitizeValue(getDefaultValue(edge))
+                getDefaultValue(edge)
             }
+
+//            return if (sourceNode != null) {
+//                when (sourceNode.type) {
+//                    "Literals/String" -> "\"${getNodeLiteralValue(sourceNode)}\""
+//                    "Literals/Number" -> getNodeLiteralValue(sourceNode)
+//                    "Literals/Boolean" -> getNodeLiteralValue(sourceNode)
+//                    else -> generateNodeCall(sourceNode)
+//                }
+//            } else {
+//                getDefaultValue(edge)
+//            }
         }
 
+        private fun getNodeLiteralValue(node: Node): String {
+            val nodeTemplate = listener<Schemas>(Endpoint.Side.SERVER).library["${node.type}/${node.name}"]
+            return nodeTemplate?.get("value")?.cast<Property.String>()?.get() ?: "nil"
+        }
 
         private fun getDefaultValue(edge: Edge): String {
             val value = edge.value
@@ -497,7 +514,8 @@ object ComplexLuaTranspiler {
 
         private fun generateValue(value: IRValue): String {
             return when (value) {
-                is IRValue.String -> sanitizeString(value.value)
+                //No need to wrap in braces because it's handled by the multiLineString function
+                is IRValue.String -> multiLineString(value.value.removePrefix("\"").removeSuffix("\""))
                 is IRValue.Int -> value.value.toString()
                 is IRValue.Float -> value.value.toString()
                 is IRValue.Boolean -> value.value.toString()
@@ -506,6 +524,23 @@ object ComplexLuaTranspiler {
         }
 
         private fun sanitizeName(name: String): String = name.replace(Regex("[^a-zA-Z0-9_]"), "_")
+
+
+        private fun multiLineString(input: String): String {
+            if (!input.contains("]]")) {
+                return "[[$input]]"
+            }
+
+            // Find the maximum number of '=' signs in a row within the input
+            val maxEquals = input.split("]").maxOfOrNull { it.count { c -> c == '=' } } ?: 0
+
+            // Use one more '=' than the maximum found to ensure unique delimiters
+            val equalsCount = maxEquals + 1
+            val openDelimiter = "[" + "=".repeat(equalsCount) + "["
+            val closeDelimiter = "]" + "=".repeat(equalsCount) + "]"
+
+            return "$openDelimiter$input$closeDelimiter"
+        }
     }
     // Data classes and enums
     data class Token(val type: TokenType, val value: String)
@@ -570,37 +605,4 @@ object ComplexLuaTranspiler {
 
     // Helper functions
     private fun sanitizeName(name: String): String = name.replace(Regex("[^a-zA-Z0-9_]"), "_")
-}
-private fun multiLineString(input: String): String {
-    if (!input.contains("]]")) {
-        return "[[" + input + "]]"
-    }
-
-    // Find the maximum number of '=' signs in a row within the input
-    val maxEquals = input.split("]").maxOfOrNull { it.count { c -> c == '=' } } ?: 0
-
-    // Use one more '=' than the maximum found to ensure unique delimiters
-    val equalsCount = maxEquals + 1
-    val openDelimiter = "[" + "=".repeat(equalsCount) + "["
-    val closeDelimiter = "]" + "=".repeat(equalsCount) + "]"
-
-    return "$openDelimiter$input$closeDelimiter"
-}
-private fun sanitizeString(input: String): String {
-    return input.replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-        .replace("\r", "\\r")
-        .replace("\t", "\\t")
-
-}
-
-private fun sanitizeValue(value: String): String {
-    return when {
-        value.startsWith("\"") && value.endsWith("\"") -> {
-            val unquotedValue = value.substring(1, value.length - 1)
-            multiLineString(unquotedValue)
-        }
-
-        else -> value // Assume it's a non-string value
-    }
 }
