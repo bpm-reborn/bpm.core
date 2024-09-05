@@ -77,8 +77,11 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     private var currentTime = 0f
     private val customActionMenu = canvasCtx.customActionMenu
 
-    private var hoveredNode: UUID? = null
-    private var hoveredLink: UUID? = null
+    private val hoveredNode: Node?
+        get() = hoveredNodeId?.let { workspace.getNode(it) }
+
+    private var hoveredNodeId: UUID? = null
+    private var hoveredLinkId: UUID? = null
     private var isPropertyWindowHovered = false
     private val arrowCount = 5
     private val execSegmentCount = 10
@@ -129,7 +132,13 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         canvasCtx.updateHoverState(Vector2f(mousePos.x, mousePos.y))
         ImGui.setMouseCursor(canvasCtx.getHoverCursor())
 
-        //println(workspace.needsRecompile)
+        val mouseWorldPos = canvasCtx.convertToWorldCoordinates(mousePos.toVec2f)
+        val nodePos : Vector2f? = hoveredNode?.let { Vector2f(it.x, it.y) }
+
+        drawList.addText(bounds.x + 5, bounds.w - 30, ImColor.rgba(1f, 1f, 1f, 1f), String.format("Mouse: %.0f, %.0f", mouseWorldPos.x, mouseWorldPos.y))
+        drawList.addText(bounds.x + 5, bounds.w - 15, ImColor.rgba(1f, 1f, 1f, 1f), String.format("Center: %.0f, %.0f", workspace.settings.center.x, workspace.settings.center.y))
+
+        nodePos?.let { drawList.addText(bounds.x + 5, bounds.w - 45, ImColor.rgba(1f, 1f, 1f, 1f), String.format("Hovered Node: %.0f, %.0f", it.x, it.y)) }
 
         renderButton(bounds.z - 50f, bounds.y + 20f, FontAwesome.Play, fontSize = 25f, width = 30f, height = 30f) {
             runtime.compile(workspace)
@@ -303,7 +312,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         )
 
         // Hover effect
-        if (hoveredNode == node.uid || canvasCtx.isNodeInSelectionBox(node)) {
+        if (hoveredNodeId == node.uid || canvasCtx.isNodeInSelectionBox(node)) {
             drawList.addRect(
                 adjustedBounds.x - 1f * canvasCtx.zoom,
                 adjustedBounds.y - 1f * canvasCtx.zoom,
@@ -1178,13 +1187,13 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
     private fun handleHover() {
         if (isPropertyWindowHovered) {
-            hoveredNode = null
-            hoveredLink = null
+            hoveredNodeId = null
+            hoveredLinkId = null
             return
         }
 
-        hoveredNode = null
-        hoveredLink = null
+        hoveredNodeId = null
+        hoveredLinkId = null
 
         val mousePos = ImGui.getMousePos()
 
@@ -1192,16 +1201,16 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         for (node in workspace.graph.nodes) {
             val bounds = canvasCtx.computeNodeBounds(node)
             if (mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w) {
-                hoveredNode = node.uid
+                hoveredNodeId = node.uid
                 break
             }
         }
 
         // Check for link hover if no node is hovered
-        if (hoveredNode == null) {
+        if (hoveredNodeId == null) {
             for (link in workspace.graph.getLinks()) {
                 if (canvasCtx.isMouseOverLink(link, mousePos.toVec2f)) {
-                    hoveredLink = link.uid
+                    hoveredLinkId = link.uid
                     break
                 }
             }

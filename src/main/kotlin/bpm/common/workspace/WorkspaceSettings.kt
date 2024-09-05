@@ -56,7 +56,7 @@ data class WorkspaceSettings(
     var gridSubColor by properties to { Vector4i(138, 138, 138, 244) }
 
     /**
-     * The current position in a grid view.
+     * The current position in a grid view (Top Left).
      *
      * The [scrolled] represents the position of an element within a grid view.
      * It is implemented as a delegated property which defaults to `Vector2i(0, 0)`.
@@ -119,6 +119,16 @@ data class WorkspaceSettings(
      * @return The calculated header font size.
      */
     val fontHeaderSize: Int get() = max(round(18f * zoom).roundToInt(), 12)
+
+    /**
+     * Finds the center of the workspace based on the current position and the size of the bounds.
+     */
+    var center: Vector2f
+        get() = Vector2f(-scrolled.x + bounds.z / 2, -scrolled.y + bounds.w / 2)
+        set(value) {
+            scrolled.x = -value.x + bounds.z / 2
+            scrolled.y = -value.y + bounds.w / 2
+        }
 
 
     /**

@@ -1058,9 +1058,29 @@ class CanvasContext : Listener {
     //Centers the scrolled area around the majority of the nodes
     fun center() {
         //Moves the camera to origin
-        workspace.settings.scrolled.x = 0f
-        workspace.settings.scrolled.y = 0f
+        val settings = workspace.settings
+        val center = findCenter()
+        settings.center = center
         workspace.settings.zoom = 1f
+    }
+
+    fun findCenter() : Vector2f {
+        if (workspace.graph.nodes.isEmpty())
+            return Vector2f()
+
+        var minX = Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxX = Float.MIN_VALUE
+        var maxY = Float.MIN_VALUE
+
+        workspace.graph.nodes.forEach {
+            if (it.x < minX) minX = it.x
+            if (it.y < minY) minY = it.y
+            if ((it.x + it.width) > maxX) maxX = (it.x + it.width)
+            if ((it.y + it.height) > maxY) maxY = (it.y + it.height)
+        }
+
+        return Vector2f(minX + (maxX - minX) / 2, minY + (maxY - minY) / 2)
     }
 
     fun handleEdgeClick(node: Node, edge: Edge) {
