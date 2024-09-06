@@ -27,6 +27,7 @@ import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.graph.User
 import bpm.common.workspace.packets.*
+import net.minecraft.client.Minecraft
 import org.joml.Vector2f
 import org.joml.Vector4f
 import java.util.*
@@ -753,11 +754,12 @@ class CanvasContext : Listener {
         val diffY = abs(node.y - nodeMovePacket.y)
         if (Time.now - lastSent > maxSendRate || (diffX > maxMoveThreshold || diffY > maxMoveThreshold)) {
             nodeMovePacket.uid = node.uid
+            nodeMovePacket.from = client.uuid
             nodeMovePacket.x = node.x
             nodeMovePacket.y = node.y
             runtime.client.send(nodeMovePacket)
             lastSent = Time.now
-            logger.info { "Sent move packet for node ${node.uid}" }
+//            logger.info { "Sent move packet for node ${node.uid}" }
         }
     }
 

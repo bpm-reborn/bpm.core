@@ -20,7 +20,7 @@ object Server : Endpoint<Server>() {
     private val clients: ConcurrentHashMap<UUID, Connection> = ConcurrentHashMap()
     private val cachedClientPlayers: ConcurrentMap<UUID, PlayerTarget> = ConcurrentHashMap()
     override val worker = Worker(this)
-    private val server: MinecraftServer by lazy {
+    internal val server: MinecraftServer by lazy {
         ServerLifecycleHooks.getCurrentServer() ?: error("Server not available")
     }
 
@@ -81,11 +81,20 @@ object Server : Endpoint<Server>() {
             MinecraftNetworkAdapter.sendPacket(packet, targetOf(playerUUID) ?: AllPlayersTarget)
         }
     }
+
     /**
      * Sends the given packet to all connected endpoints.
      */
     override fun sendToAll(packet: Packet, vararg exclude: UUID) {
-        MinecraftNetworkAdapter.sendPacket(packet, AllPlayersTarget)
+        if (exclude.isEmpty()) {
+            MinecraftNetworkAdapter.sendPacket(packet, AllPlayersTarget)
+            return
+        }
+        for (player in server.playerList.players) {
+            if (exclude.contains(player.uuid)) continue
+            val packetTarget = targetOf(player.uuid) ?: AllPlayersTarget
+            MinecraftNetworkAdapter.sendPacket(packet, packetTarget)
+        }
     }
 
     private fun targetOf(uuid: UUID): PacketTarget? {

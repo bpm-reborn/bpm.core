@@ -1,6 +1,7 @@
 package bpm.common.utils
 
 import bpm.common.logging.KotlinLogging
+import com.google.common.reflect.ClassPath.ResourceInfo
 import java.io.File
 import java.io.IOException
 import java.net.URI
@@ -31,7 +32,8 @@ class ClassResourceScanner private constructor(private val builder: Builder) {
         val classLoader: ClassLoader,
         val resources: List<ResourceInfo>,
         val classes: List<ClassInfo>,
-        val timeTaken: Long
+        val timeTaken: Long,
+        val isProduction: Boolean = true
     ) {
 
         private val resourceExtensionCache = ConcurrentHashMap<String, List<ResourceInfo>>()
@@ -56,6 +58,11 @@ class ClassResourceScanner private constructor(private val builder: Builder) {
         fun findClassesByName(name: String): List<ClassInfo> = classNameCache.getOrPut(name) {
             classes.filter { it.qualifiedClassName.contains(name) }
         }
+
+        fun getResources(startingWith: String): ScanResults {
+            val filteredResources = resources.filter { it.path.startsWith(startingWith) }
+            return copy(resources = filteredResources)
+        }
     }
 
     class Builder {
@@ -76,8 +83,10 @@ class ClassResourceScanner private constructor(private val builder: Builder) {
             return scanner.performScan()
         }
     }
+    private var isProduction = true
 
     private fun performScan(): ScanResults {
+
         val startTime = System.currentTimeMillis()
         logger.info { "Starting scan" }
 
@@ -103,15 +112,18 @@ class ClassResourceScanner private constructor(private val builder: Builder) {
         logger.info { "Scan completed, got ${resourceIndex.size} resources and ${classIndex.size} classes" }
         val endTime = System.currentTimeMillis()
         val timeTaken = endTime - startTime
-        return ScanResults(builder.classLoader ?: ClassLoader.getSystemClassLoader(),
+        var results = ScanResults(builder.classLoader ?: ClassLoader.getSystemClassLoader(),
             resourceIndex.values.toList(),
             classIndex.values.map {
                 ClassInfo(
                     it.qualifiedClassName.removePrefix("kotlin.main.").removePrefix("java.main."), it.packageName
                 )
             }.toList().filter { !it.qualifiedClassName.endsWith("package-info") },
-            timeTaken
+            timeTaken,
+            isProduction
         )
+        isProduction = true
+        return results
     }
 
 
@@ -149,6 +161,13 @@ class ClassResourceScanner private constructor(private val builder: Builder) {
                 if (Files.exists(classesDirectory)) {
                     logger.info { "Scanning classes directory: $classesDirectory" }
                     scanDirectory(classesDirectory)
+                    isProduction = false
+                }
+                val locateSchemas = resourcesDirectory.resolve("schemas")
+                if (Files.exists(locateSchemas)) {
+                    logger.info { "Scanning schemas directory: $locateSchemas" }
+                    scanDirectory(locateSchemas)
+                    isProduction = false
                 }
             }
 
@@ -170,7 +189,6 @@ class ClassResourceScanner private constructor(private val builder: Builder) {
             logger.error(e) { "Error scanning JAR: $jarPath" }
         }
     }
-
 
     // We know that we're in a development environment, so we can use the file system to scan the directory.
     // We are given a path, with neoforge, that points to our resources folder. We can use this to scan the directory.
@@ -492,14 +510,16 @@ fun ClassResourceScanner.ScanResults.fromPackages(vararg packageNames: String): 
     )
 }
 
-fun ClassResourceScanner.ScanResults.readResourcesToByteArrayMap(): Map<String, ByteArray> {
+data class Resource(val resourceInfo: ClassResourceScanner.ResourceInfo, val content: ByteArray)
+
+fun ClassResourceScanner.ScanResults.readResourcesToByteArrayMap(): Map<String, Resource> {
     return resources.associate { resourceInfo ->
         try {
             val resourceName = resourceInfo.path.substringAfterLast('/')
             val resourceContent = classLoader.getResourceAsStream(resourceInfo.path)?.use { it.readBytes() }
 
             if (resourceContent != null) {
-                resourceName to resourceContent
+                resourceName to Resource( resourceInfo, resourceContent)
             } else {
                 logger.warn { "Failed to read resource: ${resourceInfo.path}" }
                 null

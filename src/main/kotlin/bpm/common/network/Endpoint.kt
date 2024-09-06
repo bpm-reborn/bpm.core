@@ -300,7 +300,7 @@ abstract class Endpoint<T : Endpoint<T>> {
      *
      * @param netListener The network listener to be registered.
      */
-    protected fun listen(netListener: Listener): Unit = synchronized(listeners) {
+    protected fun listen(netListener: Listener){
         listeners.add(netListener)
         typedListeners[netListener::class] = netListener
     }

@@ -22,7 +22,6 @@ class Schemas(private val path: Path, private val side: Endpoint.Side) : Listene
 
 
 
-
         //Load the node library, todo: move this to a config file
         library.readFrom(path)
         val types = library.collect()

@@ -49,7 +49,6 @@ object MinecraftNetworkAdapter {
                 return MinecraftPacketPayload(packet as T)
             }
 
-
             override fun encode(buf: FriendlyByteBuf, instance: MinecraftPacketPayload<T>) {
                 val buffer = Buffer.allocate()
                 instance.packet.serialize(buffer)
@@ -78,9 +77,7 @@ object MinecraftNetworkAdapter {
 
     class MinecraftPacketPayload<T : Packet>(val packet: T) : CustomPacketPayload {
 
-
         companion object {
-
             fun <T : Packet> typeOf(packetClass: Class<T>): CustomPacketPayload.Type<MinecraftPacketPayload<T>> =
                 CustomPacketPayload.Type(
                     ResourceLocation.fromNamespaceAndPath(

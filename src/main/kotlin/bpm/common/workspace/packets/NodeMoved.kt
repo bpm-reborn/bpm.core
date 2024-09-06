@@ -5,7 +5,7 @@ import bpm.common.network.NetUtils
 import bpm.common.packets.Packet
 import java.util.UUID
 
-data class NodeMoved(var uid: UUID = NetUtils.DefaultUUID, var x: Float = 0f, var y: Float = 0f) : Packet {
+data class NodeMoved(var uid: UUID = NetUtils.DefaultUUID, var x: Float = 0f, var y: Float = 0f, var from: UUID = NetUtils.DefaultUUID) : Packet {
 
     /**
      * Serializes the provided Buffer.
@@ -16,6 +16,7 @@ data class NodeMoved(var uid: UUID = NetUtils.DefaultUUID, var x: Float = 0f, va
         buffer.writeUUID(uid)
         buffer.writeFloat(x)
         buffer.writeFloat(y)
+        buffer.writeUUID(from)
     }
 
 
@@ -28,5 +29,6 @@ data class NodeMoved(var uid: UUID = NetUtils.DefaultUUID, var x: Float = 0f, va
         uid = buffer.readUUID()
         x = buffer.readFloat()
         y = buffer.readFloat()
+        from = buffer.readUUID()
     }
 }

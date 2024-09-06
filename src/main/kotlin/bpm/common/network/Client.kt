@@ -13,7 +13,7 @@ import java.util.*
 object Client : Endpoint<Client>() {
 
     // Gets the current player's UUID
-    private val uuid by lazy { Minecraft.getInstance().player?.uuid ?: error("Player UUID not available") }
+     val uuid by lazy { Minecraft.getInstance().player?.uuid ?: error("Player UUID not available") }
 
 
     private val logger = KotlinLogging.logger {}
@@ -93,14 +93,14 @@ object Client : Endpoint<Client>() {
      */
     override fun send(packet: Packet, id: Connection?) {
         MinecraftNetworkAdapter.sendPacket(packet, ServerTarget)
-        logger.info { "Sent packet of type ${packet::class.simpleName} with id ${packet.id}" }
+//        logger.info { "Sent packet of type ${packet::class.simpleName} with id ${packet.id}" }
     }
     /**
      * Sends the given packet to all connected endpoints.
      */
     override fun sendToAll(packet: Packet, vararg exclude: UUID) = send(packet)
 
-    inline operator fun invoke(block: (Client) -> Unit): Client {
+    inline operator fun invoke(crossinline block: (Client) -> Unit): Client {
         block(this)
         return this
     }

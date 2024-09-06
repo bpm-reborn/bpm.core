@@ -50,7 +50,7 @@ class Bootstrap(
     private val serializableList = mutableListOf<KClass<out Serialize<*>>>()
     private val builtIns = mutableListOf<LuaBuiltin>()
     private val ourResults = results.fromPackages("noderspace", "bpm")
-
+    private val isRunning get() = Client.isRunning()
     /**
      * The entry point for the bootstrap.
      */
@@ -63,6 +63,7 @@ class Bootstrap(
         logger.info("Bootstrapped ${registriesList.size} registries\n, ${packetsList.size} packets, ${serializableList.size} serializable, and ${builtIns.size} builtins")
         return this
     }
+
     //Registers all of the serializerables and packet handlers
     override fun register(bus: IEventBus): IBoostrap {
         registerRegistries(bus)
@@ -117,7 +118,7 @@ class Bootstrap(
             CompletableFuture.runAsync({}, pBackgroundExecutor).thenCompose { pPreparationBarrier.wait(null) }
                 .thenAcceptAsync({
                     LOGGER.log(Level.INFO, "Initializing EditorContext...")
-                    ClientRuntime.start(Minecraft.getInstance().window.window)
+                    if(!isRunning) ClientRuntime.start(Minecraft.getInstance().window.window)
                 }, pGameExecutor)
         }
     }
@@ -181,17 +182,32 @@ class Bootstrap(
         if (!schemaPath.toFile().exists()) {
             schemaPath.toFile().mkdir()
         }
-
-        results
-
-        //Collects the schemas from the jar
-        val resources = results.withExtension("node").readResourcesToByteArrayMap()
-        resources.forEach { (name, bytes) ->
-            val file = schemaPath.resolve(name)
-            if (!file.toFile().exists()) {
-                file.toFile().writeBytes(bytes)
-            }
+        val resources = results.getResources("schemas")
+        val mapped = resources.readResourcesToByteArrayMap().map {
+            val path = it.value.resourceInfo.path
+            val bytes = it.value
+            val name = path.toString().substringAfter("schemas/")
+            name to bytes
         }
+        for((name, resource) in mapped) {
+            val bytes = resource
+            val file = schemaPath.resolve(name).toFile()
+            //create containing directories if they don't exist from the path to the file
+            file.parentFile.mkdirs()
+
+            //Always write when in dev mode, otherwise only write if the file doesn't exist
+//            if (!file.toFile().exists() || !results.isProduction) {
+                file.writeBytes(bytes.content)
+//            }
+        }
+        //Collects the schemas from the jar
+
+//            val file = schemaPath.resolve(name)
+            //Always write when in dev mode, otherwise only write if the file doesn't exist
+//            if (!file.toFile().exists() || !results.isProduction) {
+//                file.toFile().writeBytes(bytes)
+//            }
+
 
 
     }
@@ -202,8 +218,8 @@ class Bootstrap(
         copySchemas()
         LOGGER.log(Level.INFO, "Scanning for classes...")
         val gameDir = FMLPaths.GAMEDIR.get()
-        //val schemasPath = gameDir.resolve("schemas")
-        val schemasPath = Path.of("U:\\Dev\\minecraft\\modding\\mods\\bpm\\src\\main\\resources\\schemas")//gameDir.resolve("schemas")
+        val schemasPath = gameDir.resolve("schemas")
+//        val schemasPath = Path.of("U:\\Dev\\minecraft\\modding\\mods\\bpm\\src\\main\\resources\\schemas")//gameDir.resolve("schemas")
         if (!schemasPath.toFile().exists()) {
             schemasPath.toFile().mkdir()
         }
@@ -242,7 +258,8 @@ class Bootstrap(
 
     private fun collectRegistries() {
         logger.info("Collecting registries")
-        val modRegistries = ourResults.classesImplementing<ModRegistry<*>>().map { createOrGetModRegistryInstance(it) }
+        val modRegistries = ourResults.classesImplementing<ModRegistry<*>>()
+            .map { createOrGetModRegistryInstance(it) }
 
         registriesList.addAll(modRegistries)
 

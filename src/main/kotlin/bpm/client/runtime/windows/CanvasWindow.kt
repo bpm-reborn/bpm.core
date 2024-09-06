@@ -133,12 +133,29 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         ImGui.setMouseCursor(canvasCtx.getHoverCursor())
 
         val mouseWorldPos = canvasCtx.convertToWorldCoordinates(mousePos.toVec2f)
-        val nodePos : Vector2f? = hoveredNode?.let { Vector2f(it.x, it.y) }
+        val nodePos: Vector2f? = hoveredNode?.let { Vector2f(it.x, it.y) }
 
-        drawList.addText(bounds.x + 5, bounds.w - 30, ImColor.rgba(1f, 1f, 1f, 1f), String.format("Mouse: %.0f, %.0f", mouseWorldPos.x, mouseWorldPos.y))
-        drawList.addText(bounds.x + 5, bounds.w - 15, ImColor.rgba(1f, 1f, 1f, 1f), String.format("Center: %.0f, %.0f", workspace.settings.center.x, workspace.settings.center.y))
+        drawList.addText(
+            bounds.x + 5,
+            bounds.w - 30,
+            ImColor.rgba(1f, 1f, 1f, 1f),
+            String.format("Mouse: %.0f, %.0f", mouseWorldPos.x, mouseWorldPos.y)
+        )
+        drawList.addText(
+            bounds.x + 5,
+            bounds.w - 15,
+            ImColor.rgba(1f, 1f, 1f, 1f),
+            String.format("Center: %.0f, %.0f", workspace.settings.center.x, workspace.settings.center.y)
+        )
 
-        nodePos?.let { drawList.addText(bounds.x + 5, bounds.w - 45, ImColor.rgba(1f, 1f, 1f, 1f), String.format("Hovered Node: %.0f, %.0f", it.x, it.y)) }
+        nodePos?.let {
+            drawList.addText(
+                bounds.x + 5,
+                bounds.w - 45,
+                ImColor.rgba(1f, 1f, 1f, 1f),
+                String.format("Hovered Node: %.0f, %.0f", it.x, it.y)
+            )
+        }
 
         renderButton(bounds.z - 50f, bounds.y + 20f, FontAwesome.Play, fontSize = 25f, width = 30f, height = 30f) {
             runtime.compile(workspace)
@@ -149,12 +166,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         }
 
         renderButton(
-            bounds.z - 50f,
-            bounds.y + 100f,
-            FontAwesome.Crosshairs,
-            fontSize = 25f,
-            width = 30f,
-            height = 30f
+            bounds.z - 50f, bounds.y + 100f, FontAwesome.Crosshairs, fontSize = 25f, width = 30f, height = 30f
         ) {
             canvasCtx.center()
         }
@@ -171,7 +183,6 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         canvasCtx.notifications()
         ImGui.end()
     }
-    //True for the first 1.5 seconds the canvas is open
 
     private val initialOpen get() = System.currentTimeMillis() - openTime < 100
     private var openTime = System.currentTimeMillis()
@@ -271,8 +282,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
         renderToolTips()
 
-        if (canvasCtx.isDraggingNode) {
-        }
+        // Render the selection context overlay
     }
 
 
@@ -286,8 +296,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
             val description: Property<String> = nodeType["description"].cast()
             val color = node.color
             canvasCtx.tooltip(
-                node.icon.toChar().toString(),
-                description.get()
+                node.icon.toChar().toString(), description.get()
             )
         }
 
@@ -484,6 +493,11 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     }
 
 
+//        val inputEdges = edges.filter { it.direction == "input" }
+//        val outputEdges = edges.filter { it.direction == "output" }
+//
+//        // Render output edges
+//        outputEdges.forEach { edge ->
     /*private fun renderEdges(drawList: ImDrawList, node: Node) {
         val edges = workspace.graph.getEdges(node)
         if (edges.isEmpty()) return
@@ -575,16 +589,11 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
 //    private fun renderEdges(drawList: ImDrawList, node: Node, nodeBounds: Vector4f) {
 //        val edges = workspace.graph.getEdges(node)
-//        val inputEdges = edges.filter { it.direction == "input" }
-//        val outputEdges = edges.filter { it.direction == "output" }
-//
 //        // Render input edges
 //        inputEdges.forEach { edge ->
 //            renderEdge(drawList, node, edge, nodeBounds)
 //        }
 //
-//        // Render output edges
-//        outputEdges.forEach { edge ->
 //            renderEdge(drawList, node, edge, nodeBounds)
 //        }
 //    }
@@ -683,24 +692,22 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
                 val textY = pos.y - ImGui.getTextLineHeight() / 2
                 val labelPadding = 1f * canvasCtx.zoom
 //                     Render text container
-                if (edge.direction == "input")
-                    drawList.addRectFilled(
-                        startX - labelPadding,
-                        textY - labelPadding,
-                        startX + labelWidth + labelPadding,
-                        textY + ImGui.getTextLineHeight() + labelPadding,
-                        ImColor.rgba(40, 40, 40, 200),
-                        2f * canvasCtx.zoom
-                    )
-                else
-                    drawList.addRectFilled(
-                        startX + inputWidth + spacing - labelPadding,
-                        textY - labelPadding,
-                        startX + totalWidth + labelPadding,
-                        textY + ImGui.getTextLineHeight() + labelPadding,
-                        ImColor.rgba(40, 40, 40, 200),
-                        2f * canvasCtx.zoom
-                    )
+                if (edge.direction == "input") drawList.addRectFilled(
+                    startX - labelPadding,
+                    textY - labelPadding,
+                    startX + labelWidth + labelPadding,
+                    textY + ImGui.getTextLineHeight() + labelPadding,
+                    ImColor.rgba(40, 40, 40, 200),
+                    2f * canvasCtx.zoom
+                )
+                else drawList.addRectFilled(
+                    startX + inputWidth + spacing - labelPadding,
+                    textY - labelPadding,
+                    startX + totalWidth + labelPadding,
+                    textY + ImGui.getTextLineHeight() + labelPadding,
+                    ImColor.rgba(40, 40, 40, 200),
+                    2f * canvasCtx.zoom
+                )
 
                 // Render edge label
                 drawList.addText(
@@ -823,13 +830,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
                 "boolean" -> {
                     val boolValue = currentValue.castOr { Property.Boolean(false) }
                     renderCheckboxProperty(
-                        drawList,
-                        boolValue,
-                        x,
-                        y + 2 * canvasCtx.zoom,
-                        width,
-                        ImGui.getTextLineHeight(),
-                        "##value"
+                        drawList, boolValue, x, y + 2 * canvasCtx.zoom, width, ImGui.getTextLineHeight(), "##value"
                     ) {
                         edge.properties["value"] = edge.value.apply {
                             this["default"] = boolValue
@@ -867,11 +868,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
         //Renders the checkbox
         drawList.addRectFilled(
-            checkBounds.x,
-            checkBounds.y,
-            checkBounds.z,
-            checkBounds.w,
-            ImColor.rgba(40, 40, 40, 200)
+            checkBounds.x, checkBounds.y, checkBounds.z, checkBounds.w, ImColor.rgba(40, 40, 40, 200)
         )
         if (property.get()) {
             drawList.addRectFilled(
@@ -889,11 +886,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         if (isPointOverRect(Vector2f(mousePos.x, mousePos.y), checkBounds)) {
             ImGui.setMouseCursor(ImGuiMouseCursor.Arrow)
             drawList.addRectFilled(
-                checkBounds.x,
-                checkBounds.y,
-                checkBounds.z,
-                checkBounds.w,
-                ImColor.rgba(100, 100, 100, 200)
+                checkBounds.x, checkBounds.y, checkBounds.z, checkBounds.w, ImColor.rgba(100, 100, 100, 200)
             )
             if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
                 property.set(!property.get())
@@ -1023,10 +1016,14 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
                 val controlPoint1 = Vector2f(midX, sourcePos.y)
                 val controlPoint2 = Vector2f(midX, targetPos.y)
                 drawList.addBezierCubic(
-                    sourcePos.x, sourcePos.y,
-                    controlPoint1.x, controlPoint1.y,
-                    controlPoint2.x, controlPoint2.y,
-                    targetPos.x, targetPos.y,
+                    sourcePos.x,
+                    sourcePos.y,
+                    controlPoint1.x,
+                    controlPoint1.y,
+                    controlPoint2.x,
+                    controlPoint2.y,
+                    targetPos.x,
+                    targetPos.y,
                     ImColor.rgba(255, 255, 0, 255), // Yellow highlight for selected links
                     4f * canvasCtx.zoom, // Thicker line for selected links
                     50
@@ -1072,11 +1069,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
 
     private fun drawDataLink(
-        drawList: ImDrawList,
-        startPos: Vector2f,
-        endPos: Vector2f,
-        startColor: Int,
-        endColor: Int
+        drawList: ImDrawList, startPos: Vector2f, endPos: Vector2f, startColor: Int, endColor: Int
     ) {
         val midX = (startPos.x + endPos.x) / 2
         val controlPoint1 = Vector2f(midX, startPos.y)
