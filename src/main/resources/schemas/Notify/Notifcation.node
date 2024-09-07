@@ -9,15 +9,37 @@ theme:
   height: 60
   width: 100
   icon: 0xf27a
+
 edges:
   exec_in:
     description: 'The input execution flow'
     direction: input
     type: exec
-  value:
+  message:
     description: 'The message to print.'
     direction: input
     type: string
+  header:
+    description: 'The header of the notification.'
+    direction: input
+    type: string
+    value:
+      type: string
+      default: 'Notification'
+  color:
+    description: 'The color of the notification.'
+    direction: input
+    type: string
+    value:
+      type: color
+      default: '#292721f5'
+  type:
+    description: 'The type of the notification.'
+    direction: input
+    type: string
+    value:
+      type: string
+      default: 'info'
   time:
     description: 'The message to print.'
     direction: input
@@ -31,5 +53,5 @@ edges:
     type: exec
 
 source: |
-  Notify:info(value, time)
+  Notify:message(message, time, color, header, type)
   ${EXEC.exec_out}

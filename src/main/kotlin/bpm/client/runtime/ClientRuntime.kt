@@ -59,7 +59,7 @@ object ClientRuntime : Listener {
     private lateinit var io: ImGuiIO
     private val started = AtomicBoolean(false)
     private var canvasWindow: CanvasWindow? = null
-    private val logger = KotlinLogging.logger { }
+    internal val logger = KotlinLogging.logger { }
 
     operator fun get(workspaceUid: UUID): Workspace? {
 

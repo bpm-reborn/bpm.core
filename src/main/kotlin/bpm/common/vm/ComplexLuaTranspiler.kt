@@ -478,6 +478,7 @@ object ComplexLuaTranspiler {
                 "int" -> (defaultValue as? Property.Int)?.get()?.toString() ?: "0"
                 "boolean" -> (defaultValue as? Property.Boolean)?.get()?.toString() ?: "false"
                 "string" -> "\"${(defaultValue as? Property.String)?.get() ?: ""}\""
+                "color" -> "\"${(defaultValue as? Property.String)?.get() ?: "#00000000"}\""
                 else -> "nil"
             }
         }

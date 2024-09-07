@@ -10,16 +10,17 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.max
 
 class NotificationManager {
+
     private val notificationQueue = ConcurrentLinkedQueue<NotifyMessage>()
     private var lastNotificationEndTime = 0f
 
-    private val headerFont = Fonts.getFamily("Inter")["Bold"][16]
-    private val bodyFont = Fonts.getFamily("Inter")["Regular"][14]
+    private val headerFont = Fonts.getFamily("Inter")["Bold"][20]
+    private val bodyFont = Fonts.getFamily("Inter")["Regular"][18]
     private val iconFont = Fonts.getFamily("Fa")["Regular"][26]
 
     // Minimum size constants
-    private val MIN_WIDTH = 300f
-    private val MIN_HEIGHT = 100f
+    private val MIN_WIDTH = 375f
+    private val MIN_HEIGHT = 150f
 
     fun addNotification(message: NotifyMessage) {
         val existingNotification = notificationQueue.find { it.type == message.type && it.message == message.message }
@@ -61,7 +62,12 @@ class NotificationManager {
         }
     }
 
-    private fun renderNotification(notification: NotifyMessage, drawList: ImDrawList, displaySize: ImVec2, yOffset: Float) {
+    private fun renderNotification(
+        notification: NotifyMessage,
+        drawList: ImDrawList,
+        displaySize: ImVec2,
+        yOffset: Float
+    ) {
         val visibleTime = ImGui.getTime().toFloat() - max(notification.time, lastNotificationEndTime)
         val alpha = calculateAlpha(visibleTime, notification.lifetime)
 
@@ -85,7 +91,9 @@ class NotificationManager {
         val yPos = yOffset - totalHeight - margin
 
         // Background with gradient
-        val bgColor = getNotificationColor(notification.type, 1f) // Full opacity for background
+//        val bgColor = getNotificationColor(notification.type, 1f) // Full opacity for background
+        //if the color's string length is 7, add ff to the end
+        val bgColor = ImColor.rgba(if (notification.color.length == 7) notification.color + "ff" else notification.color)
         drawList.addRectFilledMultiColor(
             xPos, yPos,
             xPos + totalWidth, yPos + totalHeight,
@@ -99,7 +107,7 @@ class NotificationManager {
         drawList.addRectFilled(
             xPos, yPos,
             xPos + totalWidth, yPos + headerHeight,
-            getNotificationColor(notification.type, 1f), // Full opacity for header
+            ImColor.rgba(notification.color),
             4f
         )
 
@@ -116,9 +124,9 @@ class NotificationManager {
         // Header text
         drawList.addText(
             headerFont,
-            16f,
-            xPos + padding * 2 + iconSize,
-            yPos + (headerHeight - headerSize.y) / 2,
+            20f,
+            xPos + padding * 2 + iconSize / 2,
+            yPos + padding / 2 -2,
             ImColor.floatToColor(1f, 1f, 1f, 1f), // Full opacity for header text
             headerText
         )
@@ -126,7 +134,7 @@ class NotificationManager {
         // Message text
         drawList.addText(
             bodyFont,
-            14f,
+            18f,
             xPos + padding,
             yPos + headerHeight + padding,
             ImColor.floatToColor(0.9f, 0.9f, 0.9f, 1f), // Full opacity for message text

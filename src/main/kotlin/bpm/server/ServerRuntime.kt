@@ -25,6 +25,7 @@ import bpm.common.workspace.graph.User
 import bpm.common.workspace.packets.*
 import bpm.server.lua.Notify
 import org.joml.Vector2f
+import org.joml.Vector4f
 import org.joml.Vector4i
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -331,11 +332,46 @@ object ServerRuntime : Listener {
     private fun intToUnicodeEscaped(codePoint: Int): String {
         return "\\u" + codePoint.toString(16).padStart(4, '0')
     }
+    //Parses to a vector4f, checks if alpha is present
+    private fun parseColor(color: String): Vector4f {
+        val color = color.removePrefix("#")
+        val r = color.substring(0, 2).toInt(16) / 255f
+        val g = color.substring(2, 4).toInt(16) / 255f
+        val b = color.substring(4, 6).toInt(16) / 255f
+        val a = if (color.length == 8) color.substring(6, 8).toInt(16) / 255f else 1f
+        return Vector4f(r, g, b, a)
+    }
+
+    private fun parseColor(color: Property.String): Property.Vec4i{
+        val color = color.get().removePrefix("#")
+        val r = color.substring(0, 2).toInt(16)
+        val g = color.substring(2, 4).toInt(16)
+        val b = color.substring(4, 6).toInt(16)
+        val a = if (color.length == 8) color.substring(6, 8).toInt(16) else 255
+        return Property.Vec4i(r, g, b, a)
+    }
+
+    private fun parseThemeColor(theme: Property.Object): Property.Vec4i{
+        val color =theme["color"]
+        if(color is Property.String){
+            return parseColor(color)
+        }
+        if(color is Property.Vec4i){
+            return Property.Vec4i(color.get().x, color.get().y, color.get().z, color.get().w)
+        }
+        if(color is Property.Vec4f){
+            return Property.Vec4i((color.get().x * 255).toInt(),
+                (color.get().y * 255).toInt(), (color.get().z * 255).toInt(), (color.get().w * 255).toInt()
+            )
+        }
+        return Property.Vec4i(0, 0, 0, 255)
+    }
 
     private fun createFromType(workspace: Workspace, nodeType: NodeType, position: Vector2f): Node {
         val name = nodeType["name"] as? Property.String ?: Property.String(nodeType.meta.name)
         val theme = nodeType["theme"] as? Property.Object ?: Property.Object()
-        val color = theme["color"] as? Property.Vec4i ?: Property.Vec4i(Vector4i(255, 255, 255, 255))
+        val color = parseThemeColor(theme)
+//        val color = theme["color"] as? Property.Vec4i ?: theme["color"] as? Property.String?.let { parseColor(it) } ?: Property.Vec4i(0, 0, 0, 255)
         val edges = nodeType["edges"] as? Property.Object ?: Property.Object()
         val width = theme["width"] as? Property.Float ?: theme["width"] as? Property.Int ?: Property.Float(100f)
         val height = theme["height"] as? Property.Float ?: theme["height"] as? Property.Int ?: Property.Float(50f)
@@ -344,8 +380,8 @@ object ServerRuntime : Listener {
             "name" to name
             "type" to nodeType.meta.group
             "color" to color
-            "x" to position.x as Float
-            "y" to position.y as Float
+            "x" to position.x
+            "y" to position.y
             "uid" to UUID.randomUUID()
             "width" to width
             "height" to height

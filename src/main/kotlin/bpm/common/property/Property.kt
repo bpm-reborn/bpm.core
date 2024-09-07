@@ -4,6 +4,7 @@ import bpm.common.network.NetUtils
 import org.joml.*
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.jvm.internal.Intrinsics.Kotlin
 import kotlin.reflect.full.isSubtypeOf
 import kotlin.reflect.full.starProjectedType
 
@@ -279,7 +280,7 @@ interface Property<T : Any> {
      * @param defaultValue The default value of the color property. Defaults to Vector4i(40, 20, 69, 255).
      */
     class Vec2f(defaultValue: Vector2f) : PropertyLiteral<Vector2f>(defaultValue) {
-
+        constructor(x: kotlin.Float, y: kotlin.Float) : this(Vector2f(x, y))
         /**
          * This variable represents the number of bytes.
          *
@@ -294,7 +295,7 @@ interface Property<T : Any> {
      * @param defaultValue The default value of the vector.
      */
     class Vec3f(defaultValue: Vector3f) : PropertyLiteral<Vector3f>(defaultValue) {
-
+        constructor(x: kotlin.Float, y: kotlin.Float, z: kotlin.Float) : this(Vector3f(x, y, z))
         /**
          * This variable represents the number of bytes.
          *
@@ -312,6 +313,8 @@ interface Property<T : Any> {
      */
     class Vec4f(defaultValue: Vector4f) : PropertyLiteral<Vector4f>(defaultValue) {
 
+        constructor(x: kotlin.Float, y: kotlin.Float, z: kotlin.Float, w: kotlin.Float) : this(Vector4f(x, y, z, w))
+
         /**
          * This variable represents the number of bytes.
          *
@@ -328,7 +331,7 @@ interface Property<T : Any> {
      * @constructor Creates a Vec2i object with the specified default value.
      */
     class Vec2i(defaultValue: Vector2i) : PropertyLiteral<Vector2i>(defaultValue) {
-
+        constructor(x: kotlin.Int, y: kotlin.Int) : this(Vector2i(x, y))
         /**
          * This variable represents the number of bytes.
          *
@@ -347,7 +350,7 @@ interface Property<T : Any> {
      * @param defaultValue The default value for the vector.
      */
     class Vec3i(defaultValue: Vector3i) : PropertyLiteral<Vector3i>(defaultValue) {
-
+        constructor(x: kotlin.Int, y: kotlin.Int, z: kotlin.Int) : this(Vector3i(x, y, z))
         /**
          * This variable represents the number of bytes.
          *
@@ -362,7 +365,7 @@ interface Property<T : Any> {
      * @param defaultValue The default value of the vector.
      */
     class Vec4i(defaultValue: Vector4i) : PropertyLiteral<Vector4i>(defaultValue) {
-
+        constructor(x: kotlin.Int, y: kotlin.Int, z: kotlin.Int, w: kotlin.Int) : this(Vector4i(x, y, z, w))
         /**
          * This variable represents the number of bytes.
          *
@@ -570,4 +573,92 @@ inline fun <reified T : PropertySupplier> configured(crossinline apply: Property
         apply()
     })
     return obj
+}
+
+fun Vector2f.toProperty() = Property.Vec2f(this)
+fun Vector3f.toProperty() = Property.Vec3f(this)
+fun Vector4f.toProperty() = Property.Vec4f(this)
+fun Vector2i.toProperty() = Property.Vec2i(this)
+fun Vector3i.toProperty() = Property.Vec3i(this)
+fun Vector4i.toProperty() = Property.Vec4i(this)
+
+fun Property.Vec4f.toFloatArray() = floatArrayOf(get().x, get().y, get().z, get().w)
+
+fun Property.Vec3f.toFloatArray() = floatArrayOf(get().x, get().y, get().z)
+fun Property.Vec2f.toFloatArray() = floatArrayOf(get().x, get().y)
+fun Property.Vec4i.toIntArray() = intArrayOf(get().x, get().y, get().z, get().w)
+
+fun Property.Vec3i.toIntArray() = intArrayOf(get().x, get().y, get().z)
+fun Property.Vec2i.toIntArray() = intArrayOf(get().x, get().y)
+
+
+fun Property.Vec4f.toVecColor(): Property.Vec4i = Property.Vec4i(
+    (get().x * 255).toInt(),
+    (get().y * 255).toInt(),
+    (get().z * 255).toInt(),
+    (get().w * 255).toInt()
+)
+
+fun Property.Vec3f.toVecColor(): Property.Vec3i = Property.Vec3i(
+    (get().x * 255).toInt(),
+    (get().y * 255).toInt(),
+    (get().z * 255).toInt()
+)
+
+fun Property.Vec3i.toVecColor(): Property.Vec3f = Property.Vec3f(
+    (get().x / 255f),
+    (get().y / 255f),
+    (get().z / 255f)
+)
+
+fun Property.Vec4i.toVecColor(): Property.Vec4f = Property.Vec4f(
+    (get().x / 255f),
+    (get().y / 255f),
+    (get().z / 255f),
+    (get().w / 255f)
+)
+
+//RRGGBBAA
+fun Property.Vec4f.toHexString():String{
+    val r = (get().x * 255).toInt().toString(16).padStart(2, '0')
+    val g = (get().y * 255).toInt().toString(16).padStart(2, '0')
+    val b = (get().z * 255).toInt().toString(16).padStart(2, '0')
+    val a = (get().w * 255).toInt().toString(16).padStart(2, '0')
+    return "#$r$g$b$a"
+}
+
+
+fun Property.Vec3f.toHexString():String{
+    val r = (get().x * 255).toInt().toString(16).padStart(2, '0')
+    val g = (get().y * 255).toInt().toString(16).padStart(2, '0')
+    val b = (get().z * 255).toInt().toString(16).padStart(2, '0')
+    return "#$r$g$b"
+}
+fun Property.Vec4i.toHexString():String{
+    val r = get().x.toString(16).padStart(2, '0')
+    val g = get().y.toString(16).padStart(2, '0')
+    val b = get().z.toString(16).padStart(2, '0')
+    val a = get().w.toString(16).padStart(2, '0')
+    return "#$r$g$b$a"
+}
+fun Property.Vec3i.toHexString():String{
+    val r = get().x.toString(16).padStart(2, '0')
+    val g = get().y.toString(16).padStart(2, '0')
+    val b = get().z.toString(16).padStart(2, '0')
+    return "#$r$g$b"
+}
+
+fun Property.Vec3f.toHexStringProperty() = Property.String(toHexString())
+fun Property.Vec4i.toHexStringProperty() = Property.String(toHexString())
+fun Property.Vec4f.toHexStringProperty() = Property.String(toHexString())
+fun Property.Vec3i.toHexStringProperty() = Property.String(toHexString())
+
+
+fun Property.String.toVecColor(): Property.Vec4f {
+    val color = get()
+    val r = color.substring(1, 3).toInt(16) / 255f
+    val g = color.substring(3, 5).toInt(16) / 255f
+    val b = color.substring(5, 7).toInt(16) / 255f
+    val a = if (color.length == 9) color.substring(7, 9).toInt(16) / 255f else 1f
+    return Property.Vec4f(r, g, b, a)
 }

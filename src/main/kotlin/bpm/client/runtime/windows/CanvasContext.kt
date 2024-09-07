@@ -48,14 +48,10 @@ class CanvasContext : Listener {
     private val connectedUsers = mutableMapOf<UUID, User>()
     internal var isDraggingNode = false
 
-    private var lastNotificationEndTime = 0f
     private var selectionStart: Vector2f? = null
     private var selectionEnd: Vector2f? = null
     private val selectedNodes = mutableSetOf<UUID>()
     private val selectedLinks = mutableSetOf<UUID>()
-    private val notificationQueue = ConcurrentLinkedQueue<NotifyMessage>()
-    private var lastNotification: NotifyMessage? = null
-    private var repeatedCount = 0
     private val workspace: Workspace get() = runtime.workspace ?: throw IllegalStateException("Workspace is null")
 
     private val headerFamily get() = Fonts.getFamily("Inter")["Bold"]
@@ -63,7 +59,6 @@ class CanvasContext : Listener {
     private val bodyFamily get() = Fonts.getFamily("Inter")["Regular"]
     private val bodyFont get() = bodyFamily[workspace.settings.fontSize]
     private val fontawesomeFamily get() = Fonts.getFamily("Fa")["Regular"]
-    private val fontawesome get() = fontawesomeFamily[workspace.settings.fontSize]
 
     private var selectedEdge: Pair<Node, Edge>? = null
     private var dragStartPos: Vector2f? = null
@@ -111,14 +106,6 @@ class CanvasContext : Listener {
             isDraggingNode = true
             handleNodeDrag(node, nodeBounds, headerBounds)
         }
-    }
-
-
-    override fun onTick(delta: Float, tick: Int) {
-        //send mouse position if on window
-        val mousePos = ImGui.getMousePos()
-        //val mx = mousePos.x / runtime.workspace!!.settings.zoom
-
     }
 
     fun updateNodesInSelectionBox() {
@@ -181,194 +168,6 @@ class CanvasContext : Listener {
         val drawList = ImGui.getWindowDrawList()
         val displaySize = ImGui.getIO().displaySize
         notificationManager.renderNotifications(drawList, displaySize)
-
-//        val drawList = ImGui.getWindowDrawList()
-//        val currentTime = ImGui.getTime().toFloat()
-//        val displaySize = ImGui.getIO().displaySize
-//        var yOffset = displaySize.y - 20f  // Start from bottom
-//
-//        val visibleNotifications = mutableListOf<NotifyMessage>()
-//        val iterator = notificationQueue.iterator()
-//        var lastUniqueNotification: NotifyMessage? = null
-//        var repeatedCount = 0
-//
-//        while (iterator.hasNext() && visibleNotifications.size < 4) {
-//            val message = iterator.next()
-//
-//            // If this is a new unique message, reset the count
-//            if (lastUniqueNotification == null || message.message != lastUniqueNotification.message) {
-//                lastUniqueNotification = message.copy()
-//                repeatedCount = 1
-//            } else {
-//                repeatedCount++
-//            }
-//
-//            // Update the header with the repeat count
-//            message.header = if (repeatedCount > 1) "${message.header} ($repeatedCount)" else message.header
-//
-//            // Calculate alpha based on the time the notification became visible
-//            val visibleTime = currentTime - max(message.time, lastNotificationEndTime)
-//            val alpha = calculateAlpha(visibleTime, message.lifetime)
-//
-//            if (alpha <= 0) {
-//                if (visibleTime > message.lifetime) {
-//                    iterator.remove()
-//                    lastNotificationEndTime = currentTime
-//                }
-//                continue
-//            }
-//
-//            visibleNotifications.add(message)
-//        }
-//
-//        for (message in visibleNotifications.asReversed()) {  // Render from bottom to top
-//            val visibleTime = currentTime - max(message.time, lastNotificationEndTime)
-//            val alpha = calculateAlpha(visibleTime, message.lifetime)
-//            val bgColor = parseColor(message.color, (alpha * 255).toInt())
-//            val textColor = ImColor.rgba(255, 255, 255, (alpha * 255).toInt())
-//            val headerColor = ImColor.rgba(255, 255, 255, (alpha * 255).toInt())
-//
-//            val padding = 16f
-//            val iconSize = 24f
-//            val headerHeight = 32f
-//            val margin = 15f
-//
-//            headerFont.use {
-//                val headerSize = ImGui.calcTextSize(message.header)
-//
-//                bodyFont.use {
-//                    val textSize = ImGui.calcTextSize(message.message)
-//
-//                    val totalWidth = maxOf(headerSize.x, textSize.x) + padding * 3 + iconSize
-//                    val totalHeight = headerHeight + textSize.y + padding * 3
-//
-//                    val xPos = displaySize.x - totalWidth - margin - (margin / 2.5f)
-//                    yOffset -= totalHeight  // Move up for each notification
-//                    val yPos = yOffset - margin / 2.5f
-//
-//                    // Main background with subtle gradient
-//                    drawList.addRectFilledMultiColor(
-//                        xPos, yPos,
-//                        xPos + totalWidth, yPos + totalHeight,
-//                        ImColor.rgba(60, 60, 60, (alpha * 255).toInt()).toLong(),
-//                        ImColor.rgba(50, 50, 50, (alpha * 255).toInt()).toLong(),
-//                        ImColor.rgba(40, 40, 40, (alpha * 255).toInt()).toLong(),
-//                        ImColor.rgba(30, 30, 30, (alpha * 255).toInt()).toLong()
-//                    )
-//
-//                    //Draws a header bar with the bg color
-//                    drawList.addRectFilled(
-//                        xPos, yPos,
-//                        xPos + totalWidth, yPos + headerHeight,
-//                        bgColor,
-//                        2f
-//                    )
-//
-//                    // Colored accent bar based on notification type
-//                    val accentColor = when (message.type) {
-//                        NotifyMessage.NotificationType.INFO -> ImColor.rgba(70, 130, 180, (alpha * 255).toInt())
-//                        NotifyMessage.NotificationType.SUCCESS -> ImColor.rgba(60, 179, 113, (alpha * 255).toInt())
-//                        NotifyMessage.NotificationType.WARNING -> ImColor.rgba(255, 165, 0, (alpha * 255).toInt())
-//                        NotifyMessage.NotificationType.ERROR -> ImColor.rgba(220, 20, 60, (alpha * 255).toInt())
-//                    }
-//                    drawList.addRectFilled(
-//                        xPos, yPos,
-//                        xPos + 4f, yPos + totalHeight,
-//                        accentColor,
-//                        2f
-//                    )
-//
-//                    // Subtle border
-//                    drawList.addRect(
-//                        xPos, yPos,
-//                        xPos + totalWidth, yPos + totalHeight,
-//                        ImColor.rgba(200, 200, 200, (alpha * 77).toInt()),  // 30% of 255 is about 77
-//                        4f
-//                    )
-//
-//                    // Icon
-//                    val icon = message.icon.toChar().toString()
-//                    fontawesome.use {
-//                        drawList.addText(
-//                            fontawesome,
-//                            iconSize,
-//                            xPos + padding,
-//                            yPos + (headerHeight - iconSize) / 2,
-//                            headerColor,
-//                            icon
-//                        )
-//                    }
-//
-//                    // Header text
-//                    headerFont.use {
-//                        drawList.addText(
-//                            headerFont,
-//                            workspace.settings.fontHeaderSize.toFloat(),
-//                            xPos + padding * 2 + iconSize,
-//                            yPos + (headerHeight - headerSize.y) / 2,
-//                            headerColor,
-//                            message.header
-//                        )
-//                    }
-//
-//                    // Message text
-//                    bodyFont.use {
-//                        drawList.addText(
-//                            bodyFont,
-//                            workspace.settings.fontSize.toFloat(),
-//                            xPos + padding,
-//                            yPos + headerHeight + padding,
-//                            textColor,
-//                            message.message
-//                        )
-//                    }
-//
-//                    yOffset -= 10f  // Add some space between notifications
-//                }
-//            }
-//        }
-    }
-
-    private fun calculateAlpha(visibleTime: Float, lifetime: Float): Float {
-        val fadeInTime = 0.3f
-        val fadeOutTime = 0.5f
-
-        return when {
-            visibleTime < 0f -> 0f
-            visibleTime < fadeInTime -> visibleTime / fadeInTime
-            visibleTime > lifetime - fadeOutTime -> 1f - (visibleTime - (lifetime - fadeOutTime)) / fadeOutTime
-            visibleTime > lifetime -> 0f
-            else -> 1f
-        }.coerceIn(0f, 1f)
-    }
-
-    private fun parseColor(colorString: String, alpha: Int): Int {
-        return try {
-            val rgb = colorString.removePrefix("#").toInt(16)
-            ImColor.rgba((rgb shr 16) and 0xFF, (rgb shr 8) and 0xFF, rgb and 0xFF, alpha)
-        } catch (e: Exception) {
-            ImColor.rgba(255, 255, 255, alpha)  // Default to white if parsing fails
-        }
-    }
-
-    private fun getColors(type: NotifyMessage.NotificationType, alpha: Int): Pair<Int, Int> {
-        val colorVec = when (type) {
-            NotifyMessage.NotificationType.INFO -> listOf(70, 130, 180, 255, 255, 255)
-            NotifyMessage.NotificationType.SUCCESS -> listOf(60, 179, 113, 255, 255, 255)
-            NotifyMessage.NotificationType.WARNING -> listOf(255, 165, 0, 0, 0, 0)
-            NotifyMessage.NotificationType.ERROR -> listOf(220, 20, 60, 255, 255, 255)
-        }
-
-        val bgColor = ImColor.rgba(colorVec[0], colorVec[1], colorVec[2], alpha)
-        val textColor = ImColor.rgba(colorVec[3], colorVec[4], colorVec[5], alpha)
-
-        return Pair(bgColor, textColor)
-    }
-
-
-    fun isPointHovered(bounds: Vector4f): Boolean {
-        val mousePos = ImGui.getMousePos()
-        return bounds.contains(mousePos.x, mousePos.y)
     }
 
 
@@ -427,49 +226,6 @@ class CanvasContext : Listener {
             groupDragOffset.clear()
             // We're not unselecting nodes here anymore
             // unselectAllNodes()
-        }
-    }
-
-    fun unselectAllNodes() {
-        for (nodeId in selectedNodes) {
-            val node = runtime.workspace!!.getNode(nodeId)
-            node?.selected = false
-        }
-        selectedNodes.clear()
-    }
-
-
-    private fun updateSelection() {
-        val start = selectionStart ?: return
-        val end = selectionEnd ?: return
-
-        val topLeft = Vector2f(minOf(start.x, end.x), minOf(start.y, end.y))
-        val bottomRight = Vector2f(maxOf(start.x, end.x), maxOf(start.y, end.y))
-
-        selectedNodes.clear()
-        selectedLinks.clear()
-
-        for (node in workspace.graph.nodes) {
-            val bounds = computeNodeBounds(node)
-            if (bounds.x < bottomRight.x && bounds.z > topLeft.x && bounds.y < bottomRight.y && bounds.w > topLeft.y) {
-                selectedNodes.add(node.uid)
-                node.selected = true  // Set the selected property of the node
-            }
-        }
-
-
-        for (link in workspace.graph.getLinks()) {
-            val sourceEdge = workspace.graph.getEdge(link.from) ?: continue
-            val sourceNode = workspace.getNode(sourceEdge.owner) ?: continue
-            val targetEdge = workspace.graph.getEdge(link.to) ?: continue
-            val targetNode = workspace.getNode(targetEdge.owner) ?: continue
-
-            val sourceBounds = computeEdgeBounds(sourceNode, sourceEdge)
-            val targetBounds = computeEdgeBounds(targetNode, targetEdge)
-
-            if ((sourceBounds.x in topLeft.x..bottomRight.x && sourceBounds.y in topLeft.y..bottomRight.y) || (targetBounds.x in topLeft.x..bottomRight.x && targetBounds.y in topLeft.y..bottomRight.y)) {
-                selectedLinks.add(link.uid)
-            }
         }
     }
 
@@ -860,25 +616,19 @@ class CanvasContext : Listener {
 
     private fun deleteSelected() {
         for (nodeId in selectedNodes) {
-//            workspace.removeNode(nodeId)
-
             //colects all the links that are connected to the node
             val links = workspace.graph.getLinks(nodeId)
             for (link in links) {
                 client.send(LinkDeleteRequest(link.uid))
             }
 
-
+            // Notify the server about node deletion
             client.send(NodeDeleteRequest(nodeId))
 
-            // Notify the server about node deletion
-//            runtime.client.send(NodeDeleted(nodeId))
         }
         for (linkId in selectedLinks) {
-//            workspace.removeLink(linkId)
-            client.send(LinkDeleteRequest(linkId))
             // Notify the server about link deletion
-//            runtime.client.send(LinkDeleted(linkId))
+            client.send(LinkDeleteRequest(linkId))
         }
         selectedNodes.clear()
         selectedLinks.clear()

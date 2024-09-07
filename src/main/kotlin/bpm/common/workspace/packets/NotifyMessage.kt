@@ -6,7 +6,7 @@ import bpm.common.packets.Packet
 
 data class NotifyMessage(
     var icon: Int = 0xf05a,
-    var color: String = "#ecabec",
+    var color: String = "#ecabecff",
     var message: String = "",
     var lifetime: Float = 5.0f, //5 seconds
     var type: NotificationType = NotificationType.INFO,

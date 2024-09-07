@@ -1,32 +1,31 @@
-# Print.node
-description: "Prints a message to the console."
-group: Actions
-name: Print
+# Notification.node
+description: "Shows an info notification message."
+group: Notify
+name: Warning
 extends: Base/Node
 
 theme:
-  color: '#292721'
+  color: '#D3D630'
   height: 60
   width: 100
+  icon: 0xf27a
 
 edges:
   exec_in:
     description: 'The input execution flow'
     direction: input
     type: exec
-  value:
+  message:
     description: 'The message to print.'
     direction: input
     type: string
-    value:
-      type: string
-      default: 'Hello, World!'
   exec_out:
     description: 'The output execution flow'
     direction: output
     type: exec
 
 source: |
-  local _Print = java.import('java.lang.System').out
-  _Print:println(value)
+  local length = string.len(message)
+  local time = length * 0.5
+  Notify:message(message, time, "#D3D630F5", "Warning", "WARNING")
   ${EXEC.exec_out}

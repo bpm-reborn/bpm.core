@@ -6,17 +6,17 @@ import imgui.type.ImString
 import bpm.client.font.Fonts
 import bpm.client.render.IRender
 import bpm.client.runtime.ClientRuntime
+import bpm.client.runtime.ClientRuntime.logger
 import bpm.client.utils.toVec2f
 import bpm.common.utils.FontAwesome
 import bpm.client.utils.use
 import bpm.common.network.Client
 import bpm.common.network.Endpoint
 import bpm.common.network.listener
-import bpm.common.property.Property
-import bpm.common.property.cast
-import bpm.common.property.castOr
+import bpm.common.property.*
 import bpm.common.schemas.Schemas
 import bpm.common.utils.fmodf
+import bpm.common.utils.toVecColor
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.WorkspaceSettings
 import bpm.common.workspace.graph.Edge
@@ -493,112 +493,6 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     }
 
 
-//        val inputEdges = edges.filter { it.direction == "input" }
-//        val outputEdges = edges.filter { it.direction == "output" }
-//
-//        // Render output edges
-//        outputEdges.forEach { edge ->
-    /*private fun renderEdges(drawList: ImDrawList, node: Node) {
-        val edges = workspace.graph.getEdges(node)
-        if (edges.isEmpty()) return
-
-        val nodeBounds = canvasCtx.computeNodeBounds(node)
-
-        for (edge in edges) {
-            val bounds = canvasCtx.canvasCtx.computeEdgeBounds(node, edge)
-            val xPos = bounds.x
-            val yPos = bounds.y
-
-            // Determine edge color based on type
-            val color = when (edge.type) {
-                "exec" -> ImColor.rgba(255, 255, 255, 255)
-                "number" -> ImColor.rgba(100, 255, 100, 255)
-                "string" -> ImColor.rgba(255, 100, 100, 255)
-                "boolean" -> ImColor.rgba(255, 255, 100, 255)
-                else -> ImColor.rgba(200, 200, 200, 255)
-            }
-
-            // Render edge shape based on type
-            when (edge.type) {
-                "exec" -> {
-                    // Square shape for exec type
-                    val size = 8f * canvasCtx.zoom
-                    drawList.addRectFilled(
-                        xPos - size/2, yPos - size/2,
-                        xPos + size/2, yPos + size/2,
-                        color
-                    )
-                }
-                else -> {
-                    // Circle shape for other types
-                    drawList.addCircleFilled(xPos, yPos, 4f * canvasCtx.zoom, color)
-                }
-            }
-
-            // Render edge label
-            headerFont.use {
-                val labelSizes = ImGui.calcTextSize(edge.name)
-                val sizeX = labelSizes.x * 0.8f
-                val sizeY = labelSizes.y * 0.8f
-                val labelX = if (edge.direction == "input") xPos + 14f * canvasCtx.zoom else xPos - sizeX - 14f * canvasCtx.zoom
-                val labelY = yPos - sizeY / 2
-
-                // Add background for better readability
-                drawList.addRectFilled(
-                    labelX - 2f * canvasCtx.zoom,
-                    labelY - 2f * canvasCtx.zoom,
-                    labelX + sizeX + 2f * canvasCtx.zoom,
-                    labelY + sizeY + 2f * canvasCtx.zoom,
-                    ImColor.rgba(40, 40, 40, 200)
-                )
-
-                drawList.addText(
-                    headerFont,
-                    workspace.settings.fontHeaderSize.toFloat() * 0.8f,
-                    labelX,
-                    labelY,
-                    ImColor.rgba(220, 220, 220, 255),
-                    edge.name
-                )
-            }
-
-            // Handle hover and selection
-            val mousePos = ImGui.getMousePos()
-            if (isPointOverEdge(Vector2f(mousePos.x, mousePos.y), bounds)) {
-                // Highlight on hover
-                drawList.addCircle(xPos, yPos, 6f * canvasCtx.zoom, ImColor.rgba(255, 255, 255, 200), 12, 2f * canvasCtx.zoom)
-
-                // Show tooltip with edge description
-                ImGui.beginTooltip()
-                ImGui.text("${edge.name}: ${edge.description}")
-                ImGui.endTooltip()
-
-                // Handle edge click
-                if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
-                    canvasCtx.handleEdgeClick(node, edge)
-                    ImGui.setMouseCursor(ImGuiMouseCursor.ResizeAll)  // Change cursor to indicate dragging
-                }
-            }
-
-            // Render connected indicator
-            if (workspace.graph.getLinks().any { it.from == edge.uid || it.to == edge.uid }) {
-                drawList.addCircleFilled(xPos, yPos, 3f * canvasCtx.zoom, ImColor.rgba(255, 255, 255, 255))
-            }
-        }
-    }*/
-
-//    private fun renderEdges(drawList: ImDrawList, node: Node, nodeBounds: Vector4f) {
-//        val edges = workspace.graph.getEdges(node)
-//        // Render input edges
-//        inputEdges.forEach { edge ->
-//            renderEdge(drawList, node, edge, nodeBounds)
-//        }
-//
-//            renderEdge(drawList, node, edge, nodeBounds)
-//        }
-//    }
-
-
     private fun renderEdges(drawList: ImDrawList, node: Node, nodeBounds: Vector4f) {
         val edges = workspace.graph.getEdges(node)
         val inputEdges = edges.filter { it.direction == "input" }
@@ -836,6 +730,64 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
                             this["default"] = boolValue
                             Client { it.send(EdgePropertyUpdate(edge.uid, this)) }
                         }
+                    }
+                }
+
+                "color" -> {
+                    var colorValue = (currentValue.castOr { Property.String("#FFFFFFFF") }).toVecColor()
+                    val color = colorValue.get()
+                    val colorPickerSize = 20f * canvasCtx.zoom
+                    val colorPickerPos = Vector2f(x, y + 2 * canvasCtx.zoom)
+                    val colorPickerBounds = Vector4f(
+                        colorPickerPos.x,
+                        colorPickerPos.y,
+                        colorPickerPos.x + colorPickerSize,
+                        colorPickerPos.y + colorPickerSize
+                    )
+
+                    drawList.addRectFilled(
+                        colorPickerBounds.x,
+                        colorPickerBounds.y,
+                        colorPickerBounds.z,
+                        colorPickerBounds.w,
+                        ImColor.rgba(color.x, color.y, color.z, color.w)
+                    )
+
+                    if (isPointOverRect(Vector2f(ImGui.getMousePos().x, ImGui.getMousePos().y), colorPickerBounds)) {
+                        ImGui.setMouseCursor(ImGuiMouseCursor.Hand)
+                        drawList.addRectFilled(
+                            colorPickerBounds.x,
+                            colorPickerBounds.y,
+                            colorPickerBounds.z,
+                            colorPickerBounds.w,
+                            ImColor.rgba(100, 100, 100, 200)
+                        )
+
+                        if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
+                            ImGui.openPopup("ColorPicker")
+                        }
+                    }
+
+                    if (ImGui.beginPopup("ColorPicker")) {
+                        val floatColor = colorValue.toFloatArray()
+                        val colorPickerPos = ImGui.getCursorScreenPos()
+                        if (ImGui.colorPicker4("##color", floatColor)) {
+                            colorValue = Property.Vec4f(Vector4f(floatColor[0], floatColor[1], floatColor[2], floatColor[3]))
+                            edge.properties["value"] = edge.value.apply {
+                                //compute the #RRGGBBAA value
+                                this["default"] = colorValue.toHexStringProperty()
+                                Client { it.send(EdgePropertyUpdate(edge.uid, this)) }
+                            }
+                        }
+                        if (ImGui.isItemDeactivatedAfterEdit()) {
+                            edge.properties["value"] = edge.value.apply {
+                                //compute the #RRGGBBAA value
+                                this["default"] = colorValue.toHexStringProperty()
+                                Client { it.send(EdgePropertyUpdate(edge.uid, this)) }
+                            }
+                            ImGui.closeCurrentPopup()
+                        }
+                        ImGui.endPopup()
                     }
                 }
             }
@@ -1444,3 +1396,4 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
 
 }
+
