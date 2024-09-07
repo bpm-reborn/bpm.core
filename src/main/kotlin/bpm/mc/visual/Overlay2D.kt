@@ -6,12 +6,16 @@ import bpm.client.runtime.windows.NotificationManager
 import bpm.common.network.Listener
 import bpm.common.packets.Packet
 import bpm.common.workspace.packets.NotifyMessage
+import com.mojang.blaze3d.pipeline.RenderTarget
+import com.mojang.blaze3d.pipeline.TextureTarget
 import java.util.*
 
 object Overlay2D : Listener {
 
     var skipped = false
     private val notificationManager: NotificationManager = NotificationManager()
+//    private var renderTarget = lazyOf(TextureTarget(0, 0, false, false))
+
     fun render() {
         val mainViewport = ImGui.getMainViewport()
         ImGui.setNextWindowPos(mainViewport.posX, mainViewport.posY)
@@ -27,9 +31,10 @@ object Overlay2D : Listener {
         val displaySize = ImGui.getIO().displaySize
         notificationManager.renderNotifications(drawList, displaySize)
         ImGui.text("Hello, world!")
-
         ImGui.end()
     }
+
+
 
     override fun onPacket(packet: Packet, from: UUID) {
         if (packet is NotifyMessage) {

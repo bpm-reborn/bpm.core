@@ -16,6 +16,6 @@ edges:
     type: string
 source: |
   ${SETUP.{
-      variables.__Random__ = java.import('noderspace.common.utils.Random')
+      variables.__Random__ = java.import('bpm.common.utils.Random')
   }}
   return variables.__Random__:randomSentence()
