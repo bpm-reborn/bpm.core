@@ -1,6 +1,7 @@
 package bpm.mc.visual
 
 import bpm.Bpm
+import bpm.mc.visual.BlockViewRenderer.FaceState
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.ByteBufferBuilder
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
@@ -13,6 +14,7 @@ import net.minecraft.client.renderer.*
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import org.joml.Vector3f
+import kotlin.math.max
 import kotlin.random.Random
 
 
@@ -33,17 +35,31 @@ class CustomBackgroundRenderer(private val minecraft: Minecraft) {
     private var blurRadius = 2.0f
     private var numStars = 200
     private var starSize = 0.002f
-
+    var pulseValue = 0f
+    var lastClickTime = 0L
     // Add methods to update zoom and rotation
     fun updateZoom(dZoom: Float) {
         zoom += dZoom * 0.12f
         zoom = zoom.coerceIn(1f, 2f)  // Limit zoom range
     }
-
+    fun onFaceClick() {
+        pulseValue = 1f
+        lastClickTime = System.currentTimeMillis()
+    }
     fun updateRotation(newRotation: Float) {
         rotation = newRotation
     }
 
+    fun updatePulse() = Companion.backgroundShader?.let {
+        val currentTime = System.currentTimeMillis()
+        val timeSinceClick = currentTime - lastClickTime
+
+        // Lerp the pulse value back to zero over 1 second
+        pulseValue = max(0f, 1f - timeSinceClick / 1000f)
+
+        // Update the uniform in your shader
+        it.safeGetUniform("pulse")?.set(pulseValue)
+    }
 
     private val backgroundRenderType: RenderType = RenderType.create(
         "${Bpm.ID}_custom_background",
@@ -95,7 +111,7 @@ class CustomBackgroundRenderer(private val minecraft: Minecraft) {
 
         backgroundShader?.let { shader ->
             colorCurrent.lerp(colorTarget, 0.01f)
-            time += 1f / 60f
+            time += 0.5f
             shader.safeGetUniform("iTime")?.set(time)
 
 
@@ -103,29 +119,31 @@ class CustomBackgroundRenderer(private val minecraft: Minecraft) {
             val height = ImGui.getWindowViewport().size.y
             val boundsWidth = bounds.maxX - bounds.minX
             val boundsHeight = bounds.maxY - bounds.minY
-
+            val aspect = height / width
             //If hovered isn't null, use it's center screen position for the mouse
-            shader.safeGetUniform("iMouse")?.set(
-                mouseX.toFloat() * 2,
-                height - mouseY.toFloat() * 2  // Invert Y-coordinate
-            )
-            //The comupted size
-            if (hovered != null) {
-                shader.safeGetUniform("circleRadius")?.set(0.25f)
-                when (face) {
-                    Direction.UP -> shader.safeGetUniform("iColor")?.set(0f, 1f, 0f)
-                    Direction.DOWN -> shader.safeGetUniform("iColor")?.set(1f, 0f, 0f)
-                    Direction.NORTH -> shader.safeGetUniform("iColor")?.set(0f, 0f, 1f)
-                    Direction.SOUTH -> shader.safeGetUniform("iColor")?.set(1f, 1f, 0f)
-                    Direction.EAST -> shader.safeGetUniform("iColor")?.set(1f, 0f, 1f)
-                    Direction.WEST -> shader.safeGetUniform("iColor")?.set(0f, 1f, 1f)
-                    else -> shader.safeGetUniform("iColor")?.set(0f, 0f, 0f)
-                }
+            val realMouse = ImGui.getMousePos()
 
+//            shader.safeGetUniform("iMouse")?.set(
+//                (realMouse.x - bounds.minX) / boundsWidth,
+//                (realMouse.y - bounds.minY) / boundsHeight,
+//            )
+            //The comupted size
+
+            if (hovered != null && face != null) {
+                val state = renderer.faceStates.getOrDefault(Pair(hovered, face), FaceState.NONE)
+                when (state) {
+                    FaceState.INPUT -> shader.safeGetUniform("iColor")?.set(0f, 1f, 0f)
+                    FaceState.OUTPUT -> shader.safeGetUniform("iColor")?.set(1f, 0f, 0f)
+                    FaceState.BOTH -> shader.safeGetUniform("iColor")?.set(1f, 1f, 0f)
+                    FaceState.NONE -> shader.safeGetUniform("iColor")?.set(1f, 1f, 1f) // White for hover on NONE state
+                }
+                shader.safeGetUniform("circleRadius")?.set(2.5f) // Larger radius for hover effect
             } else {
-                shader.safeGetUniform("circleRadius")?.set(0.055f)
-                shader.safeGetUniform("iColor")?.set(0f, 0f, 0f)
+                shader.safeGetUniform("iColor")?.set(0f, 0f, 0f) // Black for non-hovered background
             }
+
+            shader.safeGetUniform("circleRadius")?.set(1.5f) // Smaller radius for non-hover effect
+
 
             shader.safeGetUniform("iResolution")?.set(width.toFloat(), height.toFloat())
 

@@ -20,11 +20,16 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 object PipeNetworkManager : Listener {
 
+    enum class ProxiedType {
+        INPUT, OUTPUT, BOTH, NONE
+    }
+    data class ProxiedView(val origin: BlockPos, val blocks: Map<BlockPos, EnumMap<Direction, ProxiedType>>)
+
     private val networks = mutableListOf<PipeNetwork>()
     private val pipeTypeCache = ConcurrentHashMap<Class<out BasePipeBlock>, MutableSet<BlockPos>>()
     private val logger = KotlinLogging.logger {}
     private val mappedControllers = ConcurrentHashMap<UUID, MutableSet<Pair<EnderControllerTileEntity, BlockPos>>>()
-
+    private val proxiedViews = mutableMapOf<UUID, ProxiedView>()
     private val pendingUpdates = mutableSetOf<PipeNetwork.LevelPipe>()
 
     private val updateInProgress = AtomicBoolean(false)
@@ -223,7 +228,11 @@ object PipeNetworkManager : Listener {
 
     private fun onControllerPlaced(entity: EnderControllerTileEntity) {
         val uuid = entity.getUUID()
-        mappedControllers.getOrPut(uuid) { mutableSetOf() }.add(entity to entity.blockPos)
+        if(mappedControllers.containsKey(uuid)) {
+            logger.warn { "Controller already placed: $uuid" }
+            return
+        }
+        mappedControllers[uuid] = mutableSetOf(entity to entity.blockPos)
         ServerRuntime.recompileWorkspace(uuid)
         logger.info { "Controller placed: $uuid" }
     }
@@ -231,6 +240,7 @@ object PipeNetworkManager : Listener {
     private fun onControllerRemoved(entity: EnderControllerTileEntity) {
         val uuid = entity.getUUID()
         mappedControllers[uuid]?.clear()
+        mappedControllers.remove(uuid)
         removeFromAllNetworks(entity.level!!, entity.blockPos)
         ServerRuntime.closeWorkspace(uuid)
         logger.info { "Controller removed: $uuid" }

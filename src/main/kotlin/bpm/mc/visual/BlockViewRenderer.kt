@@ -1,12 +1,18 @@
 package bpm.mc.visual
 
+import bpm.client.runtime.ClientRuntime
+import bpm.client.runtime.Platform
+import bpm.mc.visual.BlockPreviewScreen.customBackgroundRenderer
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.*
 import com.mojang.math.Axis
 import imgui.ImGui
 import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.gui.font.FontSet
 import net.minecraft.client.renderer.*
+import net.minecraft.client.renderer.debug.DebugRenderer
 import net.minecraft.client.renderer.texture.OverlayTexture
 import net.minecraft.client.renderer.texture.TextureAtlas
 import net.minecraft.core.BlockPos
@@ -21,10 +27,23 @@ import org.joml.Matrix4f
 import org.joml.Vector2f
 import org.joml.Vector3f
 import org.joml.Vector4f
+import org.lwjgl.glfw.GLFW
 import thedarkcolour.kotlinforforge.neoforge.forge.vectorutil.v3d.toVector3f
 
 class BlockViewRenderer(private val minecraft: Minecraft) {
     private data class SortedAABB(val blockPos: BlockPos, val aabb: AABB, val zDepth: Double, val face: Direction?)
+    // Add this enum to BlockViewRenderer.kt
+    enum class FaceState {
+
+        NONE,
+        INPUT,
+        OUTPUT,
+        BOTH
+    }
+
+    // Add these properties to BlockViewRenderer class
+    internal val faceStates = mutableMapOf<Pair<BlockPos, Direction>, FaceState>()
+    internal var hoveredFace: Pair<BlockPos, Direction>? = null
 
     private val sortedScreenSpaceAABBs = mutableListOf<SortedAABB>()
     internal val centers = mutableMapOf<BlockPos, Vector2f>()
@@ -219,7 +238,13 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
         return AABB(minX, minY, 0.0, maxX, maxY, 0.0)
     }
 
-    fun renderBlockOutline(graphics: GuiGraphics, pos: BlockPos, face: Direction?, partialTicks: Float) {
+    fun renderBlockOutline(
+        graphics: GuiGraphics,
+        pos: BlockPos,
+        face: Direction?,
+        partialTicks: Float,
+        hovered: Boolean = false
+    ) {
         if (face == null) return
 
         val pose = graphics.pose()
@@ -234,17 +259,46 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
         val buffer = bufferSource.getBuffer(customRenderType)
 
         val matrix4f = pose.last().pose()
-        val red = 1.0f
-        val green = 1.0f
-        val blue = 1.0f
-        val alpha = 0.4f
+        val state = faceStates.getOrDefault(Pair(pos, face), FaceState.NONE)
+        val isHovered = (hoveredFace == Pair(pos, face) || hovered) && !BlockPreviewScreen.isDragging
+
+
+//        if(isHovered) {
+//            val center = centers[pos] ?: return
+//            val font = minecraft.font
+//            var text = "Face: $face\nState: $state"
+//            val state = faceStates.getOrDefault(Pair(pos, face), FaceState.NONE)
+//             text += "\nPos: $pos\nFace: $face\nState: $state"
+//
+//            // Calculate the position for the text (centered on the face)
+//            val textPos = when (face) {
+//                Direction.DOWN -> Vec3(0.5, 0.0, 0.5)
+//                Direction.UP -> Vec3(0.5, 1.0, 0.5)
+//                Direction.NORTH -> Vec3(0.5, 0.5, 0.0)
+//                Direction.SOUTH -> Vec3(0.5, 0.5, 1.0)
+//                Direction.WEST -> Vec3(0.0, 0.5, 0.5)
+//                Direction.EAST -> Vec3(1.0, 0.5, 0.5)
+//            }
+//
+
+//        }
+
+
+        val color = when {
+            isHovered -> Vector4f(1f, 1f, 1f, 0.7f) // White with high alpha for hover
+            state == FaceState.NONE -> Vector4f(0f, 0f, 0f, 0f) // Transparent for NONE state
+            state == FaceState.INPUT -> Vector4f(0f, 1f, 0f, 0.4f) // Green for INPUT
+            state == FaceState.OUTPUT -> Vector4f(1f, 0f, 0f, 0.4f) // Red for OUTPUT
+            state == FaceState.BOTH -> Vector4f(1f, 1f, 0f, 0.4f) // Yellow for BOTH
+            else -> Vector4f(0f, 0f, 0f, 0f) // Fallback transparent
+        }
 
         // Slight expansion to avoid z-fighting
         val eps = 0.02f
         val min = 0f - eps
         val max = 1f + eps
 
-        renderFaceOutline(buffer, matrix4f, face, min, max, red, green, blue, alpha)
+        renderFaceOutline(buffer, matrix4f, face, min, max, color.x(), color.y(), color.z(), color.w())
 
         bufferSource.endBatch(customRenderType)
 
@@ -252,12 +306,8 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
         RenderSystem.disableBlend()
         pose.popPose()
 
-        if (ImGui.begin("Block Preview")) {
-            ImGui.text(face.toString())
-        }
-        ImGui.end()
+        hoveredFace = if (isHovered) Pair(pos, face) else null
     }
-
 
     private fun renderFaceOutline(
         buffer: VertexConsumer,
@@ -281,6 +331,91 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
         }
     }
 
+    private fun renderBillboardText(
+        poseStack: PoseStack,
+        text: String,
+        x: Float,
+        y: Float,
+        z: Float,
+        partialTicks: Float,
+        font: Font,
+        bufferSource: MultiBufferSource,
+        color: Int = 0xFFFFFF
+    ) {
+        DebugRenderer.renderFloatingText(
+            poseStack, bufferSource, text,
+            x.toDouble(), y.toDouble(), z.toDouble(), color, 0.02f, true, 0f, false
+        )
+    }
+
+    // Add this function to BlockViewRenderer class
+    fun handleMouseClick(mouseX: Int, mouseY: Int) {
+        val hoveredBlock = finalizeSortingAndDetermineHoveredBlock(mouseX, mouseY) ?: return
+
+
+        val (pos, face) = hoveredBlock
+        if (Platform.isKeyDown(ClientRuntime.Key.LEFT_CONTROL) || Platform.isKeyDown(ClientRuntime.Key.RIGHT_CONTROL) || Platform.isKeyDown(ClientRuntime.Key.LEFT_SUPER)) {
+
+            if (faceStates[hoveredBlock] != FaceState.NONE) {
+                customBackgroundRenderer.onFaceClick()
+            }
+            for (face in Direction.values()) {
+                val key = Pair(pos, face)
+                faceStates[key] = when (faceStates[key]) {
+                    null, FaceState.NONE -> FaceState.INPUT
+                    FaceState.INPUT -> FaceState.OUTPUT
+                    FaceState.OUTPUT -> FaceState.BOTH
+                    FaceState.BOTH -> FaceState.NONE
+                }
+                if (faceStates[key] != FaceState.NONE) {
+                    customBackgroundRenderer.onFaceClick()
+                }
+            }
+
+            return
+        }
+        val key = Pair(pos, face)
+        faceStates[key] = when (faceStates[key]) {
+            null, FaceState.NONE -> FaceState.INPUT
+            FaceState.INPUT -> FaceState.OUTPUT
+            FaceState.OUTPUT -> FaceState.BOTH
+            FaceState.BOTH -> FaceState.NONE
+        }
+
+        if (faceStates[key] != FaceState.NONE) {
+            customBackgroundRenderer.onFaceClick()
+        }
+
+
+        //If shifts down, set all to none, if all are none, cycle to input, if input, cycle to output, if output, cycle to both
+        if (ImGui.isKeyDown(GLFW.GLFW_KEY_LEFT_SHIFT) || ImGui.isKeyDown(GLFW.GLFW_KEY_RIGHT_SHIFT)) {
+            //If all the faces are the same, cycle to the next ordinal value
+            val allSame = faceStates.filter { it.key.first == hoveredBlock?.first }
+                .all { it.value == faceStates[hoveredBlock] }
+            if (allSame) {
+                faceStates.filter { it.key.first == hoveredBlock?.first }.forEach { (key, _) ->
+                    faceStates[key] = when (faceStates[key]) {
+                        FaceState.NONE -> FaceState.INPUT
+                        FaceState.INPUT -> FaceState.OUTPUT
+                        FaceState.OUTPUT -> FaceState.BOTH
+                        FaceState.BOTH -> FaceState.NONE
+                        null -> FaceState.NONE
+                    }
+                }
+            } else {
+                //Set all to none
+                faceStates.filter { it.key.first == hoveredBlock?.first }.forEach { (key, _) ->
+                    faceStates[key] = FaceState.NONE
+                }
+            }
+            if (faceStates[hoveredBlock] != FaceState.NONE) {
+                customBackgroundRenderer.onFaceClick()
+            }
+            return
+        }
+
+    }
+
     private fun renderFaceQuad(
         buffer: VertexConsumer,
         matrix: Matrix4f,
@@ -292,26 +427,38 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
         when {
             normal.y != 0f -> {
                 // UP or DOWN face
-                buffer.addVertex(matrix, x1, y1, z1).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
-                buffer.addVertex(matrix, x1, y1, z2).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
-                buffer.addVertex(matrix, x2, y1, z2).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
-                buffer.addVertex(matrix, x2, y1, z1).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x1, y1, z1).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x1, y1, z2).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x2, y1, z2).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x2, y1, z1).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
             }
 
             normal.x != 0f -> {
                 // EAST or WEST face
-                buffer.addVertex(matrix, x1, y1, z1).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
-                buffer.addVertex(matrix, x1, y2, z1).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
-                buffer.addVertex(matrix, x1, y2, z2).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
-                buffer.addVertex(matrix, x1, y1, z2).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x1, y1, z1).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x1, y2, z1).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x1, y2, z2).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x1, y1, z2).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
             }
 
             else -> {
                 // NORTH or SOUTH face
-                buffer.addVertex(matrix, x1, y1, z1).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
-                buffer.addVertex(matrix, x1, y2, z1).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
-                buffer.addVertex(matrix, x2, y2, z1).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
-                buffer.addVertex(matrix, x2, y1, z1).setColor(r, g, b, a).setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x1, y1, z1).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x1, y2, z1).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x2, y2, z1).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
+                buffer.addVertex(matrix, x2, y1, z1).setColor(r, g, b, a)
+                    .setNormal(normal.x(), normal.y(), normal.z())
             }
         }
     }
@@ -488,7 +635,14 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
 
         // Render the block entity
         val blockEntityRenderer = minecraft.blockEntityRenderDispatcher.getRenderer(blockEntity)
-        blockEntityRenderer?.render(blockEntity, partialTicks, pose, bufferSource, 0xF000F0, OverlayTexture.NO_OVERLAY)
+        blockEntityRenderer?.render(
+            blockEntity,
+            partialTicks,
+            pose,
+            bufferSource,
+            0xF000F0,
+            OverlayTexture.NO_OVERLAY
+        )
 
         pose.popPose()
         bufferSource.endBatch()
@@ -503,6 +657,6 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
 
     fun updateZoom(dZoom: Float) {
         zoom += dZoom * 0.5f
-        zoom = zoom.coerceIn(3f, 5f)
+        zoom = zoom.coerceIn(2f, 8f)
     }
 }
