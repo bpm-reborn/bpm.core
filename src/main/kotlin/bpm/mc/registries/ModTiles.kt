@@ -19,7 +19,10 @@ object ModTiles : ModRegistry<BlockEntityType<*>> {
     val ENDER_CONTROLLER_TILE_ENTITY: BlockEntityType<EnderControllerTileEntity>
             by register {
                 registry.register("ender_pipe_controller") { _ ->
-                    BlockEntityType.Builder.of(::EnderControllerTileEntity, ModBlocks.ENDER_CONTROLLER).build(null)
+                    BlockEntityType.Builder.of(
+                        ::EnderControllerTileEntity,
+                        ModBlocks.ENDER_CONTROLLER
+                    ).build(null)
                 }
             }
 }

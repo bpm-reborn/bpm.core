@@ -1,16 +1,24 @@
 package bpm.mc.block
 
+import bpm.client.runtime.ClientRuntime.logger
+import bpm.mc.visual.BlockPreviewScreen
+import bpm.pipe.PipeNetworkManager
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
+import net.minecraft.world.InteractionHand
+import net.minecraft.world.ItemInteractionResult
+import net.minecraft.world.entity.player.Player
+import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.BlockGetter
 import net.minecraft.world.level.Level
-import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.phys.AABB
+import net.minecraft.world.phys.BlockHitResult
 import net.minecraft.world.phys.shapes.BooleanOp
 import net.minecraft.world.phys.shapes.CollisionContext
 import net.minecraft.world.phys.shapes.Shapes
 import net.minecraft.world.phys.shapes.VoxelShape
+import net.neoforged.neoforge.capabilities.Capabilities
 
 
 class EnderProxyBlock(properties: Properties) : BasePipeBlock(properties) {
@@ -37,6 +45,62 @@ class EnderProxyBlock(properties: Properties) : BasePipeBlock(properties) {
         return shape
     }
 
+    private fun canProxyBlockConnectTo(level: Level, pos: BlockPos, direction: Direction): Boolean {
+        val blockEntity = level.getBlockEntity(pos)
+        return blockEntity != null && (hasItemHandlerCapability(level, pos, direction) || hasFluidHandlerCapability(level, pos, direction))
+    }
+
+    private fun hasItemHandlerCapability(level: Level, pos: BlockPos, side: Direction): Boolean {
+        val maybeHandler = level.getCapability(Capabilities.ItemHandler.BLOCK, pos, side)
+        return maybeHandler != null
+    }
+
+    private fun hasFluidHandlerCapability(level: Level, pos: BlockPos, side: Direction): Boolean {
+        val maybeHandler = level.getCapability(Capabilities.FluidHandler.BLOCK, pos, side)
+        return maybeHandler != null
+    }
+
+
+    override fun useItemOn(
+        stack: ItemStack,
+        state: BlockState,
+        level: Level,
+        pos: BlockPos,
+        player: Player,
+        hand: InteractionHand,
+        hit: BlockHitResult
+    ): ItemInteractionResult {
+        val proxiableBlocks = findProxiableBlocksInRadius(level, pos, 5)
+        if (!level.isClientSide) {
+            val network = PipeNetworkManager.getNetworkForPos(level, pos)
+            proxiableBlocks.forEach { proxiablePos ->
+                logger.debug("Adding proxy at $proxiablePos")
+            }
+            return ItemInteractionResult.SUCCESS
+        }
+
+        // Open the BlockPreviewScreen with the origin and proxiable blocks
+        BlockPreviewScreen.open(pos, proxiableBlocks + pos)
+        return ItemInteractionResult.SUCCESS
+    }
+
+    private fun findProxiableBlocksInRadius(level: Level, pos: BlockPos, radius: Int): List<BlockPos> {
+        val buffer = mutableListOf<BlockPos>()
+        for (x in -radius..radius) {
+            for (y in -radius..radius) {
+                for (z in -radius..radius) {
+                    val currentPos = pos.offset(x, y, z)
+                    Direction.entries.forEach { direction ->
+                        if (canProxyBlockConnectTo(level, currentPos, direction)) {
+                            buffer.add(currentPos)
+                        }
+                    }
+                }
+            }
+        }
+        logger.debug("Found ${buffer.size} proxiable blocks in radius $radius")
+        return buffer
+    }
 
 
     fun rotateShape(shape: VoxelShape, facing: Direction): VoxelShape {

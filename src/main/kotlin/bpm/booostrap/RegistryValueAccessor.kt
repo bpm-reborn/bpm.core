@@ -14,4 +14,5 @@ class RegistryValueAccessor<T : Any, V : T> {
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: DeferredHolder<T, V>) {
         holder = value
     }
+
 }

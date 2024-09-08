@@ -1,5 +1,6 @@
 package bpm.booostrap
 
+import bpm.Bpm
 import bpm.Bpm.LOGGER
 import bpm.mc.visual.Overlay2D
 import bpm.mc.visual.Overlay3D
@@ -11,10 +12,6 @@ import net.neoforged.bus.api.IEventBus
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent
 import net.neoforged.fml.loading.FMLPaths
-import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent
-import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent
-import net.neoforged.neoforge.client.event.RenderGuiEvent
-import net.neoforged.neoforge.client.event.RenderLevelStageEvent
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent
 import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.windows.CanvasContext
@@ -28,13 +25,19 @@ import bpm.common.schemas.Schemas
 import bpm.common.serial.Serial
 import bpm.common.serial.Serialize
 import bpm.common.utils.*
+import bpm.mc.visual.CustomBackgroundRenderer
 import bpm.server.lua.LuaBuiltin
 import bpm.pipe.PipeNetworkManager
 import bpm.server.ServerRuntime
 import bpm.server.lua.LuaEventExecutor
+import com.mojang.blaze3d.vertex.DefaultVertexFormat
+import net.minecraft.client.renderer.ShaderInstance
+import net.minecraft.resources.ResourceLocation
+import net.neoforged.neoforge.client.event.*
 import org.apache.logging.log4j.Level
 import thedarkcolour.kotlinforforge.neoforge.forge.FORGE_BUS
 import thedarkcolour.kotlinforforge.neoforge.forge.runForDist
+import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import kotlin.reflect.KClass
@@ -84,6 +87,7 @@ class Bootstrap(
             modBus.addListener(::onRegisterClientReloadListeners)
             FORGE_BUS.addListener(::renderOverlay2D)
             FORGE_BUS.addListener(::renderOverlay3D)
+            modBus.addListener(::registerShaders)
             Minecraft.getInstance()
         }, serverTarget = {
             "server"
@@ -118,7 +122,7 @@ class Bootstrap(
             CompletableFuture.runAsync({}, pBackgroundExecutor).thenCompose { pPreparationBarrier.wait(null) }
                 .thenAcceptAsync({
                     LOGGER.log(Level.INFO, "Initializing EditorContext...")
-                    if(!isRunning) ClientRuntime.start(Minecraft.getInstance().window.window)
+                    if (!isRunning) ClientRuntime.start(Minecraft.getInstance().window.window)
                 }, pGameExecutor)
         }
     }
@@ -189,7 +193,7 @@ class Bootstrap(
             val name = path.toString().substringAfter("schemas/")
             name to bytes
         }
-        for((name, resource) in mapped) {
+        for ((name, resource) in mapped) {
             val bytes = resource
             val file = schemaPath.resolve(name).toFile()
             //create containing directories if they don't exist from the path to the file
@@ -197,21 +201,35 @@ class Bootstrap(
 
             //Always write when in dev mode, otherwise only write if the file doesn't exist
 //            if (!file.toFile().exists() || !results.isProduction) {
-                file.writeBytes(bytes.content)
+            file.writeBytes(bytes.content)
 //            }
         }
         //Collects the schemas from the jar
 
 //            val file = schemaPath.resolve(name)
-            //Always write when in dev mode, otherwise only write if the file doesn't exist
+        //Always write when in dev mode, otherwise only write if the file doesn't exist
 //            if (!file.toFile().exists() || !results.isProduction) {
 //                file.toFile().writeBytes(bytes)
 //            }
 
 
-
     }
-
+    @OnlyIn(Dist.CLIENT)
+    private fun registerShaders(event: RegisterShadersEvent) {
+        try {
+            event.registerShader(
+                ShaderInstance(
+                    event.resourceProvider,
+                    ResourceLocation.tryParse("${Bpm.ID}:custom_background"),
+                    DefaultVertexFormat.POSITION
+                )
+            ) { shaderInstance ->
+                CustomBackgroundRenderer.backgroundShader = shaderInstance
+            }
+        } catch (e: IOException) {
+            Bpm.LOGGER.error("Failed to register shaders", e)
+        }
+    }
 
     private fun onCommonSetup(event: FMLCommonSetupEvent) {
         logger.info("Copying schemas to game directory")
