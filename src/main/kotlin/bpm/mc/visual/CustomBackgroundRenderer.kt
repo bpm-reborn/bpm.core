@@ -1,7 +1,7 @@
 package bpm.mc.visual
 
 import bpm.Bpm
-import bpm.mc.visual.BlockViewRenderer.FaceState
+import bpm.pipe.proxy.ProxiedType
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.ByteBufferBuilder
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
@@ -130,12 +130,12 @@ class CustomBackgroundRenderer(private val minecraft: Minecraft) {
             //The comupted size
 
             if (hovered != null && face != null) {
-                val state = renderer.faceStates.getOrDefault(Pair(hovered, face), FaceState.NONE)
+                val state = renderer.faceStates.getOrDefault(Pair(hovered, face), ProxiedType.NONE)
                 when (state) {
-                    FaceState.INPUT -> shader.safeGetUniform("iColor")?.set(0f, 1f, 0f)
-                    FaceState.OUTPUT -> shader.safeGetUniform("iColor")?.set(1f, 0f, 0f)
-                    FaceState.BOTH -> shader.safeGetUniform("iColor")?.set(1f, 1f, 0f)
-                    FaceState.NONE -> shader.safeGetUniform("iColor")?.set(1f, 1f, 1f) // White for hover on NONE state
+                    ProxiedType.INPUT -> shader.safeGetUniform("iColor")?.set(0f, 1f, 0f)
+                    ProxiedType.OUTPUT -> shader.safeGetUniform("iColor")?.set(1f, 0f, 0f)
+                    ProxiedType.BOTH -> shader.safeGetUniform("iColor")?.set(1f, 1f, 0f)
+                    ProxiedType.NONE -> shader.safeGetUniform("iColor")?.set(1f, 1f, 1f) // White for hover on NONE state
                 }
                 shader.safeGetUniform("circleRadius")?.set(2.5f) // Larger radius for hover effect
             } else {

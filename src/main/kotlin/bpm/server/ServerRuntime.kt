@@ -24,6 +24,10 @@ import bpm.common.workspace.graph.Node
 import bpm.common.workspace.graph.User
 import bpm.common.workspace.packets.*
 import bpm.server.lua.Notify
+import net.minecraft.resources.ResourceKey
+import net.minecraft.server.MinecraftServer
+import net.minecraft.world.level.Level
+import net.neoforged.neoforge.server.ServerLifecycleHooks
 import org.joml.Vector2f
 import org.joml.Vector4f
 import org.joml.Vector4i
@@ -342,7 +346,7 @@ object ServerRuntime : Listener {
         return Vector4f(r, g, b, a)
     }
 
-    private fun parseColor(color: Property.String): Property.Vec4i{
+    private fun parseColor(color: Property.String): Property.Vec4i {
         val color = color.get().removePrefix("#")
         val r = color.substring(0, 2).toInt(16)
         val g = color.substring(2, 4).toInt(16)
@@ -351,16 +355,17 @@ object ServerRuntime : Listener {
         return Property.Vec4i(r, g, b, a)
     }
 
-    private fun parseThemeColor(theme: Property.Object): Property.Vec4i{
-        val color =theme["color"]
-        if(color is Property.String){
+    private fun parseThemeColor(theme: Property.Object): Property.Vec4i {
+        val color = theme["color"]
+        if (color is Property.String) {
             return parseColor(color)
         }
-        if(color is Property.Vec4i){
+        if (color is Property.Vec4i) {
             return Property.Vec4i(color.get().x, color.get().y, color.get().z, color.get().w)
         }
-        if(color is Property.Vec4f){
-            return Property.Vec4i((color.get().x * 255).toInt(),
+        if (color is Property.Vec4f) {
+            return Property.Vec4i(
+                (color.get().x * 255).toInt(),
                 (color.get().y * 255).toInt(), (color.get().z * 255).toInt(), (color.get().w * 255).toInt()
             )
         }
@@ -552,6 +557,12 @@ object ServerRuntime : Listener {
         } else {
             logger.warn { "Workspace does not need recompilation" }
         }
+    }
+
+    private val mcserver by lazy { ServerLifecycleHooks.getCurrentServer() ?: error("Server not available") }
+
+    fun getLevel(level: ResourceKey<Level>): Level {
+        return mcserver.getLevel(level) ?: error("Level not found")
     }
 
 

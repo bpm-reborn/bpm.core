@@ -2,7 +2,7 @@ package bpm.mc.block
 
 import bpm.common.logging.KotlinLogging
 import bpm.mc.visual.NodeEditorGui
-import bpm.pipe.PipeNetworkManager
+import bpm.pipe.PipeNetManager
 import bpm.server.ServerRuntime
 import net.minecraft.ChatFormatting
 import net.minecraft.core.BlockPos
@@ -106,7 +106,7 @@ class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), 
     override fun getStateForPlacement(context: BlockPlaceContext): BlockState? {
         val level = context.level
         val pos = context.clickedPos
-        if (PipeNetworkManager.hasControllerInNetwork(level, pos)) {
+        if (PipeNetManager.hasControllerInNetwork(level, pos)) {
             return null
         }
         return super.getStateForPlacement(context)
@@ -126,7 +126,7 @@ class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), 
     ) {
         super.neighborChanged(state, level, pos, block, fromPos, isMoving)
         if (!level.isClientSide) {
-            PipeNetworkManager.queueNetworkUpdate(level, pos)
+//            PipeNetManager.queueNetworkUpdate(level, pos)
         }
     }
 

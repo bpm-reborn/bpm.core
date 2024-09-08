@@ -2,7 +2,11 @@ package bpm.mc.visual
 
 import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.Platform
-import bpm.mc.visual.BlockPreviewScreen.customBackgroundRenderer
+import bpm.common.network.Client
+import bpm.mc.visual.ProxyScreen.customBackgroundRenderer
+import bpm.pipe.proxy.PacketProxyUpdate
+import bpm.pipe.proxy.ProxiedType
+import bpm.pipe.proxy.ProxyState
 import com.mojang.blaze3d.systems.RenderSystem
 import com.mojang.blaze3d.vertex.*
 import com.mojang.math.Axis
@@ -10,7 +14,6 @@ import imgui.ImGui
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.Font
 import net.minecraft.client.gui.GuiGraphics
-import net.minecraft.client.gui.font.FontSet
 import net.minecraft.client.renderer.*
 import net.minecraft.client.renderer.debug.DebugRenderer
 import net.minecraft.client.renderer.texture.OverlayTexture
@@ -32,17 +35,10 @@ import thedarkcolour.kotlinforforge.neoforge.forge.vectorutil.v3d.toVector3f
 
 class BlockViewRenderer(private val minecraft: Minecraft) {
     private data class SortedAABB(val blockPos: BlockPos, val aabb: AABB, val zDepth: Double, val face: Direction?)
-    // Add this enum to BlockViewRenderer.kt
-    enum class FaceState {
 
-        NONE,
-        INPUT,
-        OUTPUT,
-        BOTH
-    }
 
     // Add these properties to BlockViewRenderer class
-    internal val faceStates = mutableMapOf<Pair<BlockPos, Direction>, FaceState>()
+    internal val faceStates = mutableMapOf<Pair<BlockPos, Direction>, ProxiedType>()
     internal var hoveredFace: Pair<BlockPos, Direction>? = null
 
     private val sortedScreenSpaceAABBs = mutableListOf<SortedAABB>()
@@ -164,7 +160,7 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
         maxScreenX = Float.MIN_VALUE
         maxScreenY = Float.MIN_VALUE
 
-        BlockPreviewScreen.trackedBlocks.keys.forEach { pos ->
+        ProxyScreen.trackedBlocks.keys.forEach { pos ->
             val aabb = AABB(pos)
             val screenSpaceAABB = transformAABBToScreenSpace(aabb, mvpMatrix)
 
@@ -259,15 +255,15 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
         val buffer = bufferSource.getBuffer(customRenderType)
 
         val matrix4f = pose.last().pose()
-        val state = faceStates.getOrDefault(Pair(pos, face), FaceState.NONE)
-        val isHovered = (hoveredFace == Pair(pos, face) || hovered) && !BlockPreviewScreen.isDragging
+        val state = faceStates.getOrDefault(Pair(pos, face), ProxiedType.NONE)
+        val isHovered = (hoveredFace == Pair(pos, face) || hovered) && !ProxyScreen.isDragging
 
 
 //        if(isHovered) {
 //            val center = centers[pos] ?: return
 //            val font = minecraft.font
 //            var text = "Face: $face\nState: $state"
-//            val state = faceStates.getOrDefault(Pair(pos, face), FaceState.NONE)
+//            val state = faceStates.getOrDefault(Pair(pos, face), ProxiedType.NONE)
 //             text += "\nPos: $pos\nFace: $face\nState: $state"
 //
 //            // Calculate the position for the text (centered on the face)
@@ -286,10 +282,10 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
 
         val color = when {
             isHovered -> Vector4f(1f, 1f, 1f, 0.7f) // White with high alpha for hover
-            state == FaceState.NONE -> Vector4f(0f, 0f, 0f, 0f) // Transparent for NONE state
-            state == FaceState.INPUT -> Vector4f(0f, 1f, 0f, 0.4f) // Green for INPUT
-            state == FaceState.OUTPUT -> Vector4f(1f, 0f, 0f, 0.4f) // Red for OUTPUT
-            state == FaceState.BOTH -> Vector4f(1f, 1f, 0f, 0.4f) // Yellow for BOTH
+            state == ProxiedType.NONE -> Vector4f(0f, 0f, 0f, 0f) // Transparent for NONE state
+            state == ProxiedType.INPUT -> Vector4f(0f, 1f, 0f, 0.4f) // Green for INPUT
+            state == ProxiedType.OUTPUT -> Vector4f(1f, 0f, 0f, 0.4f) // Red for OUTPUT
+            state == ProxiedType.BOTH -> Vector4f(1f, 1f, 0f, 0.4f) // Yellow for BOTH
             else -> Vector4f(0f, 0f, 0f, 0f) // Fallback transparent
         }
 
@@ -350,73 +346,85 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
 
     // Add this function to BlockViewRenderer class
     fun handleMouseClick(mouseX: Int, mouseY: Int) {
-        val hoveredBlock = finalizeSortingAndDetermineHoveredBlock(mouseX, mouseY) ?: return
+        val hoveredBlockFace = finalizeSortingAndDetermineHoveredBlock(mouseX, mouseY) ?: return
 
+        var controlClicked = false
+        val (pos, face) = hoveredBlockFace
+        if (Platform.isKeyDown(ClientRuntime.Key.LEFT_CONTROL) || Platform.isKeyDown(ClientRuntime.Key.RIGHT_CONTROL) || Platform.isKeyDown(
+                ClientRuntime.Key.LEFT_SUPER
+            )
+        ) {
 
-        val (pos, face) = hoveredBlock
-        if (Platform.isKeyDown(ClientRuntime.Key.LEFT_CONTROL) || Platform.isKeyDown(ClientRuntime.Key.RIGHT_CONTROL) || Platform.isKeyDown(ClientRuntime.Key.LEFT_SUPER)) {
-
-            if (faceStates[hoveredBlock] != FaceState.NONE) {
+            if (faceStates[hoveredBlockFace] != ProxiedType.NONE) {
                 customBackgroundRenderer.onFaceClick()
             }
             for (face in Direction.values()) {
                 val key = Pair(pos, face)
                 faceStates[key] = when (faceStates[key]) {
-                    null, FaceState.NONE -> FaceState.INPUT
-                    FaceState.INPUT -> FaceState.OUTPUT
-                    FaceState.OUTPUT -> FaceState.BOTH
-                    FaceState.BOTH -> FaceState.NONE
+                    null, ProxiedType.NONE -> ProxiedType.INPUT
+                    ProxiedType.INPUT -> ProxiedType.OUTPUT
+                    ProxiedType.OUTPUT -> ProxiedType.BOTH
+                    ProxiedType.BOTH -> ProxiedType.NONE
                 }
-                if (faceStates[key] != FaceState.NONE) {
+                if (faceStates[key] != ProxiedType.NONE) {
                     customBackgroundRenderer.onFaceClick()
                 }
             }
-
-            return
+            controlClicked = true
         }
-        val key = Pair(pos, face)
-        faceStates[key] = when (faceStates[key]) {
-            null, FaceState.NONE -> FaceState.INPUT
-            FaceState.INPUT -> FaceState.OUTPUT
-            FaceState.OUTPUT -> FaceState.BOTH
-            FaceState.BOTH -> FaceState.NONE
+        if (!controlClicked) {
+            val key = Pair(pos, face)
+            faceStates[key] = when (faceStates[key]) {
+                null, ProxiedType.NONE -> ProxiedType.INPUT
+                ProxiedType.INPUT -> ProxiedType.OUTPUT
+                ProxiedType.OUTPUT -> ProxiedType.BOTH
+                ProxiedType.BOTH -> ProxiedType.NONE
+            }
+
+            if (faceStates[key] != ProxiedType.NONE) {
+                customBackgroundRenderer.onFaceClick()
+            }
         }
-
-        if (faceStates[key] != FaceState.NONE) {
-            customBackgroundRenderer.onFaceClick()
-        }
-
-
         //If shifts down, set all to none, if all are none, cycle to input, if input, cycle to output, if output, cycle to both
         if (ImGui.isKeyDown(GLFW.GLFW_KEY_LEFT_SHIFT) || ImGui.isKeyDown(GLFW.GLFW_KEY_RIGHT_SHIFT)) {
             //If all the faces are the same, cycle to the next ordinal value
-            val allSame = faceStates.filter { it.key.first == hoveredBlock?.first }
-                .all { it.value == faceStates[hoveredBlock] }
+            val allSame = faceStates.filter { it.key.first == hoveredBlockFace?.first }
+                .all { it.value == faceStates[hoveredBlockFace] }
             if (allSame) {
-                faceStates.filter { it.key.first == hoveredBlock?.first }.forEach { (key, _) ->
+                faceStates.filter { it.key.first == hoveredBlockFace?.first }.forEach { (key, _) ->
                     faceStates[key] = when (faceStates[key]) {
-                        FaceState.NONE -> FaceState.INPUT
-                        FaceState.INPUT -> FaceState.OUTPUT
-                        FaceState.OUTPUT -> FaceState.BOTH
-                        FaceState.BOTH -> FaceState.NONE
-                        null -> FaceState.NONE
+                        ProxiedType.NONE -> ProxiedType.INPUT
+                        ProxiedType.INPUT -> ProxiedType.OUTPUT
+                        ProxiedType.OUTPUT -> ProxiedType.BOTH
+                        ProxiedType.BOTH -> ProxiedType.NONE
+                        null -> ProxiedType.NONE
                     }
                 }
             } else {
                 //Set all to none
-                faceStates.filter { it.key.first == hoveredBlock?.first }.forEach { (key, _) ->
-                    faceStates[key] = FaceState.NONE
+                faceStates.filter { it.key.first == hoveredBlockFace?.first }.forEach { (key, _) ->
+                    faceStates[key] = ProxiedType.NONE
                 }
             }
-            if (faceStates[hoveredBlock] != FaceState.NONE) {
+            if (faceStates[hoveredBlockFace] != ProxiedType.NONE) {
                 customBackgroundRenderer.onFaceClick()
             }
         }
 
-
         //Update the server proxy state
+        Client.send(stateToPacket(pos))
+    }
 
 
+    private fun stateToPacket(blockPos: BlockPos): PacketProxyUpdate {
+        val origin = ProxyScreen.origin
+        val states = faceStates.filter { it.key.first == blockPos }.map { it.key.second to it.value }.toMap()
+        val packet = PacketProxyUpdate(origin)
+        packet.proxiedState.relativePos = blockPos
+        for ((face, state) in states) {
+            packet.proxiedState.setProxiedType(face, state)
+        }
+        return packet
     }
 
     private fun renderFaceQuad(
@@ -537,7 +545,7 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
         var maxY = Double.MIN_VALUE
         var maxZ = Double.MIN_VALUE
 
-        BlockPreviewScreen.trackedBlocks.keys.forEach { pos ->
+        ProxyScreen.trackedBlocks.keys.forEach { pos ->
             minX = minOf(minX, pos.x.toDouble())
             minY = minOf(minY, pos.y.toDouble())
             minZ = minOf(minZ, pos.z.toDouble())
@@ -661,5 +669,32 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
     fun updateZoom(dZoom: Float) {
         zoom += dZoom * 0.5f
         zoom = zoom.coerceIn(2f, 8f)
+    }
+
+    fun updateProxiedState(state: ProxyState) {
+        faceStates.clear()
+        for ((relativePos, proxiedType) in state.proxiedBlocks) {
+            for ((face, type) in proxiedType.proxiedFaces) {
+                faceStates[Pair(relativePos, face)] = type
+            }
+        }
+    }
+
+    companion object {
+
+        private val savedRotationStates = mutableMapOf<BlockPos, Triple<Float, Float, Float>>()
+    }
+
+    private var origin = BlockPos.ZERO
+
+    fun open(origin: BlockPos) {
+        this.origin = origin
+        rotationX = savedRotationStates[origin]?.first ?: 0f
+        rotationY = savedRotationStates[origin]?.second ?: 0f
+        zoom = savedRotationStates[origin]?.third ?: 1f
+    }
+
+    fun close() {
+        savedRotationStates[origin] = Triple(rotationX, rotationY, zoom)
     }
 }

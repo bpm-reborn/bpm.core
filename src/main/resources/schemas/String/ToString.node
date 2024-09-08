@@ -20,7 +20,6 @@ edges:
     type: string
 
 source: |
-  World:print("Called ToString")
   
   local function dump(o, indent)
     if type(o) ~= 'table' then
@@ -48,9 +47,8 @@ source: |
       end
       table.insert(parts, part)
     end
-  
-    ${OUTPUT.result =  "{\n" .. table.concat(parts, ",\n") .. "\n" .. indent .. "}"}
-    return
+    
+    return "{\n" .. table.concat(parts, ",\n") .. "\n" .. indent .. "}"
   end
 
   ${OUTPUT.result = dump(value)}

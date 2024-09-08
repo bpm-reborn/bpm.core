@@ -93,7 +93,7 @@ object Serial {
      * @return The deserialized object of type T, or null if reading was unsuccessful
      */
     fun <T : Any> read(type: KClass<T>, path: Path): T? {
-        val bytes = Files.readAllBytes(path)
+        val bytes = path.toFile().readBytes()
         val buffer = Buffer.wrap(bytes)
         return get(type.java).deserialize(buffer)
     }

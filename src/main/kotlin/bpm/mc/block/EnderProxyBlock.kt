@@ -1,8 +1,8 @@
 package bpm.mc.block
 
 import bpm.client.runtime.ClientRuntime.logger
-import bpm.mc.visual.BlockPreviewScreen
-import bpm.pipe.PipeNetworkManager
+import bpm.mc.visual.ProxyScreen
+import bpm.pipe.PipeNetManager
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.world.InteractionHand
@@ -47,7 +47,11 @@ class EnderProxyBlock(properties: Properties) : BasePipeBlock(properties) {
 
     private fun canProxyBlockConnectTo(level: Level, pos: BlockPos, direction: Direction): Boolean {
         val blockEntity = level.getBlockEntity(pos)
-        return blockEntity != null && (hasItemHandlerCapability(level, pos, direction) || hasFluidHandlerCapability(level, pos, direction))
+        return blockEntity != null && (hasItemHandlerCapability(level, pos, direction) || hasFluidHandlerCapability(
+            level,
+            pos,
+            direction
+        ))
     }
 
     private fun hasItemHandlerCapability(level: Level, pos: BlockPos, side: Direction): Boolean {
@@ -72,7 +76,7 @@ class EnderProxyBlock(properties: Properties) : BasePipeBlock(properties) {
     ): ItemInteractionResult {
         val proxiableBlocks = findProxiableBlocksInRadius(level, pos, 5)
         if (!level.isClientSide) {
-            val network = PipeNetworkManager.getNetworkForPos(level, pos)
+            val network = PipeNetManager.getNetworkForPos(level, pos)
             proxiableBlocks.forEach { proxiablePos ->
                 logger.debug("Adding proxy at $proxiablePos")
             }
@@ -80,7 +84,7 @@ class EnderProxyBlock(properties: Properties) : BasePipeBlock(properties) {
         }
 
         // Open the BlockPreviewScreen with the origin and proxiable blocks
-        BlockPreviewScreen.open(pos, proxiableBlocks + pos)
+        ProxyScreen.open(pos, proxiableBlocks + pos)
         return ItemInteractionResult.SUCCESS
     }
 

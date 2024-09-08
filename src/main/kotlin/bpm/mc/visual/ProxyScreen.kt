@@ -1,6 +1,13 @@
 package bpm.mc.visual
 
 import bpm.client.runtime.ClientRuntime
+import bpm.common.logging.KotlinLogging
+import bpm.common.network.Client
+import bpm.common.network.Listener
+import bpm.common.packets.Packet
+import bpm.pipe.proxy.PacketProxyRequest
+import bpm.pipe.proxy.PacketProxyResponse
+import bpm.pipe.proxy.ProxiedType
 import com.mojang.blaze3d.systems.RenderSystem
 import imgui.ImGui
 import imgui.flag.ImGuiMouseCursor
@@ -14,8 +21,9 @@ import net.minecraft.network.chat.Component
 import net.minecraft.world.level.block.EntityBlock
 import net.minecraft.world.level.block.entity.BlockEntity
 import net.minecraft.world.level.block.state.BlockState
+import java.util.*
 
-object  BlockPreviewScreen : Screen(Component.literal("Block Preview")) {
+object ProxyScreen : Screen(Component.literal("Block Preview")), Listener {
 
     val trackedBlocks = mutableMapOf<BlockPos, BlockState>()
     private val trackedBlockEntities = mutableMapOf<BlockPos, BlockEntity>()
@@ -23,14 +31,26 @@ object  BlockPreviewScreen : Screen(Component.literal("Block Preview")) {
     internal var origin: BlockPos = BlockPos.ZERO
     private var hoveredBlock: Pair<BlockPos, Direction>? = null
     internal lateinit var customBackgroundRenderer: CustomBackgroundRenderer
+    private val logger = KotlinLogging.logger { }
     override fun init() {
         super.init()
         renderer = BlockViewRenderer(Minecraft.getInstance())
         customBackgroundRenderer = CustomBackgroundRenderer(minecraft!!)
+        renderer.open(origin)
+    }
+
+    override fun onPacket(packet: Packet, from: UUID) {
+        if (packet is PacketProxyResponse) {
+            val state = packet.proxyState
+            //Update the renderers with the new proxied state
+            renderer.updateProxiedState(state)
+            logger.debug { "Received proxied state: $state" }
+        }
     }
 
     fun open(origin: BlockPos, positions: List<BlockPos>) {
         this.origin = origin
+        Client.send(PacketProxyRequest(origin))
         trackedBlocks.clear()
         trackedBlockEntities.clear()
 
@@ -49,22 +69,32 @@ object  BlockPreviewScreen : Screen(Component.literal("Block Preview")) {
         if (Minecraft.getInstance().screen != this) {
             Minecraft.getInstance().setScreen(this)
         }
+
     }
 
     override fun tick() {
         customBackgroundRenderer.updatePulse()
     }
+
     override fun render(graphics: GuiGraphics, mouseX: Int, mouseY: Int, partialTick: Float) {
 
         ClientRuntime.newFrame()
 
-        if(isDragging) ImGui.setMouseCursor(ImGuiMouseCursor.TextInput)
+        if (isDragging) ImGui.setMouseCursor(ImGuiMouseCursor.TextInput)
         RenderSystem.enableDepthTest()
         RenderSystem.setShaderColor(1f, 1f, 1f, 1f)
         renderer.updateScreenSpaceBounds(graphics)
 
         // After rendering all blocks and block entities, determine which one is hovered
-        customBackgroundRenderer.renderBackground(graphics, renderer, mouseX, mouseY, partialTick, hoveredBlock?.second, hoveredBlock?.first)
+        customBackgroundRenderer.renderBackground(
+            graphics,
+            renderer,
+            mouseX,
+            mouseY,
+            partialTick,
+            hoveredBlock?.second,
+            hoveredBlock?.first
+        )
         hoveredBlock = renderer.finalizeSortingAndDetermineHoveredBlock(mouseX, mouseY)
 
         renderer.setupCamera(graphics.pose(), partialTick)
@@ -77,10 +107,10 @@ object  BlockPreviewScreen : Screen(Component.literal("Block Preview")) {
         trackedBlockEntities.forEach { (pos, blockEntity) ->
             renderer.renderBlockEntity(graphics, blockEntity, pos, partialTick, mouseX, mouseY)
         }
-        BlockPreviewScreen.trackedBlocks.forEach { (pos, _) ->
+        ProxyScreen.trackedBlocks.forEach { (pos, _) ->
             Direction.values().forEach { face ->
-                val state = renderer.faceStates.getOrDefault(Pair(pos, face), BlockViewRenderer.FaceState.NONE)
-                if (state != BlockViewRenderer.FaceState.NONE) {
+                val state = renderer.faceStates.getOrDefault(Pair(pos, face), ProxiedType.NONE)
+                if (state != ProxiedType.NONE) {
                     renderer.renderBlockOutline(graphics, pos, face, partialTick)
                 }
             }
@@ -94,29 +124,42 @@ object  BlockPreviewScreen : Screen(Component.literal("Block Preview")) {
         renderHoveredFaceInfo(graphics, mouseX, mouseY)
 
         RenderSystem.disableDepthTest()
-        customBackgroundRenderer.renderBackground(graphics, renderer, mouseX, mouseY, partialTick, hoveredBlock?.second, hoveredBlock?.first)
+        customBackgroundRenderer.renderBackground(
+            graphics,
+            renderer,
+            mouseX,
+            mouseY,
+            partialTick,
+            hoveredBlock?.second,
+            hoveredBlock?.first
+        )
 
         val matrixStack = RenderSystem.getModelViewStack()
         matrixStack.popMatrix()
         ClientRuntime.endFrame()
     }
+
     private fun renderHoveredFaceInfo(graphics: GuiGraphics, mouseX: Int, mouseY: Int) {
         val hoveredFace = renderer.hoveredFace
         if (hoveredFace != null) {
             val (pos, face) = hoveredFace
-            val state = renderer.faceStates.getOrDefault(hoveredFace, BlockViewRenderer.FaceState.NONE)
+            val state = renderer.faceStates.getOrDefault(hoveredFace, ProxiedType.NONE)
 
             ImGui.setNextWindowPos(20f, 20f)
             ImGui.setNextWindowBgAlpha(0.7f)
-            ImGui.begin("Hovered Face Info", ImGuiWindowFlags.NoMove or ImGuiWindowFlags.NoResize or ImGuiWindowFlags.AlwaysAutoResize or ImGuiWindowFlags.NoTitleBar)
+            ImGui.begin(
+                "Hovered Face Info",
+                ImGuiWindowFlags.NoMove or ImGuiWindowFlags.NoResize or ImGuiWindowFlags.AlwaysAutoResize or ImGuiWindowFlags.NoTitleBar
+            )
             ImGui.text("Position: $pos")
             ImGui.text("Face: $face")
             ImGui.text("State: $state")
             ImGui.end()
         }
     }
+
     override fun mouseDragged(mouseX: Double, mouseY: Double, button: Int, dragX: Double, dragY: Double): Boolean {
-        if (button == 0 ) {
+        if (button == 0) {
             renderer.updateRotation(dragX.toFloat(), dragY.toFloat())
             //Takes the cross product of the drag vector to determine the rotation
             val dot = Math.abs(dragX) / (Math.sqrt(dragX * dragX + dragY * dragY) * Math.sqrt(dragX * dragX + dragY * dragY))
@@ -139,6 +182,7 @@ object  BlockPreviewScreen : Screen(Component.literal("Block Preview")) {
         customBackgroundRenderer.updateZoom(p_294830_.toFloat())
         return true
     }
+
     override fun mouseClicked(mouseX: Double, mouseY: Double, button: Int): Boolean {
         if (button == 0) { // Left click
             renderer.handleMouseClick(mouseX.toInt(), mouseY.toInt())
@@ -146,9 +190,13 @@ object  BlockPreviewScreen : Screen(Component.literal("Block Preview")) {
         }
         return super.mouseClicked(mouseX, mouseY, button)
     }
+
     override fun onClose() {
         super.onClose()
+        renderer.close()
         trackedBlocks.clear()
         trackedBlockEntities.clear()
     }
+
+
 }

@@ -60,5 +60,5 @@ source: |
   local velY = vel.y + 0.0
   local velZ = vel.z + 0.0
   local spread = spread or 0.0
-  World:spawnParticle(x, y, z, count, velX, velY, velZ, spread, type)
+  World:spawnParticle(x, y, z, count, velX, velY, velZ, spread, type, _Uid)
   ${EXEC.exec_out}

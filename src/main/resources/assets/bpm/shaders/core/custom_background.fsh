@@ -4,86 +4,87 @@ uniform float iTime;
 uniform float circleRadius;
 uniform vec2 iResolution;
 uniform vec3 iColor;
-uniform float pulse;  // New uniform for the pulse effect
+uniform float pulse;
 out vec4 fragColor;
 
-#define SPEED 0.025
-#define DISTORTION_STRENGTH 0.1
-#define BLACK_HOLE_COLOR vec3(0.0, 0.0, 0.0)
-#define ACCRETION_DISK_COLOR vec3(0.8, 0.4, 0.1)
-#define SPACE_COLOR vec3(0.05, 0.05, 0.15)
-#define BACKGROUND_COLOR vec3(0.2, 0.2, 0.2)
+#define PI 3.14159265359
+#define TWO_PI 6.28318530718
 
+// Smooth noise function
 float hash(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
+    float h = dot(p, vec2(127.1, 311.7));
+    return fract(sin(h) * 43758.5453123);
 }
 
-float noise(vec2 p) {
+float noise(in vec2 p) {
     vec2 i = floor(p);
     vec2 f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
-               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
 }
 
-float fbm(vec2 p) {
-    float v = 0.0;
-    float a = 0.5;
-    mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
-    for (int i = 0; i < 4; ++i) {
-        v += a * noise(p);
-        p = rot * p * 2.0;
-        a *= 0.5;
+// Fractal Brownian Motion
+float fbm(vec2 uv) {
+    float value = 0.0;
+    float amplitude = 0.5;
+    float frequency = 0.0;
+    for (int i = 0; i < 6; ++i) {
+        value += amplitude * noise(uv);
+        uv *= 2.0;
+        amplitude *= 0.5;
     }
-    return v;
+    return value;
+}
+
+// Star field function
+float starField(vec2 uv, float threshold) {
+    float n = hash(uv);
+    return smoothstep(threshold, threshold + 0.02, n);
 }
 
 void main() {
-    vec2 uv = (gl_FragCoord.xy / iResolution.xy) * 2.0 - 1.0;
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    uv = uv * 2.0 - 1.0;
     uv.x *= iResolution.x / iResolution.y;
-    float time = iTime * SPEED;
 
-    // Black hole position
-    float angle = time * 0.5;
-    vec2 blackHolePos = vec2(
-        cos(angle) * 0.5,
-        sin(angle) * 0.5
-    );
+    float time = iTime * 0.05;
 
-    // Distance from current pixel to black hole center
-    float dist = length(uv - blackHolePos);
+    // Create base flow pattern
+    float flowPattern = fbm(uv * 2.0 + time);
 
-    // Create distortion effect (affected by pulse)
-    vec2 distortedUV = uv - blackHolePos;
-    float distortionFactor = 1.0 / (1.0 + exp((dist - circleRadius) * 10.0));
-    distortedUV *= mix(1.0, 1.0 - DISTORTION_STRENGTH * (1.0 + pulse), distortionFactor);
-    distortedUV += blackHolePos;
+    // Use circleRadius for a void-like effect
+    float radial = length(uv);
+    float voidFactor = smoothstep(0.0, circleRadius * 1.5, radial);
 
-    // Create accretion disk (affected by pulse)
-    float diskWidth = 0.1 * (1.0 + pulse * 0.5);
-    float diskMask = smoothstep(circleRadius, circleRadius + diskWidth, dist) *
-                     (1.0 - smoothstep(circleRadius + diskWidth, circleRadius + diskWidth * 2.0, dist));
+    // Create smooth pulse effect
+    float pulseFactor = 0.5 + 0.5 * sin(time * TWO_PI);
+    pulseFactor = mix(0.8, 1.0, pulseFactor * pulse);
 
-    // Create black hole mask (affected by pulse)
-    float blackHoleMask = 1.0 - smoothstep(circleRadius * (0.8 - pulse * 0.2), circleRadius, dist);
+    // Combine flow pattern with void and pulse effects
+    float pattern = flowPattern * voidFactor * pulseFactor;
 
-    // Create background effect
-    float bgNoise = fbm(distortedUV * 3.0 + time * 0.1);
-    vec3 backgroundColor = mix(BACKGROUND_COLOR, BACKGROUND_COLOR * 1.2, bgNoise);
+    // Create a dark color palette
+    vec3 darkColor = vec3(0.02, 0.02, 0.05);
+    vec3 brightColor = mix(vec3(0.1, 0.1, 0.3), iColor, 0.5);
 
-    // Combine colors
-    vec3 diskColor = ACCRETION_DISK_COLOR * (1.0 + 0.5 * sin(dist * 50.0 - time * 5.0));
-    diskColor = mix(diskColor, vec3(1.0), pulse * 0.5);  // Make disk brighter with pulse
-    vec3 finalColor = mix(backgroundColor, diskColor, diskMask);
-    finalColor = mix(finalColor, BLACK_HOLE_COLOR, blackHoleMask);
+    // Generate smooth color transition
+    vec3 flowColor = mix(darkColor, brightColor, pattern * 0.5);
 
-    // Add some glow to the accretion disk (affected by pulse)
-    finalColor += diskColor * diskMask * (0.5 + pulse);
+    // Add star field
+    float starBrightness = starField(uv * 10.0, 0.98) * 0.5 + starField(uv * 20.0, 0.995) * 0.5;
+    flowColor += starBrightness * brightColor;
 
-    // Add pulse-based color effect to the entire scene
-    finalColor = mix(finalColor, iColor, pulse * 0.3);
+    // Apply vignette effect
+    float vignette = smoothstep(0.5, 1.8, radial);
+    flowColor *= 1.0 - vignette * 0.8;
 
-    fragColor = vec4(finalColor, 1.0);
+    // Gentle pulse brightness
+    flowColor *= 1.0 + pulse * 0.1 * sin(time * TWO_PI);
+
+    // Add a subtle glow in the center
+    float centralGlow = (1.0 - smoothstep(0.0, circleRadius, radial)) * 0.2;
+    flowColor += centralGlow * brightColor;
+
+    fragColor = vec4(flowColor, 1.0);
 }

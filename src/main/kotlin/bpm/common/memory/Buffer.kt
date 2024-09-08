@@ -1,6 +1,9 @@
 package bpm.common.memory
 
 
+import net.minecraft.core.BlockPos
+import net.minecraft.resources.ResourceKey
+import net.minecraft.resources.ResourceLocation
 import org.joml.*
 import java.util.*
 
@@ -528,6 +531,36 @@ interface Buffer {
      */
     fun moved(position: Int)
 
+    fun writeBlockPos(proxyOrigin: BlockPos) {
+        writeInt(proxyOrigin.x)
+        writeInt(proxyOrigin.y)
+        writeInt(proxyOrigin.z)
+    }
+
+    fun readBlockPos(): BlockPos {
+        return BlockPos(readInt(), readInt(), readInt())
+    }
+
+    fun writeResourceLocation(location: ResourceLocation) {
+        writeString(location.toString())
+    }
+
+    fun writeResourceKey(key: ResourceKey<*>) {
+        writeResourceLocation(key.location())
+        writeResourceLocation(key.registry())
+    }
+
+    fun readResourceLocation(): ResourceLocation {
+        return ResourceLocation.tryParse(readString()) ?: ResourceLocation.fromNamespaceAndPath("minecraft", "missing")
+    }
+
+
+    fun <T> readResourceKey(): ResourceKey<T> {
+        val location = readResourceLocation()
+        val registry = readResourceLocation()
+        val registryKey = ResourceKey.createRegistryKey<T>(registry)
+        return ResourceKey.create(registryKey, location)
+    }
 
     companion object {
 

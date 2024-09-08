@@ -26,13 +26,16 @@ import bpm.common.serial.Serial
 import bpm.common.serial.Serialize
 import bpm.common.utils.*
 import bpm.mc.visual.CustomBackgroundRenderer
+import bpm.mc.visual.ProxyScreen
+import bpm.pipe.PipeNetManager
 import bpm.server.lua.LuaBuiltin
-import bpm.pipe.PipeNetworkManager
+import bpm.pipe.proxy.ProxyManager
 import bpm.server.ServerRuntime
 import bpm.server.lua.LuaEventExecutor
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import net.minecraft.client.renderer.ShaderInstance
 import net.minecraft.resources.ResourceLocation
+import net.minecraft.server.level.ServerLevel
 import net.neoforged.neoforge.client.event.*
 import org.apache.logging.log4j.Level
 import thedarkcolour.kotlinforforge.neoforge.forge.FORGE_BUS
@@ -87,11 +90,16 @@ class Bootstrap(
             modBus.addListener(::onRegisterClientReloadListeners)
             FORGE_BUS.addListener(::renderOverlay2D)
             FORGE_BUS.addListener(::renderOverlay3D)
+
             modBus.addListener(::registerShaders)
             Minecraft.getInstance()
         }, serverTarget = {
+
             "server"
         })
+
+        FORGE_BUS.addListener(::onLevelSave)
+        FORGE_BUS.addListener(::onLevelLoad)
         //Server setup, should be done on client too for single player
         modBus.addListener(::onCommonSetup)
     }
@@ -165,13 +173,15 @@ class Bootstrap(
         LOGGER.log(Level.INFO, "Server client...")
         val gameDir = FMLPaths.GAMEDIR.get()
 
-        //TODO: remove this, only for testing
         val schemaPath = gameDir.resolve("schemas")
         if (!schemaPath.toFile().exists()) {
             schemaPath.toFile().mkdir()
         }
 
-        Client.install(ClientRuntime).install<Schemas>(schemaPath, Endpoint.Side.CLIENT).install<CanvasContext>()
+        Client.install(ClientRuntime)
+            .install<Schemas>(schemaPath, Endpoint.Side.CLIENT)
+            .install<CanvasContext>()
+            .install<ProxyScreen>()
             .install<Overlay2D>()
     }
 
@@ -246,9 +256,21 @@ class Bootstrap(
         Server
             .install<ServerRuntime>()
             .install<Schemas>(schemasPath, Endpoint.Side.SERVER)
-            .install<PipeNetworkManager>()
+            .install<ProxyManager>()
             .install<LuaEventExecutor>()
             .start()
+    }
+
+    private fun onLevelSave(event: net.neoforged.neoforge.event.level.LevelEvent.Save) {
+        val level = event.level
+        if (level !is ServerLevel) return
+        PipeNetManager.save(level)
+    }
+
+    private fun onLevelLoad(event: net.neoforged.neoforge.event.level.LevelEvent.Load) {
+        val level = event.level
+        if (level !is ServerLevel) return
+        PipeNetManager.load(level)
     }
 
 

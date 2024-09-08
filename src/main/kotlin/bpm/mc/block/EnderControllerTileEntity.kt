@@ -15,7 +15,7 @@ import net.neoforged.neoforge.attachment.IAttachmentSerializer
 import bpm.client.runtime.ClientRuntime
 import bpm.common.workspace.Workspace
 import bpm.mc.registries.ModBlocks
-import bpm.pipe.PipeNetworkManager
+import bpm.pipe.PipeNetManager
 import bpm.server.ServerRuntime
 import net.minecraft.world.level.block.entity.BlockEntityType
 import java.util.*
@@ -30,7 +30,7 @@ class EnderControllerTileEntity(type: BlockEntityType<*>, pos: BlockPos, state: 
 
     override fun onLoad() {
         super.onLoad()
-        PipeNetworkManager.onPipeAdded(ModBlocks.ENDER_CONTROLLER, level!!, worldPosition)
+        PipeNetManager.onPipeAdded(ModBlocks.ENDER_CONTROLLER, level!!, worldPosition)
     }
 
     override fun saveAdditional(tag: CompoundTag, provider: HolderLookup.Provider) {

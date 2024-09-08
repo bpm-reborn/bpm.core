@@ -1,6 +1,6 @@
 package bpm.mc.block
 
-import bpm.pipe.PipeNetworkManager
+import bpm.pipe.PipeNetManager
 import bpm.server.ServerRuntime
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
@@ -67,6 +67,7 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
     }
 
 
+
     override fun playerDestroy(
         p_49827_: Level,
         p_49828_: Player,
@@ -76,13 +77,14 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
         p_49832_: ItemStack
     ) {
         super.playerDestroy(p_49827_, p_49828_, p_49829_, p_49830_, p_49831_, p_49832_)
-        PipeNetworkManager.onPipeRemoved(this, p_49827_,p_49829_)
+        PipeNetManager.onPipeRemoved(this, p_49827_,p_49829_)
 
             if(p_49831_ is EnderControllerTileEntity) {
                 //TODO: this should be calling some on removed event instead
                 ServerRuntime.recompileWorkspace(p_49831_.getUUID())
             }
     }
+
 
     open fun canConnectTo(level: Level, pos: BlockPos, direction: Direction): Boolean {
         val neighborState = level.getBlockState(pos.relative(direction))
@@ -139,17 +141,17 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
     }
 
     open fun onPipeAdded(level: Level, pos: BlockPos) {
-        PipeNetworkManager.onPipeAdded(this, level, pos)
+        PipeNetManager.onPipeAdded(this, level, pos)
     }
 
     open fun onPipeRemoved(level: Level, pos: BlockPos) {
-        PipeNetworkManager.onPipeRemoved(this, level, pos)
+        PipeNetManager.onPipeRemoved(this, level, pos)
     }
 
     override fun playerWillDestroy(level: Level, pos: BlockPos, state: BlockState, player: Player): BlockState {
         val block = state.block
         if (!level.isClientSide && block is BasePipeBlock) {
-            PipeNetworkManager.onPipeRemoved(block, level, pos)
+            PipeNetManager.onPipeRemoved(block, level, pos)
 //            dropController(level, pos)
 
             // Remove the direct call to updateNetwork
@@ -167,7 +169,7 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
 
     override fun onRemove(state: BlockState, level: Level, pos: BlockPos, newState: BlockState, isMoving: Boolean) {
 //        if (!level.isClientSide && state.block != newState.block) {
-//            PipeNetworkManager.onPipeRemoved(this, level, pos)
+//            PipeNetManager.onPipeRemoved(this, level, pos)
 //        }
         super.onRemove(state, level, pos, newState, isMoving)
     }

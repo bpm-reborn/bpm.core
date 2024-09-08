@@ -1,5 +1,6 @@
 package bpm.server.lua
 
+import bpm.pipe.PipeNetManager
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.core.particles.ParticleOptions
@@ -11,6 +12,7 @@ import net.minecraft.world.entity.EntityType
 import net.minecraft.world.level.Level
 import net.minecraft.world.phys.AABB
 import net.neoforged.neoforge.server.ServerLifecycleHooks
+import java.util.UUID
 
 object World : LuaBuiltin {
 
@@ -99,11 +101,15 @@ object World : LuaBuiltin {
         velY: Float,
         velZ: Float,
         spread: Float,
-        particleName: String
+        particleName: String,
+        controllerUUID: String
     ) {
+
+        val uuid = UUID.fromString(controllerUUID)
+        val level = PipeNetManager.getWorldForController(uuid) ?: return
         val particle = getParticleByName(particleName)
         //Position, count, velocity, spread
-        overworld.sendParticles(
+        level.sendParticles(
             particle,
             x.toDouble(),
             y.toDouble(),
