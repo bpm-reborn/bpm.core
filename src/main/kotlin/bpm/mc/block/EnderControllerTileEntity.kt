@@ -17,11 +17,14 @@ import bpm.common.workspace.Workspace
 import bpm.mc.registries.ModBlocks
 import bpm.pipe.PipeNetworkManager
 import bpm.server.ServerRuntime
+import net.minecraft.world.level.block.entity.BlockEntityType
 import java.util.*
 
-class EnderControllerTileEntity(pos: BlockPos, state: BlockState) :
-    BlockEntity(ModTiles.ENDER_CONTROLLER_TILE_ENTITY, pos, state), IAttachmentHolder,
+class EnderControllerTileEntity(type: BlockEntityType<*>, pos: BlockPos, state: BlockState) :
+    BlockEntity(type, pos, state), IAttachmentHolder,
     HolderOwner<EnderControllerTileEntity> {
+
+    constructor(pos: BlockPos, state: BlockState) : this(ModTiles.ENDER_CONTROLLER_TILE_ENTITY, pos, state)
 
     val attachmentHolder = AttachmentHolder.AsField(this)
 

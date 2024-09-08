@@ -58,10 +58,10 @@ object NodeEditorGui : Screen(Component.literal("Node Editor")) {
             ClientRuntime.newFrame()
             ClientRuntime.process()
             ClientRuntime.endFrame()
-
-            ClientRuntime.newFrame()
-            inventoryRenderer.renderInventory(testItemStacks, pGuiGraphics)
-            ClientRuntime.endFrame()
+//
+//            ClientRuntime.newFrame()
+//            inventoryRenderer.renderInventory(testItemStacks, pGuiGraphics)
+//            ClientRuntime.endFrame()
         } catch (e: Exception) {
             Bpm.LOGGER.error("Error rendering NodeEditorGui", e)
         }
