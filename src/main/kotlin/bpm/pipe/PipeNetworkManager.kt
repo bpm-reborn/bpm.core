@@ -24,6 +24,7 @@ object PipeNetworkManager : Listener {
     enum class ProxiedType {
         INPUT, OUTPUT, BOTH, NONE
     }
+
     data class ProxiedView(val origin: BlockPos, val blocks: Map<BlockPos, EnumMap<Direction, ProxiedType>>)
 
     private val networks = mutableListOf<PipeNetwork>()
@@ -37,20 +38,21 @@ object PipeNetworkManager : Listener {
     fun onPipeAdded(pipe: BasePipeBlock, level: Level, pos: BlockPos) {
         addToTypeCache(pipe, pos)
         queueNetworkUpdate(level, pos)
-        if(pipe is EnderControllerBlock) {
+        if (pipe is EnderControllerBlock) {
             val controllerTileEntity = level.getBlockEntity(pos) as? EnderControllerTileEntity
             if (controllerTileEntity != null) {
                 onControllerPlaced(controllerTileEntity)
             } else {
                 logger.warn { "Couldn't add controller at $pos, no tile entity found" }
             }
-        }else if(pipe is EnderProxyBlock){
-            proxiedViews[pos] = ProxiedView(pos, emptyMap())
-            logger.debug { "Added proxy view at $pos" }
+        } else if (pipe is EnderProxyBlock) {
+            if (!proxiedViews.containsKey(pos)) {
+                proxiedViews[pos] = ProxiedView(pos, emptyMap())
+                logger.debug { "Added proxy view at $pos" }
+            }
         }
         logger.info { "Adding pipe at $pos of type ${pipe::class.simpleName}" }
     }
-
 
     fun onPipeRemoved(pipe: BasePipeBlock, level: Level, pos: BlockPos) {
         removeFromTypeCache(pipe, pos)
@@ -61,7 +63,7 @@ object PipeNetworkManager : Listener {
             } else {
                 logger.warn { "Couldn't remove controller at $pos, no tile entity found" }
             }
-        }else if(pipe is EnderProxyBlock){
+        } else if (pipe is EnderProxyBlock) {
             proxiedViews.remove(pos)
         }
         queueNetworkUpdate(level, pos)
@@ -144,8 +146,8 @@ object PipeNetworkManager : Listener {
     }
 
     private fun locateUuid(level: Level, pos: BlockPos): UUID? {
-        for((uuid, controller) in mappedControllers)
-            if(controller.any { it.second == pos }) return uuid
+        for ((uuid, controller) in mappedControllers)
+            if (controller.any { it.second == pos }) return uuid
         return null
     }
 
@@ -236,7 +238,7 @@ object PipeNetworkManager : Listener {
 
     private fun onControllerPlaced(entity: EnderControllerTileEntity) {
         val uuid = entity.getUUID()
-        if(mappedControllers.containsKey(uuid)) {
+        if (mappedControllers.containsKey(uuid)) {
             logger.warn { "Controller already placed: $uuid" }
             return
         }
@@ -282,7 +284,7 @@ object PipeNetworkManager : Listener {
     }
 
     fun getController(uuid: UUID): EnderControllerTileEntity? {
-        val controller =  mappedControllers[uuid]?.firstOrNull()
+        val controller = mappedControllers[uuid]?.firstOrNull()
         if (controller == null) {
             patchControllerUuids(uuid)
             return mappedControllers[uuid]?.firstOrNull()?.first
@@ -295,7 +297,7 @@ object PipeNetworkManager : Listener {
     }
 
     fun getControllerPosition(uuid: UUID): BlockPos? {
-        val controller =  mappedControllers[uuid]?.firstOrNull()
+        val controller = mappedControllers[uuid]?.firstOrNull()
         if (controller == null) {
             patchControllerUuids(uuid)
             return mappedControllers[uuid]?.firstOrNull()?.second

@@ -1,0 +1,44 @@
+description: "Adds two vectors together"
+group: Math
+name: Vector Decomposition
+extends: Base/Node
+
+theme:
+  color: '#167933'
+  width: 140
+  height: 60
+  icon: 0xe55f
+edges:
+  exec_in:
+    description: 'The input execution flow'
+    direction: input
+    type: exec
+  vector:
+    description: 'The first vector to add'
+    direction: input
+    type: vec3i or vec3f
+  x:
+    description: 'The second value to add'
+    direction: output
+    type: vec3i or vec3f
+  y:
+    description: 'The result of the addition'
+    direction: output
+    type: vec3i or vec3f
+  z:
+    description: 'The result of the addition'
+    direction: output
+    type: vec3i or vec3f
+  exec_out:
+    description: 'The output execution flow'
+    direction: output
+    type: exec
+source: |
+  World:print("Called Vector Decomposition")
+  local x = vector.x + 0.0
+  local y = vector.y + 0.0
+  local z = vector.z + 0.0
+  ${OUTPUT.x = x}
+  ${OUTPUT.y = y}
+  ${OUTPUT.z = z}
+  ${EXEC.exec_out}

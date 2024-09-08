@@ -15,7 +15,5 @@ edges:
     type: exec
 
 source: |
-  ${SETUP.{
-    java.import('java.lang.System').out:println('Hello, World!')
-  }}
+  World:print("Called OnRun")
   ${EXEC.exec_out}

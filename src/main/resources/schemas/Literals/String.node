@@ -17,4 +17,4 @@ edges:
     type: string
 
 source: |
-  return value
+  ${OUTPUT.result = value}

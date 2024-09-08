@@ -9,10 +9,11 @@ object Notify : LuaBuiltin {
 
     @JvmStatic
     fun message(msg: String, time: Float, coler: String, headerIn: String, typeIn: String) {
+        //If the color is 7 characters, append FF to the end
         Server.sendToAll(new<NotifyMessage> {
             icon = 0x0021
             message = msg
-            color = coler
+            color = if (coler.length == 7) "${coler}FF" else coler
             lifetime = time
             header = headerIn
             type = NotifyMessage.NotificationType.valueOf(typeIn)

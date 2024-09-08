@@ -22,6 +22,12 @@ object World : LuaBuiltin {
         server.getLevel(Level.OVERWORLD) ?: throw IllegalStateException("Overworld not available")
     }
 
+
+    @JvmStatic
+    fun print(message: String) {
+        println(message)
+    }
+
     @JvmStatic
     fun signalAt(x: Int, y: Int, z: Int): Int {
         val state = overworld.getBlockState(BlockPos(x, y, z))

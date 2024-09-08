@@ -154,6 +154,7 @@ object ComplexLuaTranspiler {
             return ast
         }
 
+
         private fun parseExpression(expression: String): ASTNode {
             return when {
                 expression.startsWith("NODE.") -> ASTNode.NodeReference(expression.substringAfter("NODE."))
@@ -162,6 +163,15 @@ object ComplexLuaTranspiler {
                 expression.startsWith("LAMBDA.") -> ASTNode.LambdaReference(expression.substringAfter("LAMBDA."))
                 expression.startsWith("JAVA.") -> ASTNode.JavaImport(expression.substringAfter("JAVA."))
                 expression.startsWith("SETUP.") -> ASTNode.SetupBlock(expression.substringAfter("SETUP."))
+                expression.startsWith("OUTPUT.") -> {
+                    val parts = expression.substringAfter("OUTPUT.").split("=", limit = 2)
+                    if (parts.size == 2) {
+                        ASTNode.OutputAssignment(parts[0].trim(), parts[1].trim())
+                    } else {
+                        ASTNode.GenericExpression(expression)
+                    }
+                }
+
                 else -> ASTNode.GenericExpression(expression)
             }
         }
@@ -185,7 +195,8 @@ object ComplexLuaTranspiler {
 
             // Process nodes
             ast.nodes.forEach { node ->
-                ir.functions.add(generateFunction(node, workspace))
+                val function = generateFunction(node, workspace)
+                ir.functions.add(function)
             }
 
             // Process edges
@@ -195,6 +206,7 @@ object ComplexLuaTranspiler {
 
             return ir
         }
+
 
         private fun multiLineString(input: String): String {
             val lines = input.split("\n")
@@ -271,7 +283,14 @@ object ComplexLuaTranspiler {
                     is ASTNode.JavaImport -> function.body.add(IRStatement.JavaImport(child.name))
                     is ASTNode.SetupBlock -> function.setupBlocks.add(child.content.removePrefix("{").removeSuffix("}"))
                     is ASTNode.GenericExpression -> function.body.add(IRStatement.GenericExpression(child.content))
-                    else -> {} // Ignore other node types
+                    is ASTNode.OutputAssignment -> function.body.add(
+                        IRStatement.OutputAssignment(
+                            child.name,
+                            child.value
+                        )
+                    )
+
+                    else -> {} // Ignore other node typesCodeGenerator
                 }
             }
 
@@ -293,19 +312,59 @@ object ComplexLuaTranspiler {
 
         private val indent = "  "
         private lateinit var currentNode: IRFunction
-
+        private val nodeDependencies = mutableMapOf<String, MutableSet<String>>()
+        private val executionOrder = mutableListOf<String>()
 
         fun generate(ir: IR): String {
+            buildDependencies(ir)
+            determineExecutionOrder(ir)
+
             val codeBuilder = StringBuilder()
             generateWorkspaceAccessor(workspace, codeBuilder)
             generateVariableInitializations(ir, codeBuilder)
             generateBuiltIns(codeBuilder)
             generateSetupFunction(ir, codeBuilder)
+            generateGlobalOutputsTable(codeBuilder)
             generateFunctionDeclarations(ir, codeBuilder)
             generateFunctionImplementations(ir, codeBuilder)
             generateMainExecution(ir, codeBuilder)
-
             return codeBuilder.toString()
+        }
+
+        private fun buildDependencies(ir: IR) {
+            ir.functions.forEach { function ->
+                nodeDependencies[function.id] = mutableSetOf()
+                function.inputConnections.forEach { (_, sourcePair) ->
+                    nodeDependencies[function.id]!!.add(sourcePair.first)
+                }
+            }
+        }
+
+        private fun determineExecutionOrder(ir: IR) {
+            val visited = mutableSetOf<String>()
+            val tempVisited = mutableSetOf<String>()
+
+            fun visit(id: String) {
+                if (id in tempVisited) throw IllegalStateException("Cyclic dependency detected")
+                if (id in visited) return
+
+                tempVisited.add(id)
+                nodeDependencies[id]?.forEach { visit(it) }
+                tempVisited.remove(id)
+                visited.add(id)
+                executionOrder.add(id)
+            }
+
+            ir.functions.forEach { function ->
+                if (function.id !in visited) visit(function.id)
+            }
+        }
+
+
+
+        private fun generateGlobalOutputsTable(codeBuilder: StringBuilder) {
+            codeBuilder.append("-- Global Outputs Table\n")
+            codeBuilder.append("local globalOutputs = {}\n\n")
         }
 
         private fun generateBuiltIns(codeBuilder: StringBuilder) {
@@ -359,107 +418,132 @@ object ComplexLuaTranspiler {
 
         private fun generateFunctionImplementations(ir: IR, codeBuilder: StringBuilder) {
             codeBuilder.append("-- Function Implementations\n")
-            ir.functions.forEach { function ->
-                generateFunction(function, ir, codeBuilder)
-                codeBuilder.append("\n")
-            }
-        }
-
-        private fun generateInputNodeCall(workspace: Workspace, inputName: String): String {
-            val inputEdge = workspace.graph.getEdges(UUID.fromString(currentNode.id))
-                .find { it.name == inputName && it.direction == "input" }
-            return if (inputEdge != null) {
-                val sourceNode = getSourceNode(workspace, inputEdge)
-                if (sourceNode != null) {
-                    generateNodeCall(sourceNode)
-                } else {
-                    getDefaultValue(inputEdge)
+            executionOrder.forEach { id ->
+                val function = ir.functions.find { it.id == id }
+                if (function != null) {
+                    generateFunction(function, codeBuilder)
+                    codeBuilder.append("\n")
                 }
-            } else {
-                "nil"
             }
         }
 
-        private fun generateFunction(function: IRFunction, ir: IR, codeBuilder: StringBuilder) {
-            currentNode = function
+        private fun generateFunction(function: IRFunction, codeBuilder: StringBuilder) {
             val functionName = sanitizeName("${function.originalName}_${function.id}")
-            val parameters = function.inputEdges.joinToString(", ")
 
             codeBuilder.append("-- Node: ${function.originalName} (${function.id})\n")
-            codeBuilder.append("$functionName = function($parameters)\n")
+            codeBuilder.append("$functionName = function()\n")
 
-            function.body.forEach { statement ->
-                when (statement) {
-                    is IRStatement.Literal -> codeBuilder.append("$indent${statement.value}\n")
-                    is IRStatement.ExecReference -> {
-                        val targetFunctions = function.outputEdges[statement.name] ?: emptyList()
-                        targetFunctions.forEach { (targetId, targetName) ->
-                            val resolvedCall = generateNodeCall(workspace.graph.getNode(UUID.fromString(targetId))!!)
-                            codeBuilder.append("$indent$resolvedCall\n")
-                        }
-                    }
-
-                    is IRStatement.VarReference -> codeBuilder.append("${indent}local ${sanitizeName(statement.name)} = variables['${statement.name}']\n")
-                    is IRStatement.LambdaReference -> {
-                        codeBuilder.append(
-                            "function() return ${
-                                generateInputNodeCall(
-                                    workspace,
-                                    statement.name
-                                )
-                            } end\n"
-                        )
-//                        val targetFunctions = function.outputEdges[statement.name] ?: emptyList()
-//                        if (targetFunctions.isNotEmpty()) {
-//                            codeBuilder.append("${indent}local ${sanitizeName(statement.name)} = function()\n")
-//                            targetFunctions.forEach { (targetId, targetName) ->
-//                                val resolvedCall = generateNodeCall(workspace.graph.getNode(UUID.fromString(targetId))!!)
-//                                codeBuilder.append("$indent$indent$resolvedCall\n")
-//                            }
-//                            codeBuilder.append("${indent}end\n")
-//                        } else {
-//                            codeBuilder.append("${indent}local ${sanitizeName(statement.name)} = function() end\n")
-//                        }
-                    }
-
-                    is IRStatement.JavaImport -> codeBuilder.append("${indent}local ${sanitizeName(statement.name)} = java.import('${statement.name}')\n")
-                    is IRStatement.GenericExpression -> codeBuilder.append("$indent${statement.content}\n")
-                    is IRStatement.NodeReference -> {
-                        // Ignore NodeReference as it's already handled in inputEdges
+            // Generate local variables for inputs
+            function.inputEdges.forEach { inputName ->
+                if (inputName in function.inputConnections) {
+                    val (sourceNodeId, sourceNodeName) = function.inputConnections[inputName]!!
+                    val sourceEdgeName = getSourceEdgeName(workspace, function.id, inputName)
+                    val globalVarName = sanitizeName("${sourceNodeName}_${sourceNodeId}_${sanitizeName(sourceEdgeName)}")
+                    codeBuilder.append("${indent}local $inputName = globalOutputs['$globalVarName']\n")
+                } else {
+                    val edge = workspace.graph.getEdges(workspace.graph.getNode(UUID.fromString(function.id))!!).find { it.name == inputName }
+                    if (edge != null) {
+                        val defaultValue = getDefaultValue(edge)
+                        codeBuilder.append("${indent}local $inputName = $defaultValue\n")
                     }
                 }
+            }
+
+            if (function.inputEdges.isNotEmpty()) {
+                codeBuilder.append("\n")
+            }
+
+            // Generate function body
+            function.body.forEach { statement ->
+                generateStatement(statement, codeBuilder, functionName)
             }
 
             codeBuilder.append("end\n")
         }
 
+
+
+        private fun getSourceEdgeName(workspace: Workspace, targetNodeId: String, targetEdgeName: String): String {
+            val targetNode = workspace.graph.getNode(UUID.fromString(targetNodeId))
+            val targetEdge = workspace.graph.getEdges(targetNode!!).find { it.name == targetEdgeName }
+            val sourceLink = workspace.graph.getLinks().find { it.to == targetEdge!!.uid }
+            val sourceEdge = workspace.graph.getEdge(sourceLink!!.from)
+            return sourceEdge!!.name
+        }
+
+
+        private fun getTargetNodes(workspace: Workspace, edge: Edge): List<Node> {
+            val connectedLinks = workspace.graph.getLinks().filter { it.from == edge.uid }
+            return connectedLinks.mapNotNull { link ->
+                val targetEdge = workspace.graph.getEdge(link.to)
+                targetEdge?.let { workspace.graph.getNode(it.owner) }
+            }
+        }
+
+
         private fun generateNodeCall(node: Node): String {
             val functionName = sanitizeName("${node.name}_${node.uid}")
-            val params = workspace.graph.getEdges(node)
-                .filter { it.direction == "input" && it.type != "exec" }
-                .joinToString(", ") { generateInputNodeCall(it) }
-            return "$functionName($params)"
+            return "$functionName()"
         }
+
+
+        private fun generateStatement(statement: IRStatement, codeBuilder: StringBuilder, functionName: String) {
+            when (statement) {
+                is IRStatement.Literal -> codeBuilder.append("$indent${statement.value}\n")
+                is IRStatement.NodeReference -> {
+                    val inputCall = generateInputNodeCall(workspace.graph.getEdge(UUID.fromString(statement.name))!!)
+                    codeBuilder.append("${indent}local ${statement.name} = $inputCall\n")
+                }
+                is IRStatement.ExecReference -> {
+
+                }
+                is IRStatement.VarReference -> codeBuilder.append("${indent}variables['${statement.name}']\n")
+                is IRStatement.LambdaReference -> codeBuilder.append("${indent}${statement.name}\n")
+                is IRStatement.JavaImport -> codeBuilder.append("${indent}${statement.name}\n")
+                is IRStatement.GenericExpression -> codeBuilder.append("${indent}${statement.content}\n")
+                is IRStatement.OutputAssignment -> {
+                    val outputKey = "${functionName}_${sanitizeName(statement.name)}"
+                    codeBuilder.append("${indent}globalOutputs['$outputKey'] = ${statement.value}\n")
+                }
+            }
+        }
+
 
         private fun generateInputNodeCall(edge: Edge): String {
             val sourceNode = getSourceNode(workspace, edge)
             return if (sourceNode != null) {
-                generateNodeCall(sourceNode)
+                val sourceEdge = getSourceEdge(workspace, edge)
+                if (sourceEdge != null && sourceEdge.type != "exec") {
+                    val sourceFunctionName = sanitizeName("${sourceNode.name}_${sourceNode.uid}")
+                    "globalOutputs['${sourceFunctionName}_${sanitizeName(sourceEdge.name)}']"
+                } else {
+                    getDefaultValue(edge)
+                }
             } else {
                 getDefaultValue(edge)
             }
+        }
 
+//        private fun generateInputNodeCall(edge: Edge): String {
+//            val sourceNode = getSourceNode(workspace, edge)
 //            return if (sourceNode != null) {
-//                when (sourceNode.type) {
-//                    "Literals/String" -> "\"${getNodeLiteralValue(sourceNode)}\""
-//                    "Literals/Number" -> getNodeLiteralValue(sourceNode)
-//                    "Literals/Boolean" -> getNodeLiteralValue(sourceNode)
-//                    else -> generateNodeCall(sourceNode)
+//                val sourceEdge = getSourceEdge(workspace, edge)
+//                if (sourceEdge != null) {
+//                    val sourceFunctionName = sanitizeName("${sourceNode.name}_${sourceNode.uid}")
+//                    "${sourceFunctionName}_${sanitizeName(sourceEdge.name)}()"
+//                } else {
+//                    getDefaultValue(edge)
 //                }
 //            } else {
 //                getDefaultValue(edge)
 //            }
+//        }
+
+        private fun getSourceEdge(workspace: Workspace, targetEdge: Edge): Edge? {
+            val connectedLink = workspace.graph.getLinks().find { it.to == targetEdge.uid }
+            return connectedLink?.let { workspace.graph.getEdge(it.from) }
         }
+
 
         private fun getNodeLiteralValue(node: Node): String {
             val nodeTemplate = listener<Schemas>(Endpoint.Side.SERVER).library["${node.type}/${node.name}"]
@@ -483,6 +567,7 @@ object ComplexLuaTranspiler {
             }
         }
 
+
         private fun getSourceNode(workspace: Workspace, edge: Edge): Node? {
             val connectedLink = workspace.graph.getLinks().find { it.to == edge.uid }
             return if (connectedLink != null) {
@@ -492,20 +577,38 @@ object ComplexLuaTranspiler {
                 } else null
             } else null
         }
-
-
         private fun generateMainExecution(ir: IR, codeBuilder: StringBuilder) {
             codeBuilder.append("-- Main Execution\n")
             codeBuilder.append("setup()\n")
+            codeBuilder.append("local function main()\n")
+            executionOrder.forEach { id ->
+                val function = ir.functions.find { it.id == id }
+                if (function != null) {
+                    val functionName = sanitizeName("${function.originalName}_${function.id}")
+                    codeBuilder.append("${indent}$functionName()\n")
+                }
+            }
+            codeBuilder.append("end\n\n")
             codeBuilder.append("return {\n")
             ir.functions.filter { it.nodeType == "Events" }.forEach { function ->
                 val functionName = sanitizeName("${function.originalName}_${function.id}")
-                codeBuilder.append("${indent}${function.originalName} = {\n")
-                codeBuilder.append("$indent$indent$functionName\n")
-                codeBuilder.append("$indent},\n")
+                codeBuilder.append("${indent}${function.originalName} = {main},\n")
             }
             codeBuilder.append("}\n")
         }
+
+//        private fun generateMainExecution(ir: IR, codeBuilder: StringBuilder) {
+//            codeBuilder.append("-- Main Execution\n")
+//            codeBuilder.append("setup()\n")
+//            codeBuilder.append("return {\n")
+//            ir.functions.filter { it.nodeType == "Events" }.forEach { function ->
+//                val functionName = sanitizeName("${function.originalName}_${function.id}")
+//                codeBuilder.append("${indent}${function.originalName} = {\n")
+//                codeBuilder.append("$indent$indent$functionName\n")
+//                codeBuilder.append("$indent},\n")
+//            }
+//            codeBuilder.append("}\n")
+//        }
 
         private fun generateValue(value: IRValue): String {
             return when (value) {
@@ -523,6 +626,10 @@ object ComplexLuaTranspiler {
     // Data classes and enums
     data class Token(val type: TokenType, val value: String)
     enum class TokenType { NODE_START, NODE_END, EDGE, EXPRESSION, LITERAL }
+    sealed class IROutputTemplate {
+        data class VariableAssignment(val variableName: String, val value: String) : IROutputTemplate()
+        data class ExecCall(val execName: String) : IROutputTemplate()
+    }
 
     class AST {
 
@@ -543,6 +650,7 @@ object ComplexLuaTranspiler {
         data class JavaImport(val name: String) : ASTNode()
         data class SetupBlock(val content: String) : ASTNode()
         data class GenericExpression(val content: String) : ASTNode()
+        data class OutputAssignment(val name: String, val value: String) : ASTNode()
     }
 
     class IR {
@@ -557,10 +665,10 @@ object ComplexLuaTranspiler {
         val originalName: String,
         val nodeType: String,
         val inputEdges: List<String>,
-        val inputConnections: Map<String, Pair<String, String>>, // Map of input edge name to (sourceNodeId, sourceNodeName)
+        val inputConnections: Map<String, Pair<String, String>>,
         val outputEdges: Map<String, List<Pair<String, String>>>,
         val body: MutableList<IRStatement> = mutableListOf(),
-        val setupBlocks: MutableSet<String> = mutableSetOf() //Using a set here prevents duplicate setup blocks
+        val setupBlocks: MutableSet<String> = mutableSetOf(),
     )
 
     data class IREdge(val id: String)
@@ -579,8 +687,8 @@ object ComplexLuaTranspiler {
         data class LambdaReference(val name: String) : IRStatement()
         data class JavaImport(val name: String) : IRStatement()
         data class GenericExpression(val content: String) : IRStatement()
+        data class OutputAssignment(val name: String, val value: String) : IRStatement()
     }
-
     // Helper functions
     private fun sanitizeName(name: String): String = name.replace(Regex("[^a-zA-Z0-9_]"), "_")
 }

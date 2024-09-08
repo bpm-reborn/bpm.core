@@ -147,9 +147,8 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
     }
 
     override fun playerWillDestroy(level: Level, pos: BlockPos, state: BlockState, player: Player): BlockState {
-        val blockEntity = level.getBlockEntity(pos) as? EnderControllerTileEntity
         val block = state.block
-        if (blockEntity != null && !level.isClientSide && block is BasePipeBlock) {
+        if (!level.isClientSide && block is BasePipeBlock) {
             PipeNetworkManager.onPipeRemoved(block, level, pos)
 //            dropController(level, pos)
 

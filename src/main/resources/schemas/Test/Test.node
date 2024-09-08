@@ -1,0 +1,32 @@
+# Concatenate.node
+description: "Testing multi returns"
+group: Testing
+name: Test Multi Returns
+extends: Base/Node
+
+theme:
+  color: '#3366cc'
+  width: 160
+  height: 60
+  icon: 0xe55f
+edges:
+  exec_in:
+    description: 'The first string'
+    direction: input
+    type: exec
+  exec_out:
+    description: 'Flows the output action'
+    direction: output
+    type: exec
+  value_a:
+    description: 'A value that should be set appropriately'
+    direction: output
+    type: string
+  value_b:
+    description: 'A value that should be set appropriately'
+    direction: output
+    type: string
+source: |
+  ${OUTPUT.value_a = '69420'}
+  ${EXEC.exec_out}
+  ${OUTPUT.value_b = '52069'}
