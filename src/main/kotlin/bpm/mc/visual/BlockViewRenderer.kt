@@ -411,8 +411,11 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
             if (faceStates[hoveredBlock] != FaceState.NONE) {
                 customBackgroundRenderer.onFaceClick()
             }
-            return
         }
+
+
+        //Update the server proxy state
+
 
     }
 

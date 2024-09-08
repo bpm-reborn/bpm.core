@@ -1,0 +1,44 @@
+description: "Filters out slots with stack sizes less than the specified amount."
+group: Inventory
+name: Stack Size Filter
+extends: Base/Node
+
+theme:
+  color: '#3a2b87'
+  height: 40
+  width: 140
+  icon: 0xf557
+
+edges:
+  items_in:
+    type: items
+    description: 'The input proxy block faces the inventory to retrieve.'
+    direction: input
+  min_stack_size:
+    type: number
+    description: 'The minimum stack size to filter by.'
+    direction: input
+    value:
+      default: 1
+      type: number
+  max_stack_size:
+    type: number
+    description: 'The maximum stack size to filter by.'
+    direction: input
+    value:
+      default: 64
+      type: number
+  items_out:
+    description: 'An item handle'
+    direction: output
+    type: items
+source: |
+  local items = {}
+  for slot, item in pairs(items_in) do
+      if item.count >= min_stack_size and item.count <= max_stack_size then
+      items[slot] = item
+      end
+  end
+  return items  
+  
+  

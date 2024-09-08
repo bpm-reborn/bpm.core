@@ -64,8 +64,8 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
     ) {
         super.setPlacedBy(p_49847_, p_49848_, p_49849_, p_49850_, p_49851_)
         onPipeAdded(p_49847_, p_49848_)
-
     }
+
 
     override fun playerDestroy(
         p_49827_: Level,

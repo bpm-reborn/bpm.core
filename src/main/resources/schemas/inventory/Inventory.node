@@ -1,0 +1,27 @@
+description: "Gets the inventory of the input proxy"
+group: Inventory
+name: Get Inventory
+extends: Base/Node
+
+theme:
+  color: '#3a2b87'
+  height: 40
+  width: 120
+  icon: 0xf557
+
+edges:
+  proxy:
+    type: proxy or vec3i
+    description: 'The input proxy block faces the inventory to retrieve.'
+    direction: input
+  items:
+    description: 'An item handle'
+    direction: output
+    type: items
+source: |
+  local blockLambda = ${LAMBDA.proxy}
+  local block = blockLambda()
+  local inventory = World:getInventory(block)
+  return inventory
+  
+  

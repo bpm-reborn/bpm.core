@@ -13,6 +13,7 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.level.Level
 import bpm.common.logging.KotlinLogging
 import bpm.common.network.Listener
+import bpm.mc.block.EnderProxyBlock
 import bpm.server.ServerRuntime
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -29,7 +30,7 @@ object PipeNetworkManager : Listener {
     private val pipeTypeCache = ConcurrentHashMap<Class<out BasePipeBlock>, MutableSet<BlockPos>>()
     private val logger = KotlinLogging.logger {}
     private val mappedControllers = ConcurrentHashMap<UUID, MutableSet<Pair<EnderControllerTileEntity, BlockPos>>>()
-    private val proxiedViews = mutableMapOf<UUID, ProxiedView>()
+    private val proxiedViews = mutableMapOf<BlockPos, ProxiedView>()
     private val pendingUpdates = mutableSetOf<PipeNetwork.LevelPipe>()
 
     private val updateInProgress = AtomicBoolean(false)
@@ -43,6 +44,9 @@ object PipeNetworkManager : Listener {
             } else {
                 logger.warn { "Couldn't add controller at $pos, no tile entity found" }
             }
+        }else if(pipe is EnderProxyBlock){
+            proxiedViews[pos] = ProxiedView(pos, emptyMap())
+            logger.debug { "Added proxy view at $pos" }
         }
         logger.info { "Adding pipe at $pos of type ${pipe::class.simpleName}" }
     }
@@ -57,6 +61,8 @@ object PipeNetworkManager : Listener {
             } else {
                 logger.warn { "Couldn't remove controller at $pos, no tile entity found" }
             }
+        }else if(pipe is EnderProxyBlock){
+            proxiedViews.remove(pos)
         }
         queueNetworkUpdate(level, pos)
         logger.info { "Removing pipe at $pos of type ${pipe::class.simpleName}" }
@@ -71,7 +77,9 @@ object PipeNetworkManager : Listener {
         pendingUpdates.add(PipeNetwork.LevelPipe(level, block, pos))
     }
 
-
+    fun getProxiedView(pos: BlockPos): ProxiedView? {
+        return proxiedViews[pos]
+    }
 
 
     override fun onTick(delta: Float, tick: Int) {

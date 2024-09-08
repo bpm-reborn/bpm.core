@@ -1,0 +1,37 @@
+description: "Filters out items with the specified name."
+group: Inventory
+name: Item Type Filter
+extends: Base/Node
+
+theme:
+  color: '#3a2b87'
+  height: 40
+  width: 140
+  icon: 0xf557
+
+edges:
+  items_in:
+    type: items
+    description: 'The input proxy block faces the inventory to retrieve.'
+    direction: input
+  item_name:
+    type: string
+    description: 'The name of the item to filter by.'
+    direction: input
+    value:
+      default: 'minecraft:stone'
+      type: string
+  items_out:
+    description: 'An item handle'
+    direction: output
+    type: items
+source: |
+  local items = {}
+  for slot, item in pairs(items_in) do
+    if item.name == item_name then
+      items[slot] = item
+    end
+  end
+  return items  
+  
+  
