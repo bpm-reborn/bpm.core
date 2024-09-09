@@ -1,0 +1,53 @@
+  description: "Inserts items into a specific slot in an item handler"
+  group: Network
+  name: Insert Item
+  extends: Base/Node
+
+  theme:
+    color: '#21f7f7'
+    height: 80
+    width: 140
+    icon: 0xf56e
+
+  edges:
+    exec_in:
+      description: 'Execute the insertion'
+      direction: input
+      type: exec
+    handler:
+      description: 'The item handler to insert into'
+      direction: input
+      type: itemhandler
+    slot:
+      description: 'The slot to insert into'
+      direction: input
+      type: number
+      value:
+        type: int
+        default: 0
+    stack:
+      description: 'The ItemStack to insert'
+      direction: input
+      type: itemstack
+    simulate:
+      description: 'Whether to simulate the insertion'
+      direction: input
+      type: boolean
+      value:
+        type: boolean
+        default: false
+    remaining:
+      description: 'The remaining ItemStack after insertion'
+      direction: output
+      type: itemstack
+    exec_out:
+      description: 'Execution complete'
+      direction: output
+      type: exec
+
+  source: |
+    local remainingStack = Network:insertItem(handler, slot, stack, simulate)
+    local insertedCount = stack:getCount() - remainingStack:getCount()
+    World:print("Inserted " .. insertedCount .. " items")
+    ${OUTPUT.remaining = remainingStack}
+    ${EXEC.exec_out}

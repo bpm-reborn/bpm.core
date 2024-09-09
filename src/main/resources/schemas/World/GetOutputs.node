@@ -1,0 +1,34 @@
+description: "Gets the output item handlers for this workspace"
+group: Network
+name: Get Outputs
+extends: Base/Node
+
+theme:
+  color: '#3af721'
+  height: 40
+  width: 120
+  icon: 0xf07d
+
+edges:
+  exec_in:
+    description: 'Execute the retrieval'
+    direction: input
+    type: exec
+  outputs:
+    description: 'The combined output item handler'
+    direction: output
+    type: itemhandler
+  exec_out:
+      description: 'Execution complete'
+      direction: output
+      type: exec
+
+source: |
+  local outputs = Network:getOutputs(_Uid)
+  if outputs then
+    World:print("Output handlers retrieved successfully")
+  else
+    World:print("No output handlers found")
+  end
+  ${OUTPUT.outputs = outputs}
+  ${EXEC.exec_out}

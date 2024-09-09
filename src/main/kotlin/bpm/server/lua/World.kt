@@ -55,22 +55,14 @@ object World : LuaBuiltin {
         val sound = getSoundByName(soundName)
         overworld.playSound(
             null, // No specific player, play for all
-            x.toDouble(),
-            y.toDouble(),
-            z.toDouble(),
-            sound,
-            SoundSource.BLOCKS,
-            volume,
-            pitch
+            x.toDouble(), y.toDouble(), z.toDouble(), sound, SoundSource.BLOCKS, volume, pitch
         )
     }
-
 
     @JvmStatic
     fun getPlayerInRadius(originX: Float, originY: Float, originZ: Float, radius: Float): List<String> {
         val entities = overworld.getEntities(
-            null,
-            AABB(
+            null, AABB(
                 originX.toDouble() - radius,
                 originY.toDouble() - radius,
                 originZ.toDouble() - radius,
@@ -79,9 +71,7 @@ object World : LuaBuiltin {
                 originZ.toDouble() + radius
             )
         )
-        return entities
-            .filterIsInstance<net.minecraft.world.entity.player.Player>()
-            .map { it.stringUUID }
+        return entities.filterIsInstance<net.minecraft.world.entity.player.Player>().map { it.stringUUID }
     }
 
     private fun getSoundByName(name: String): net.minecraft.sounds.SoundEvent {

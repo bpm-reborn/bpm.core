@@ -349,6 +349,11 @@ object PipeNetManager {
         return controllerPos
     }
 
+    fun getNetwork(uuid: UUID): PipeNet? {
+        val networkId = state.controllerToNetwork[uuid] ?: return null
+        return state.networks[networkId]
+    }
+
     fun getProxies(uuid: UUID): List<ProxyState> {
         val networkId = state.controllerToNetwork[uuid] ?: return let {
             logger.warn { "No network found for controller $uuid" }

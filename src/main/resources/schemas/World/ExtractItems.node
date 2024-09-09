@@ -1,0 +1,59 @@
+  description: "Extracts items from a specific slot in an item handler"
+  group: Network
+  name: Extract Item
+  extends: Base/Node
+
+  theme:
+    color: '#f72121'
+    height: 80
+    width: 140
+    icon: 0xf56d
+
+  edges:
+    exec_in:
+      description: 'Execute the extraction'
+      direction: input
+      type: exec
+    handler:
+      description: 'The item handler to extract from'
+      direction: input
+      type: itemhandler
+    slot:
+      description: 'The slot to extract from'
+      direction: input
+      type: number
+      value:
+        type: int
+        default: 0
+    amount:
+      description: 'The maximum number of items to extract'
+      direction: input
+      type: number
+      value:
+        type: int
+        default: 64
+    simulate:
+      description: 'Whether to simulate the extraction'
+      direction: input
+      type: boolean
+      value:
+        type: boolean
+        default: false
+    extracted:
+      description: 'The extracted ItemStack'
+      direction: output
+      type: itemstack
+    exec_out:
+      description: 'Execution complete'
+      direction: output
+      type: exec
+
+  source: |
+    local extractedStack = Network:extractItem(handler, slot, amount, simulate)
+    if not extractedStack:isEmpty() then
+      World:print("Extracted " .. extractedStack:getCount() .. " items")
+    else
+      World:print("No items extracted")
+    end
+    ${OUTPUT.extracted = extractedStack}
+    ${EXEC.exec_out}

@@ -1,0 +1,33 @@
+description: "Gets the input item handlers for this workspace"
+group: Network
+name: Get Inputs
+extends: Base/Node
+
+theme:
+  color: '#3af721'
+  height: 40
+  width: 120
+  icon: 0xf07c
+
+edges:
+  exec_in:
+    description: 'Execute the retrieval'
+    direction: input
+    type: exec
+  inputs:
+    description: 'The combined input item handler'
+    direction: output
+    type: itemhandler
+  exec_out:
+    description: 'Execution complete'
+    direction: output
+    type: exec
+source: |
+  local inputs = Network:getInputs(_Uid)
+  if inputs then
+    World:print("Input handlers retrieved successfully")
+  else
+    World:print("No input handlers found")
+  end
+  ${OUTPUT.inputs = inputs}
+  ${EXEC.exec_out}
