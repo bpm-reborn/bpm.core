@@ -466,14 +466,14 @@ object ComplexLuaTranspiler {
         private fun getSourceEdgeName(workspace: Workspace, targetNodeId: String, targetEdgeName: String): String {
             val targetNode = workspace.graph.getNode(UUID.fromString(targetNodeId))
             val targetEdge = workspace.graph.getEdges(targetNode!!).find { it.name == targetEdgeName }
-            val sourceLink = workspace.graph.getLinks().find { it.to == targetEdge!!.uid }
+            val sourceLink = workspace.graph.links.find { it.to == targetEdge!!.uid }
             val sourceEdge = workspace.graph.getEdge(sourceLink!!.from)
             return sourceEdge!!.name
         }
 
 
         private fun getTargetNodes(workspace: Workspace, edge: Edge): List<Node> {
-            val connectedLinks = workspace.graph.getLinks().filter { it.from == edge.uid }
+            val connectedLinks = workspace.graph.links.filter { it.from == edge.uid }
             return connectedLinks.mapNotNull { link ->
                 val targetEdge = workspace.graph.getEdge(link.to)
                 targetEdge?.let { workspace.graph.getNode(it.owner) }
@@ -540,7 +540,7 @@ object ComplexLuaTranspiler {
 //        }
 
         private fun getSourceEdge(workspace: Workspace, targetEdge: Edge): Edge? {
-            val connectedLink = workspace.graph.getLinks().find { it.to == targetEdge.uid }
+            val connectedLink = workspace.graph.links.find { it.to == targetEdge.uid }
             return connectedLink?.let { workspace.graph.getEdge(it.from) }
         }
 
