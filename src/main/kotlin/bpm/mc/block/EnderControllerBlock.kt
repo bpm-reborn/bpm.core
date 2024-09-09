@@ -33,7 +33,7 @@ import java.util.*
 
 class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), EntityBlock {
 
-    private val shape = Shapes.box(3/16.0, 3/16.0, 3/16.0, 13/16.0, 13/16.0, 13/16.0)
+    private val shape = Shapes.box(3 / 16.0, 3 / 16.0, 3 / 16.0, 13 / 16.0, 13 / 16.0, 13 / 16.0)
     private val logger = KotlinLogging.logger { }
 
     override fun useItemOn(
@@ -68,7 +68,6 @@ class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), 
         p_49850_: LivingEntity?,
         p_49851_: ItemStack
     ) {
-        super.setPlacedBy(level, p_49848_, p_49849_, p_49850_, p_49851_)
         if (!level.isClientSide) {
             (level.getBlockEntity(p_49848_) as? EnderControllerTileEntity)?.setUUID(UUID.randomUUID())
             val tile = level.getBlockEntity(p_49848_)
@@ -89,6 +88,7 @@ class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), 
 //                }
             }
         }
+        super.setPlacedBy(level, p_49848_, p_49849_, p_49850_, p_49851_)
     }
 
     override fun getCollisionShape(
@@ -106,7 +106,7 @@ class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), 
     override fun getStateForPlacement(context: BlockPlaceContext): BlockState? {
         val level = context.level
         val pos = context.clickedPos
-        if (PipeNetManager.hasControllerInNetwork(level, pos)) {
+        if (level.isClientSide) if (PipeNetManager.hasControllerInNetwork(level, pos)) {
             return null
         }
         return super.getStateForPlacement(context)

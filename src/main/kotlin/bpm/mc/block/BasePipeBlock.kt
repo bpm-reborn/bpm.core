@@ -14,10 +14,12 @@ import net.minecraft.world.level.block.entity.BlockEntity
 import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.level.block.state.StateDefinition
 import net.minecraft.world.level.block.state.properties.BooleanProperty
+import net.minecraft.world.level.material.FluidState
 import net.neoforged.neoforge.common.extensions.IBlockExtension
 
 open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExtension {
     companion object {
+
         val NORTH: BooleanProperty = BooleanProperty.create("north")
         val EAST: BooleanProperty = BooleanProperty.create("east")
         val SOUTH: BooleanProperty = BooleanProperty.create("south")
@@ -38,17 +40,6 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
         builder.add(*ALL_STATES.toTypedArray())
     }
 
-    override fun neighborChanged(
-        state: BlockState, level: Level, pos: BlockPos, block: Block, fromPos: BlockPos, isMoving: Boolean
-    ) {
-        if (!level.isClientSide) {
-            val newState = getUpdatedState(level, pos, state)
-            if (newState != state) {
-                level.setBlock(pos, newState, 3)
-                notifyNeighbors(level, pos)
-            }
-        }
-    }
 
     override fun getStateForPlacement(context: BlockPlaceContext): BlockState? {
 
@@ -63,26 +54,52 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
         p_49851_: ItemStack
     ) {
         super.setPlacedBy(p_49847_, p_49848_, p_49849_, p_49850_, p_49851_)
-        onPipeAdded(p_49847_, p_49848_)
     }
 
+    override fun onDestroyedByPlayer(
+        state: BlockState,
+        level: Level,
+        pos: BlockPos,
+        player: Player,
+        willHarvest: Boolean,
+        fluid: FluidState
+    ): Boolean {
+//        if (!level.isClientSide) {
+//            val block = state.block
+//            if (block is BasePipeBlock) {
+//                PipeNetManager.onPipeRemoved(block, level, pos)
+//            }
+//        }
+        return super<Block>.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid)
+    }
+//
+//    override fun playerDestroy(
+//        p_49827_: Level,
+//        p_49828_: Player,
+//        p_49829_: BlockPos,
+//        p_49830_: BlockState,
+//        p_49831_: BlockEntity?,
+//        p_49832_: ItemStack
+//    ) {
+//        super.playerDestroy(p_49827_, p_49828_, p_49829_, p_49830_, p_49831_, p_49832_)
+//        PipeNetManager.onPipeRemoved(this, p_49827_, p_49829_)
+//
+//        if (p_49831_ is EnderControllerTileEntity) {
+//            //TODO: this should be calling some on removed event instead
+//            ServerRuntime.recompileWorkspace(p_49831_.getUUID())
+//        }
+//    }
 
-
-    override fun playerDestroy(
-        p_49827_: Level,
-        p_49828_: Player,
-        p_49829_: BlockPos,
-        p_49830_: BlockState,
-        p_49831_: BlockEntity?,
-        p_49832_: ItemStack
+    override fun neighborChanged(
+        state: BlockState, level: Level, pos: BlockPos, block: Block, fromPos: BlockPos, isMoving: Boolean
     ) {
-        super.playerDestroy(p_49827_, p_49828_, p_49829_, p_49830_, p_49831_, p_49832_)
-        PipeNetManager.onPipeRemoved(this, p_49827_,p_49829_)
-
-            if(p_49831_ is EnderControllerTileEntity) {
-                //TODO: this should be calling some on removed event instead
-                ServerRuntime.recompileWorkspace(p_49831_.getUUID())
+        if (!level.isClientSide) {
+            val newState = getUpdatedState(level, pos, state)
+            if (newState != state) {
+                level.setBlock(pos, newState, 3)
+                notifyNeighbors(level, pos)
             }
+        }
     }
 
 
@@ -108,10 +125,12 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
                 // If there are no connections, set proxy to true and UP to true
                 newState = newState.setValue(PROXY, true).setValue(UP, true)
             }
+
             connections.size == 1 -> {
                 // If there's only one connection, set the proxy state and the corresponding direction
                 newState = newState.setValue(PROXY, true).setValue(getPropertyForDirection(connections[0]), true)
             }
+
             else -> {
                 // Otherwise, set the connection states for all connections
                 for (direction in connections) {
@@ -151,7 +170,7 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
     override fun playerWillDestroy(level: Level, pos: BlockPos, state: BlockState, player: Player): BlockState {
         val block = state.block
         if (!level.isClientSide && block is BasePipeBlock) {
-            PipeNetManager.onPipeRemoved(block, level, pos)
+//            PipeNetManager.onPipeRemoved(block, level, pos)
 //            dropController(level, pos)
 
             // Remove the direct call to updateNetwork
@@ -161,16 +180,13 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
 
     override fun onPlace(state: BlockState, level: Level, pos: BlockPos, oldState: BlockState, isMoving: Boolean) {
         super.onPlace(state, level, pos, oldState, isMoving)
-//        if (!level.isClientSide) {
-//
-//        }
+        if (!level.isClientSide) onPipeAdded(level, pos)
+
     }
 
 
     override fun onRemove(state: BlockState, level: Level, pos: BlockPos, newState: BlockState, isMoving: Boolean) {
-//        if (!level.isClientSide && state.block != newState.block) {
-//            PipeNetManager.onPipeRemoved(this, level, pos)
-//        }
+        if (!level.isClientSide) onPipeRemoved(level, pos)
         super.onRemove(state, level, pos, newState, isMoving)
     }
 }
