@@ -83,6 +83,10 @@ class Graph(
      */
     val nodes: Collection<Node> get() = nodeMap.values
     /**
+     * Returns a collection of links contained within the graph.
+     */
+    val links: Collection<Link> get() = linkMap.values
+    /**
      * Returns a collection of edges contained within the graph.
      */
     val edges: Collection<Edge> get() = edgeMap.values
@@ -169,14 +173,14 @@ class Graph(
      */
     fun getLinks(owner: Node): List<Link> {
         val edges = getEdges(owner)
-        return getLinks().filter { link ->
+        return links.filter { link ->
             link.to in edges.map { it.uid } || link.from in edges.map { it.uid }
         }
     }
 
     fun getLinks(owner: UUID): List<Link> {
         val edges = getEdges(owner)
-        return getLinks().filter { link ->
+        return links.filter { link ->
             link.to in edges.map { it.uid } || link.from in edges.map { it.uid }
         }
     }
@@ -210,10 +214,6 @@ class Graph(
      */
     fun getLink(uid: UUID): Link? {
         return linkMap[uid]
-    }
-
-    fun getLinks(): Collection<Link> {
-        return linkMap.values
     }
 
     override fun toString(): String {

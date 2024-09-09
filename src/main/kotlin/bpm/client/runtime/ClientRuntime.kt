@@ -166,6 +166,7 @@ object ClientRuntime : Listener {
             ImGui.renderPlatformWindowsDefault()
             GLFW.glfwMakeContextCurrent(backupWindowPtr)
         }
+        Keyboard.update()
     }
     /**
      * Should be called once per frame to process events from the main thread

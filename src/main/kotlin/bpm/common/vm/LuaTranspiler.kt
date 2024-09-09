@@ -277,7 +277,7 @@ object LuaTranspiler {
     }
 
     private fun getSourceNode(workspace: Workspace, edge: Edge): Node? {
-        val connectedLink = workspace.graph.getLinks().find { it.to == edge.uid }
+        val connectedLink = workspace.graph.links.find { it.to == edge.uid }
         return if (connectedLink != null) {
             val sourceEdge = workspace.graph.getEdge(connectedLink.from)
             if (sourceEdge != null) {
@@ -287,7 +287,7 @@ object LuaTranspiler {
     }
 
     private fun getTargetNodes(workspace: Workspace, edge: Edge): List<Node> {
-        val connectedLinks = workspace.graph.getLinks().filter { it.from == edge.uid }
+        val connectedLinks = workspace.graph.links.filter { it.from == edge.uid }
         return connectedLinks.mapNotNull { link ->
             val targetEdge = workspace.graph.getEdge(link.to)
             targetEdge?.let { workspace.graph.getNode(it.owner) }

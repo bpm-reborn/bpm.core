@@ -36,7 +36,7 @@ class EnderControllerItem : BlockItem(ModBlocks.ENDER_CONTROLLER, Item.Propertie
             val nodeCount = Component.literal(workspace?.graph?.nodes?.size?.toString() ?: "none!")
                 .withStyle(ChatFormatting.DARK_GRAY)
                 .withStyle(ChatFormatting.ITALIC)
-            val connectionCount = Component.literal(workspace?.graph?.getLinks()?.size?.toString() ?: "none!")
+            val connectionCount = Component.literal(workspace?.graph?.links?.size?.toString() ?: "none!")
                 .withStyle(ChatFormatting.DARK_GRAY)
                 .withStyle(ChatFormatting.ITALIC)
             components.add(

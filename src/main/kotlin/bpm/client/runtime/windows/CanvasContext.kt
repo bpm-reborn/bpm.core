@@ -1,14 +1,11 @@
 package bpm.client.runtime.windows
 
-import imgui.ImColor
-import imgui.ImDrawList
-import imgui.ImGui
-import imgui.flag.*
-import bpm.common.logging.KotlinLogging
 import bpm.client.font.Fonts
-import bpm.client.runtime.Platform
 import bpm.client.runtime.ClientRuntime
+import bpm.client.runtime.Keyboard
+import bpm.client.runtime.Platform
 import bpm.client.utils.use
+import bpm.common.logging.KotlinLogging
 import bpm.common.network.Client
 import bpm.common.network.Endpoint
 import bpm.common.network.Listener
@@ -27,11 +24,15 @@ import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.graph.User
 import bpm.common.workspace.packets.*
-import net.minecraft.client.Minecraft
+import imgui.ImColor
+import imgui.ImDrawList
+import imgui.ImGui
+import imgui.flag.ImGuiMouseButton
+import imgui.flag.ImGuiMouseCursor
+import imgui.flag.ImGuiPopupFlags
 import org.joml.Vector2f
 import org.joml.Vector4f
 import java.util.*
-import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -41,13 +42,17 @@ class CanvasContext : Listener {
     private val dragOffset: Vector2f = Vector2f()
     private val nodeMovePacket = NodeMoved()
     private var lastSent: Time = Time.now
+
     // The maximum send rate in milliseconds, 60 PPS (Packets Per Second)
     private val maxSendRate = 1000 / 60
+
     // The maximum move threshold in pixels
     private val maxMoveThreshold = 5f
     private val connectedUsers = mutableMapOf<UUID, User>()
     internal var isDraggingNode = false
+    internal var wasDraggingNode = false
 
+    private var isSelecting: Boolean = false
     private var selectionStart: Vector2f? = null
     private var selectionEnd: Vector2f? = null
     private val selectedNodes = mutableSetOf<UUID>()
@@ -69,6 +74,7 @@ class CanvasContext : Listener {
     private var isDraggingGroup = false
     private val groupDragOffset = mutableMapOf<UUID, Vector2f>()
     private val nodesInSelectionBox = mutableSetOf<UUID>()
+    private val linksInSelectionBox = mutableSetOf<UUID>()
     var hoveredTitleBar: UUID? = null
     var hoveredPin: Pair<UUID, Edge>? = null
     private var draggedEdge: Pair<Node, Edge>? = null
@@ -77,6 +83,7 @@ class CanvasContext : Listener {
     private var draggedSourceEdge: Pair<Node, Edge>? = null
     internal val variablesMenu by lazy { VariablesMenu(this) }
     private val notificationManager = NotificationManager()
+
     /**
      * Represents the node library used in the application.
      *
@@ -105,23 +112,6 @@ class CanvasContext : Listener {
         if (node.dragged) {
             isDraggingNode = true
             handleNodeDrag(node, nodeBounds, headerBounds)
-        }
-    }
-
-    fun updateNodesInSelectionBox() {
-        val start = selectionStart ?: return
-        val end = selectionEnd ?: return
-
-        val topLeft = Vector2f(minOf(start.x, end.x), minOf(start.y, end.y))
-        val bottomRight = Vector2f(maxOf(start.x, end.x), maxOf(start.y, end.y))
-
-        nodesInSelectionBox.clear()
-
-        for (node in workspace.graph.nodes) {
-            val bounds = computeNodeBounds(node)
-            if (bounds.x < bottomRight.x && bounds.z > topLeft.x && bounds.y < bottomRight.y && bounds.w > topLeft.y) {
-                nodesInSelectionBox.add(node.uid)
-            }
         }
     }
 
@@ -179,10 +169,6 @@ class CanvasContext : Listener {
         }
     }
 
-    fun isNodeInSelectionBox(node: Node): Boolean {
-        return nodesInSelectionBox.contains(node.uid)
-    }
-
     fun isLinkSelected(link: Link): Boolean {
         return selectedLinks.contains(link.uid)
     }
@@ -197,7 +183,8 @@ class CanvasContext : Listener {
         if (node.dragged) {
             val mx = mousePos.x / runtime.workspace!!.settings.zoom
             val my = mousePos.y / runtime.workspace!!.settings.zoom
-            val isShiftDown = Platform.isKeyDown(ClientRuntime.Key.LEFT_SHIFT) || Platform.isKeyDown(ClientRuntime.Key.RIGHT_SHIFT)
+            val isShiftDown =
+                Platform.isKeyDown(ClientRuntime.Key.LEFT_SHIFT) || Platform.isKeyDown(ClientRuntime.Key.RIGHT_SHIFT)
 
             if (isDraggingGroup) {
                 // Move all selected nodes
@@ -224,6 +211,7 @@ class CanvasContext : Listener {
             isDraggingNode = false
             isDraggingGroup = false
             groupDragOffset.clear()
+            wasDraggingNode = true
             // We're not unselecting nodes here anymore
             // unselectAllNodes()
         }
@@ -283,7 +271,6 @@ class CanvasContext : Listener {
         )
     }
 
-
     fun computeHeaderBounds(node: Node): Vector4f {
         return headerFont.use {
             val nodePos = workspace.convertPosition(node.x, node.y)
@@ -296,6 +283,47 @@ class CanvasContext : Listener {
 
             Vector4f(titleX, titleY, nodePos.x + nodeSize.x, titleY + titleHeight)
         }
+    }
+
+    private fun computeLinkInSelectionBox(link: Link, topLeft: Vector2f, bottomRight: Vector2f): Boolean {
+        val sourceEdge = workspace.graph.getEdge(link.from) ?: return false
+        val sourceNode = workspace.getNode(sourceEdge.owner) ?: return false
+        val targetEdge = workspace.graph.getEdge(link.to) ?: return false
+        val targetNode = workspace.getNode(targetEdge.owner) ?: return false
+
+        val sourceBounds = computeEdgeBounds(sourceNode, sourceEdge)
+        val targetBounds = computeEdgeBounds(targetNode, targetEdge)
+
+        val startPos = Vector2f(sourceBounds.x, sourceBounds.y)
+        val endPos = Vector2f(targetBounds.x, targetBounds.y)
+
+        val midX = (startPos.x + endPos.x) / 2
+        val controlPoint1 = Vector2f(midX, startPos.y)
+        val controlPoint2 = Vector2f(midX, endPos.y)
+
+        // Check multiple points along the curve
+        val steps = 20
+        for (i in 0..steps) {
+            val t = i.toFloat() / steps
+            val point = getBezierPoint(startPos, controlPoint1, controlPoint2, endPos, t)
+            if (point.x in topLeft.x..bottomRight.x && point.y in topLeft.y..bottomRight.y) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun computeNodeInSelectionBox(node: Node, topLeft: Vector2f, bottomRight: Vector2f): Boolean {
+        val bounds = computeNodeBounds(node)
+        return bounds.x < bottomRight.x && bounds.z > topLeft.x && bounds.y < bottomRight.y && bounds.w > topLeft.y
+    }
+
+    fun isNodeInSelectionBox(node: Node): Boolean {
+        return nodesInSelectionBox.contains(node.uid)
+    }
+
+    fun isLinkInSelectionBox(link: Link): Boolean {
+        return linksInSelectionBox.contains(link.uid)
     }
 
     fun handleSelection(isPropertyWindowHovered: Boolean) {
@@ -328,25 +356,52 @@ class CanvasContext : Listener {
         }
 
         if (isLeftClickDragging && selectionStart != null) {
+            isSelecting = true
             selectionEnd = Vector2f(mousePos.x, mousePos.y)
             updateNodesInSelectionBox()
             updateLinksInSelectionBox()
         }
 
         if (isLeftClickReleased) {
-            if (selectionStart != null) {
+            if (isSelecting) {
                 updateFinalSelection()
-                selectionStart = null
-                selectionEnd = null
+                isSelecting = false
+            } else if (!wasDraggingNode) {
+                // Handle selection of individually clicked nodes
+                if (Keyboard.isKeyUp(ClientRuntime.Key.LEFT_CONTROL)) {
+                    clearSelection()
+                }
+
+                val nodesUnderMouse = workspace.graph.nodes.filter { node ->
+                    val bounds = computeNodeBounds(node)
+                    mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w
+                }
+
+                nodesUnderMouse.forEach { node ->
+                    selectedNodes.add(node.uid)
+                    node.selected = true
+                }
             }
+
+            selectionStart = null
+            selectionEnd = null
         }
     }
 
+    private fun updateNodesInSelectionBox() {
+        val start = selectionStart ?: return
+        val end = selectionEnd ?: return
 
-    private fun clearSelection() {
-        selectedNodes.clear()
-        selectedLinks.clear()
-        workspace.graph.nodes.forEach { it.selected = false }
+        val topLeft = Vector2f(minOf(start.x, end.x), minOf(start.y, end.y))
+        val bottomRight = Vector2f(maxOf(start.x, end.x), maxOf(start.y, end.y))
+
+        nodesInSelectionBox.clear()
+
+        for (node in workspace.graph.nodes) {
+            if (computeNodeInSelectionBox(node, topLeft, bottomRight)) {
+                nodesInSelectionBox.add(node.uid)
+            }
+        }
     }
 
     private fun updateLinksInSelectionBox() {
@@ -356,9 +411,10 @@ class CanvasContext : Listener {
         val topLeft = Vector2f(minOf(start.x, end.x), minOf(start.y, end.y))
         val bottomRight = Vector2f(maxOf(start.x, end.x), maxOf(start.y, end.y))
 
-        workspace.graph.getLinks().forEach { link ->
-            if (isLinkInSelectionBox(link, topLeft, bottomRight)) {
-                selectedLinks.add(link.uid)
+        linksInSelectionBox.clear()
+        workspace.graph.links.forEach { link ->
+            if (computeLinkInSelectionBox(link, topLeft, bottomRight)) {
+                linksInSelectionBox.add(link.uid)
             }
         }
     }
@@ -376,52 +432,31 @@ class CanvasContext : Listener {
         }
 
         workspace.graph.nodes.forEach { node ->
-            val bounds = computeNodeBounds(node)
-            if (bounds.x < bottomRight.x && bounds.z > topLeft.x && bounds.y < bottomRight.y && bounds.w > topLeft.y) {
+            if (nodesInSelectionBox.contains(node.uid)) {
                 selectedNodes.add(node.uid)
                 node.selected = true
             }
         }
+        nodesInSelectionBox.clear()
 
-        workspace.graph.getLinks().forEach { link ->
-            if (isLinkInSelectionBox(link, topLeft, bottomRight)) {
+        workspace.graph.links.forEach { link ->
+            if (linksInSelectionBox.contains(link.uid)) {
                 selectedLinks.add(link.uid)
             }
         }
+        linksInSelectionBox.clear()
+    }
+
+    private fun clearSelection() {
+        selectedNodes.clear()
+        selectedLinks.clear()
+        workspace.graph.nodes.forEach { it.selected = false }
     }
 
     private fun findLinkUnderMouse(mousePos: Vector2f): Link? {
-        return workspace.graph.getLinks().find { link ->
+        return workspace.graph.links.find { link ->
             isMouseOverLink(link, mousePos)
         }
-    }
-
-    private fun isLinkInSelectionBox(link: Link, topLeft: Vector2f, bottomRight: Vector2f): Boolean {
-        val sourceEdge = workspace.graph.getEdge(link.from) ?: return false
-        val sourceNode = workspace.getNode(sourceEdge.owner) ?: return false
-        val targetEdge = workspace.graph.getEdge(link.to) ?: return false
-        val targetNode = workspace.getNode(targetEdge.owner) ?: return false
-
-        val sourceBounds = computeEdgeBounds(sourceNode, sourceEdge)
-        val targetBounds = computeEdgeBounds(targetNode, targetEdge)
-
-        val startPos = Vector2f(sourceBounds.x, sourceBounds.y)
-        val endPos = Vector2f(targetBounds.x, targetBounds.y)
-
-        val midX = (startPos.x + endPos.x) / 2
-        val controlPoint1 = Vector2f(midX, startPos.y)
-        val controlPoint2 = Vector2f(midX, endPos.y)
-
-        // Check multiple points along the curve
-        val steps = 20
-        for (i in 0..steps) {
-            val t = i.toFloat() / steps
-            val point = getBezierPoint(startPos, controlPoint1, controlPoint2, endPos, t)
-            if (point.x in topLeft.x..bottomRight.x && point.y in topLeft.y..bottomRight.y) {
-                return true
-            }
-        }
-        return false
     }
 
     private fun getBezierPoint(p0: Vector2f, p1: Vector2f, p2: Vector2f, p3: Vector2f, t: Float): Vector2f {
@@ -468,6 +503,10 @@ class CanvasContext : Listener {
         return false
     }
 
+    fun isMouseOverNode(node: Node, mousePos: Vector2f): Boolean {
+        val bounds = computeNodeBounds(node)
+        return mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w
+    }
 
     fun selectLink(link: Link) {
         selectedLinks.add(link.uid)
@@ -553,6 +592,8 @@ class CanvasContext : Listener {
     }
 
     fun getSelection(): Pair<Vector2f, Vector2f>? {
+        if (!isSelecting) return null
+
         return selectionStart?.let { start ->
             selectionEnd?.let { end ->
                 Pair(start, end)
@@ -816,7 +857,7 @@ class CanvasContext : Listener {
         workspace.settings.zoom = 1f
     }
 
-    fun findCenter() : Vector2f {
+    fun findCenter(): Vector2f {
         if (workspace.graph.nodes.isEmpty())
             return Vector2f()
 
@@ -906,7 +947,7 @@ class CanvasContext : Listener {
 
 
         //If source and edge aren't exec, and the target already has a link, it's invalid
-        if (sourceEdge.type != "exec" && targetEdge.type != "exec" && workspace.graph.getLinks()
+        if (sourceEdge.type != "exec" && targetEdge.type != "exec" && workspace.graph.links
                 .any { it.to == targetEdge.uid }
         ) {
             return false

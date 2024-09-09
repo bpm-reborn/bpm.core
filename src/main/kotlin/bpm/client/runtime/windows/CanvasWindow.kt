@@ -1,28 +1,26 @@
 package bpm.client.runtime.windows
 
-import imgui.*
-import imgui.flag.*
-import imgui.type.ImString
 import bpm.client.font.Fonts
 import bpm.client.render.IRender
 import bpm.client.runtime.ClientRuntime
-import bpm.client.runtime.ClientRuntime.logger
 import bpm.client.utils.toVec2f
-import bpm.common.utils.FontAwesome
 import bpm.client.utils.use
 import bpm.common.network.Client
 import bpm.common.network.Endpoint
 import bpm.common.network.listener
 import bpm.common.property.*
 import bpm.common.schemas.Schemas
+import bpm.common.utils.FontAwesome
 import bpm.common.utils.fmodf
-import bpm.common.utils.toVecColor
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.WorkspaceSettings
 import bpm.common.workspace.graph.Edge
 import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.packets.EdgePropertyUpdate
+import imgui.*
+import imgui.flag.*
+import imgui.type.ImString
 import org.joml.Vector2f
 import org.joml.Vector4f
 import org.joml.Vector4i
@@ -43,6 +41,8 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
     private val selectionContextOverlay = SelectionContextOverlay(workspace)
     private val selectedNodes = mutableSetOf<UUID>()
+    private val selectedLinks = mutableSetOf<UUID>()
+
     /**
      * Returns the bounds of the context settings as a 4D vector.
      *
@@ -51,6 +51,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
      * @return The bounds of the context settings as a 4D vector.
      */
     private val bounds: Vector4f get() = workspace.settings.bounds
+
     /**
      * Represents the position of the context menu.
      *
@@ -59,6 +60,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
      * @return The position of the context menu.
      */
     private var contextMenuPosition = Vector2f()
+
     /**
      * A private constant representing the scrolled vector.
      *
@@ -88,6 +90,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     private val execSegmentLength = 10f // Length of each segment in the exec link
     private val execGapRatio = 0.5f // Ratio of gap to segment length
     private var lastCanvasSize: Vector2f = Vector2f()
+
     /**
      * Manage all the rendering related to the main canvas here.
      */
@@ -103,7 +106,9 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
         // Update selectedNodes set
         selectedNodes.clear()
+        selectedLinks.clear()
         selectedNodes.addAll(workspace.graph.nodes.filter { it.selected }.map { it.uid })
+        selectedLinks.addAll(workspace.graph.links.filter { canvasCtx.isLinkSelected(it) }.map { it.uid })
 
         val isActionMenuHovered = customActionMenu.isVisible() && customActionMenu.isHovered()
         val isVariablesMenuHovered = false
@@ -137,24 +142,27 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
         drawList.addText(
             bounds.x + 5,
-            bounds.w - 30,
-            ImColor.rgba(1f, 1f, 1f, 1f),
-            String.format("Mouse: %.0f, %.0f", mouseWorldPos.x, mouseWorldPos.y)
-        )
-        drawList.addText(
-            bounds.x + 5,
             bounds.w - 15,
             ImColor.rgba(1f, 1f, 1f, 1f),
             String.format("Center: %.0f, %.0f", workspace.settings.center.x, workspace.settings.center.y)
         )
 
-        nodePos?.let {
+        if (mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w) {
             drawList.addText(
                 bounds.x + 5,
-                bounds.w - 45,
+                bounds.w - 30,
                 ImColor.rgba(1f, 1f, 1f, 1f),
-                String.format("Hovered Node: %.0f, %.0f", it.x, it.y)
+                String.format("Mouse: %.0f, %.0f", mouseWorldPos.x, mouseWorldPos.y)
             )
+
+            nodePos?.let {
+                drawList.addText(
+                    bounds.x + 5,
+                    bounds.w - 45,
+                    ImColor.rgba(1f, 1f, 1f, 1f),
+                    String.format("Hovered Node: %.0f, %.0f", it.x, it.y)
+                )
+            }
         }
 
         renderButton(bounds.z - 50f, bounds.y + 20f, FontAwesome.Play, fontSize = 25f, width = 30f, height = 30f) {
@@ -181,6 +189,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         // Render the custom action menu
         customActionMenu.render(drawList)
         canvasCtx.notifications()
+        canvasCtx.wasDraggingNode = false
         ImGui.end()
     }
 
@@ -207,8 +216,10 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     private fun handleContextMenu() {
         if (ImGui.isMouseClicked(ImGuiMouseButton.Right) && !initialOpen) {
             val mousePos = ImGui.getMousePos()
-            val selectedNodes = findSelectedNodesUnderMouse(mousePos)
-            val selectedLinks = findSelectedLinksUnderMouse(mousePos)
+            val selectedNodes =
+                selectedNodes.mapNotNull(workspace::getNode).ifEmpty { findNodesUnderMouse(mousePos) }.toSet()
+            val selectedLinks =
+                selectedLinks.mapNotNull(workspace.graph::getLink).ifEmpty { findLinksUnderMouse(mousePos) }.toSet()
 
             if (selectedNodes.isNotEmpty() || selectedLinks.isNotEmpty()) {
                 customActionMenu.open(mousePos, selectedNodes, selectedLinks)
@@ -219,26 +230,17 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         }
     }
 
-
-    private fun findSelectedLinksUnderMouse(mousePos: ImVec2): Set<Link> {
-        return workspace.graph.getLinks().filter { link ->
-            canvasCtx.isLinkSelected(link) || canvasCtx.isMouseOverLink(link, mousePos.toVec2f)
+    private fun findLinksUnderMouse(mousePos: ImVec2): Set<Link> {
+        return workspace.graph.links.filter { link ->
+            canvasCtx.isMouseOverLink(link, mousePos.toVec2f)
         }.toSet()
     }
 
-    private fun findSelectedNodesUnderMouse(mousePos: ImVec2): Set<Node> {
-        val nodesUnderMouse = workspace.graph.nodes.filter { node ->
-            val bounds = canvasCtx.computeNodeBounds(node)
-            mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w
+    private fun findNodesUnderMouse(mousePos: ImVec2): Set<Node> {
+        return workspace.graph.nodes.filter { node ->
+            canvasCtx.isMouseOverNode(node, mousePos.toVec2f)
         }.toSet()
-
-        return if (nodesUnderMouse.isNotEmpty()) {
-            nodesUnderMouse
-        } else {
-            workspace.graph.nodes.filter { it.selected }.toSet()
-        }
     }
-
 
     private inline fun renderButton(
         x: Float,
@@ -538,14 +540,15 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     ) {
         val color = getEdgeColor(edge.type)
         val edgeRadius = 4f * canvasCtx.zoom
-        val isConnected = workspace.graph.getLinks().any { it.from == edge.uid || it.to == edge.uid }
+        val isConnected = workspace.graph.links.any { it.from == edge.uid || it.to == edge.uid }
 
         if (edge.type == "exec" && edge.name == "exec_in" || edge.name == "exec_out" || edge.name == "exec") {
 
 
             //render the triangle
             val triangleSize = 8f * canvasCtx.zoom
-            val triangleX = if (edge.direction == "input") pos.x + 18f * canvasCtx.zoom else pos.x - triangleSize - 18f * canvasCtx.zoom
+            val triangleX =
+                if (edge.direction == "input") pos.x + 18f * canvasCtx.zoom else pos.x - triangleSize - 18f * canvasCtx.zoom
             val triangleY = pos.y - triangleSize / 2
             val triangleBounds = Vector4f(triangleX, triangleY, triangleX + triangleSize, triangleY + triangleSize)
             val triangleColor = ImColor.rgba(255, 255, 255, 255)
@@ -578,7 +581,8 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
                 val spacing = 5f * canvasCtx.zoom
 
                 val totalWidth = labelWidth + inputWidth + spacing
-                val startX = if (isInput) pos.x + edgeRadius * 2 + spacing else pos.x - totalWidth - edgeRadius * 2 - spacing
+                val startX =
+                    if (isInput) pos.x + edgeRadius * 2 + spacing else pos.x - totalWidth - edgeRadius * 2 - spacing
 
                 val labelX = if (isInput) startX else startX + inputWidth + spacing
                 val inputX = if (isInput) startX + labelWidth + spacing else startX
@@ -772,7 +776,8 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
                         val floatColor = colorValue.toFloatArray()
                         val colorPickerPos = ImGui.getCursorScreenPos()
                         if (ImGui.colorPicker4("##color", floatColor)) {
-                            colorValue = Property.Vec4f(Vector4f(floatColor[0], floatColor[1], floatColor[2], floatColor[3]))
+                            colorValue =
+                                Property.Vec4f(Vector4f(floatColor[0], floatColor[1], floatColor[2], floatColor[3]))
                             edge.properties["value"] = edge.value.apply {
                                 //compute the #RRGGBBAA value
                                 this["default"] = colorValue.toHexStringProperty()
@@ -874,7 +879,8 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         if (edge.name == "exec_in" || edge.name == "exec_out" || edge.name == "exec") {
             //render the triangle
             val triangleSize = 8f * canvasCtx.zoom
-            val triangleX = if (edge.direction == "input") xPos + 18f * canvasCtx.zoom else xPos - triangleSize - 18f * canvasCtx.zoom
+            val triangleX =
+                if (edge.direction == "input") xPos + 18f * canvasCtx.zoom else xPos - triangleSize - 18f * canvasCtx.zoom
             val triangleY = yPos - triangleSize / 2
             val triangleBounds = Vector4f(triangleX, triangleY, triangleX + triangleSize, triangleY + triangleSize)
             val triangleColor = ImColor.rgba(255, 255, 255, 255)
@@ -892,7 +898,8 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
             // Render edge label
             bodyFont.use {
                 val textSize = ImGui.calcTextSize(edge.name)
-                val textX = if (edge.direction == "input") xPos + 16f * canvasCtx.zoom else xPos - textSize.x - 16f * canvasCtx.zoom
+                val textX =
+                    if (edge.direction == "input") xPos + 16f * canvasCtx.zoom else xPos - textSize.x - 16f * canvasCtx.zoom
                 val textY = yPos - 8f * canvasCtx.zoom
                 val textBounds = Vector4f(textX, textY, textX + textSize.x, textY + textSize.y)
 
@@ -914,10 +921,8 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
                     ImColor.rgba(220, 220, 220, 255),
                     edge.name
                 )
-
             }
         }
-
 
         if (canvasCtx.isEdgeSelected(edge)) {
             drawList.addCircle(
@@ -941,7 +946,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
     private fun renderLinks() {
         val drawList = ImGui.getWindowDrawList()
-        for (link in workspace.graph.getLinks()) {
+        for (link in workspace.graph.links) {
             val sourceEdge = workspace.graph.getEdge(link.from) ?: continue
             val sourceNode = workspace.getNode(sourceEdge.owner) ?: continue
             val targetEdge = workspace.graph.getEdge(link.to) ?: continue
@@ -960,6 +965,26 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
                 drawExecLink(drawList, sourcePos, targetPos, sourceColor, targetColor)
             } else {
                 drawDataLink(drawList, sourcePos, targetPos, sourceColor, targetColor)
+            }
+
+            // Hover effect
+            if (hoveredLinkId == link.uid || canvasCtx.isLinkInSelectionBox(link)) {
+                val midX = (sourcePos.x + targetPos.x) / 2
+                val controlPoint1 = Vector2f(midX, sourcePos.y)
+                val controlPoint2 = Vector2f(midX, targetPos.y)
+                drawList.addBezierCubic(
+                    sourcePos.x,
+                    sourcePos.y,
+                    controlPoint1.x,
+                    controlPoint1.y,
+                    controlPoint2.x,
+                    controlPoint2.y,
+                    targetPos.x,
+                    targetPos.y,
+                    ImColor.rgba(69, 163, 230, 185), // Blue-ish highlight for hovered links
+                    4f * canvasCtx.zoom, // Thicker line for hovered links
+                    50
+                )
             }
 
             // Add visual indication for selected links
@@ -1153,7 +1178,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
         // Check for link hover if no node is hovered
         if (hoveredNodeId == null) {
-            for (link in workspace.graph.getLinks()) {
+            for (link in workspace.graph.links) {
                 if (canvasCtx.isMouseOverLink(link, mousePos.toVec2f)) {
                     hoveredLinkId = link.uid
                     break
