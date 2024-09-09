@@ -30,7 +30,6 @@ class EnderControllerTileEntity(type: BlockEntityType<*>, pos: BlockPos, state: 
 
     override fun onLoad() {
         super.onLoad()
-        PipeNetManager.onPipeAdded(ModBlocks.ENDER_CONTROLLER, level!!, worldPosition)
     }
 
     override fun saveAdditional(tag: CompoundTag, provider: HolderLookup.Provider) {
@@ -49,6 +48,7 @@ class EnderControllerTileEntity(type: BlockEntityType<*>, pos: BlockPos, state: 
         // Load the UUID directly from the main tag
         if (tag.contains("_Uid")) {
             setUUID(tag.getUUID("_Uid"))
+            PipeNetManager.onControllerPlaced(this)
         }
         if (tag.contains(AttachmentHolder.ATTACHMENTS_NBT_KEY)) {
             attachmentHolder.deserializeInternal(provider, tag.getCompound(AttachmentHolder.ATTACHMENTS_NBT_KEY))

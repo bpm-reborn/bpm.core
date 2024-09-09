@@ -117,9 +117,9 @@ object PipeNetManager {
     }
 
     fun hasControllerInNetwork(level: Level, posIn: BlockPos): Boolean {
-        val connectedNetworks = findConnectedNetworks(level, posIn)
-        return connectedNetworks.any { network ->
-            network.pipes.any { (pos, pipe) -> pipe.type == EnderControllerBlock::class.java }
+        val connectedNetworks = state.blockPosToNetwork[posIn]?.let { state.networks[it] } ?: return false
+        return connectedNetworks.pipes.any { (_, trackedPipe) ->
+            trackedPipe.type == EnderControllerBlock::class.java
         }
     }
 
@@ -213,13 +213,10 @@ object PipeNetManager {
         val network = state.networks[networkId] ?: return
 
         network.removePipe(level, pos)
-        state = state.copy(
-            blockPosToNetwork = state.blockPosToNetwork.toMutableMap().apply { remove(pos) },
-            networks = state.networks.toMutableMap().apply { this[networkId] = network }
-        )
-
+        state.blockPosToNetwork.remove(pos)
         if (network.isEmpty()) {
-            state = state.copy(networks = state.networks.toMutableMap().apply { remove(networkId) })
+            state.networks.remove(networkId)
+
         } else if (pipe is EnderControllerBlock) {
             val entity = level.getBlockEntity(pos) as? EnderControllerTileEntity
             if (entity != null) {
@@ -228,15 +225,14 @@ object PipeNetManager {
         } else {
             val splitNetworks = network.split(level, pos)
             if (splitNetworks.size > 1) {
-                val newNetworks = state.networks.toMutableMap()
-                val newBlockPosToNetwork = state.blockPosToNetwork.toMutableMap()
+                val newNetworks = state.networks
+                val newBlockPosToNetwork = state.blockPosToNetwork
                 newNetworks.remove(networkId)
                 splitNetworks.forEach { newNetwork ->
                     val newNetworkId = UUID.randomUUID()
                     newNetworks[newNetworkId] = newNetwork
                     newNetwork.pipes.keys.forEach { newBlockPosToNetwork[it] = newNetworkId }
                 }
-                state = state.copy(networks = newNetworks, blockPosToNetwork = newBlockPosToNetwork)
             }
         }
 
@@ -257,8 +253,8 @@ object PipeNetManager {
         val mergedNetwork = PipeNet()
         val newNetworkId = UUID.randomUUID()
 
-        val newNetworks = state.networks.toMutableMap()
-        val newBlockPosToNetwork = state.blockPosToNetwork.toMutableMap()
+        val newNetworks = state.networks
+        val newBlockPosToNetwork = state.blockPosToNetwork
 
         networksToMerge.forEach { network ->
             network.pipes.forEach { (pipePos, trackedPipe) ->
@@ -272,7 +268,7 @@ object PipeNetManager {
         newBlockPosToNetwork[pos] = newNetworkId
         newNetworks[newNetworkId] = mergedNetwork
 
-        state = state.copy(networks = newNetworks, blockPosToNetwork = newBlockPosToNetwork)
+
 
         logger.info { "Merged ${networksToMerge.size} networks" }
 
@@ -292,7 +288,7 @@ object PipeNetManager {
             .mapNotNull { state.networks[it] }
     }
 
-    private fun onControllerPlaced(entity: EnderControllerTileEntity) {
+     fun onControllerPlaced(entity: EnderControllerTileEntity) {
         val controllerUuid = entity.getUUID()
         val networkId = state.blockPosToNetwork[entity.blockPos] ?: return
         state.controllerToNetwork[controllerUuid] = networkId
@@ -301,8 +297,7 @@ object PipeNetManager {
 
     private fun onControllerRemoved(entity: EnderControllerTileEntity) {
         val controllerUuid = entity.getUUID()
-        state = state.copy(
-            controllerToNetwork = state.controllerToNetwork.toMutableMap().apply { remove(controllerUuid) })
+        state.controllerToNetwork.remove(controllerUuid)
         logger.info { "Controller removed: $controllerUuid" }
     }
 
