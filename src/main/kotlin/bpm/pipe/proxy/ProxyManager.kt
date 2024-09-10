@@ -8,6 +8,7 @@ import java.util.*
 
 //Todo: make this serializable by providing a serializer
 object ProxyManager : Listener {
+
     private val proxies = mutableMapOf<BlockPos, ProxyState>()
     operator fun get(pos: BlockPos): ProxyState? = proxies[pos]
     operator fun set(pos: BlockPos, state: ProxyState) = let { proxies[pos] = state }
@@ -33,9 +34,17 @@ object ProxyManager : Listener {
     override fun onPacket(packet: Packet, from: UUID) {
         if (packet is PacketProxyUpdate) {
             val proxy = ProxyManager[packet.proxyOrigin] ?: return
-            proxy[packet.proxiedState.relativePos] = packet.proxiedState
+            val proxyOrigin = packet.proxyOrigin
+            val absoluteProxiedState = packet.proxiedState
+            absoluteProxiedState.absolutePos = proxyOrigin.offset(absoluteProxiedState.relativePos)
+            //Filter out any pro
+            proxy[absoluteProxiedState.absolutePos] = absoluteProxiedState
         } else if (packet is PacketProxyRequest) {
             val proxy = ProxyManager[packet.proxyOrigin] ?: return
+            //Filter out any that have all none for the proxied type
+            val blocks = proxy.proxiedBlocks.filter { it.key != packet.proxyOrigin }
+            proxy.proxiedBlocks.clear()
+            proxy.proxiedBlocks.putAll(blocks)
             Server.send(PacketProxyResponse(packet.proxyOrigin, proxy), from)
         }
     }

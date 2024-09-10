@@ -12,23 +12,15 @@ data class ProxyState(
     val proxiedBlocks: MutableMap<BlockPos, ProxiedState> = mutableMapOf()
 ) {
 
-    fun getProxiedState(pos: BlockPos, relative: Boolean = true): ProxiedState {
-        return if (!relative) {
-            //If the position is not relative, subtract the origin to make it relative
-            val newPos = pos.subtract(origin)
-            proxiedBlocks[newPos] ?: ProxiedState()
-        } else proxiedBlocks[pos] ?: ProxiedState()
+    fun getProxiedState(pos: BlockPos): ProxiedState? {
+        return proxiedBlocks[pos]
     }
 
-    operator fun get(pos: BlockPos): ProxiedState = getProxiedState(pos)
+    operator fun get(pos: BlockPos): ProxiedState = getProxiedState(pos) ?: ProxiedState()
 
     //This should be a position relative to the origin of the proxy block
-    fun setProxiedState(pos: BlockPos, state: ProxiedState, relative: Boolean = true) {
-        if (!relative) {
-            //If the position is not relative, subtract the origin to make it relative
-            val newPos = pos.subtract(origin)
-            proxiedBlocks[newPos] = state
-        } else proxiedBlocks[pos] = state
+    fun setProxiedState(pos: BlockPos, state: ProxiedState) {
+        proxiedBlocks[pos] = state
     }
 
     operator fun set(pos: BlockPos, state: ProxiedState) = setProxiedState(pos, state)

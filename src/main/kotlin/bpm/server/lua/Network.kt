@@ -10,6 +10,9 @@ import java.util.*
 import net.minecraft.world.item.ItemStack
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
+import net.minecraft.world.Container
+import net.neoforged.neoforge.items.wrapper.InvWrapper
+import net.neoforged.neoforge.server.ServerLifecycleHooks
 
 object Network : LuaBuiltin {
 
@@ -45,21 +48,25 @@ object Network : LuaBuiltin {
 
         return 0
     }
+    //TODO figure out why the world from getWorldForController is invalid
+    private val overworld by lazy{
+        ServerLifecycleHooks.getCurrentServer()?.overworld() ?: throw IllegalStateException("Overworld not available")
+    }
 
     private fun getHandlers(uuid: String, types: Set<ProxiedType>): CombinedItemHandler? {
         val workspaceUUID = UUID.fromString(uuid)
         val proxies = PipeNetManager.getProxies(workspaceUUID)
-        val world = PipeNetManager.getWorldForController(workspaceUUID) ?: return null
+//        val world = PipeNetManager.getWorldForController(workspaceUUID) ?: return null
 
         val handlers = proxies.flatMap { proxyState ->
-            proxyState.proxiedBlocks.mapNotNull { (relativePos, proxiedState) ->
-                val absolutePos = proxyState.origin.offset(relativePos)
+            proxyState.proxiedBlocks.mapNotNull { (absolutePos, proxiedState) ->
                 val facesWithHandlers = Direction.entries.mapNotNull { direction ->
                     when {
                         proxiedState.getProxiedType(direction) in types -> {
-                            val handler = getItemHandler(world, absolutePos, direction)
+                            val handler = getItemHandler(overworld, absolutePos, direction)
                             if (handler != null) direction to handler else null
                         }
+
                         else -> null
                     }
                 }.toMap()
@@ -71,10 +78,26 @@ object Network : LuaBuiltin {
         return if (handlers.isNotEmpty()) CombinedItemHandler(handlers) else null
     }
 
-    private fun getItemHandler(world: ServerLevel, pos: BlockPos, direction: Direction): IItemHandler? {
-        return world.getCapability(Capabilities.ItemHandler.BLOCK, pos, direction)?.let { handler ->
-            if (handler.slots > 0) handler else null
+    private fun getItemHandler(world: ServerLevel, pos: BlockPos, direction: Direction?): IItemHandler? {
+        val blockEntity = world.getBlockEntity(pos)
+        if (blockEntity != null) {
+            // Try to get the item handler capability
+            val cap = world.getCapability(Capabilities.ItemHandler.BLOCK, pos, direction)
+            if (cap != null) {
+                return cap
+            }
+
+            // If no capability is found, check if the block entity itself is an IItemHandler
+            if (blockEntity is IItemHandler) {
+                return blockEntity
+            }
+
+            // As a fallback, create an InvWrapper if the block entity has an inventory
+            if (blockEntity is Container) {
+                return InvWrapper(blockEntity)
+            }
         }
+        return null
     }
 
     @JvmStatic
@@ -91,6 +114,7 @@ object Network : LuaBuiltin {
 }
 
 class CombinedItemHandler(private val handlers: Map<BlockPos, Map<Direction, IItemHandler>>) : IItemHandler {
+
     private val slotMapping = mutableMapOf<Int, Triple<BlockPos, Direction, Int>>()
 
     init {

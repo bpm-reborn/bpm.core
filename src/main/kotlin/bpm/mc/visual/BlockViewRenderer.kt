@@ -675,7 +675,7 @@ class BlockViewRenderer(private val minecraft: Minecraft) {
         faceStates.clear()
         for ((relativePos, proxiedType) in state.proxiedBlocks) {
             for ((face, type) in proxiedType.proxiedFaces) {
-                faceStates[Pair(relativePos, face)] = type
+                faceStates[Pair(proxiedType.relativePos, face)] = type
             }
         }
     }

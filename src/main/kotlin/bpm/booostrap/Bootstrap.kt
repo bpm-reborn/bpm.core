@@ -37,6 +37,7 @@ import net.minecraft.client.renderer.ShaderInstance
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.server.level.ServerLevel
 import net.neoforged.neoforge.client.event.*
+import net.neoforged.neoforge.event.tick.ServerTickEvent
 import org.apache.logging.log4j.Level
 import thedarkcolour.kotlinforforge.neoforge.forge.FORGE_BUS
 import thedarkcolour.kotlinforforge.neoforge.forge.runForDist
@@ -97,7 +98,7 @@ class Bootstrap(
 
             "server"
         })
-
+        FORGE_BUS.addListener(::onServerTick)
         FORGE_BUS.addListener(::onLevelSave)
         FORGE_BUS.addListener(::onLevelLoad)
         //Server setup, should be done on client too for single player
@@ -241,6 +242,10 @@ class Bootstrap(
         }
     }
 
+    private fun onServerTick(event: ServerTickEvent.Pre) {
+        LuaEventExecutor.onTick()
+    }
+
     private fun onCommonSetup(event: FMLCommonSetupEvent) {
         logger.info("Copying schemas to game directory")
         copySchemas()
@@ -257,7 +262,6 @@ class Bootstrap(
             .install<ServerRuntime>()
             .install<Schemas>(schemasPath, Endpoint.Side.SERVER)
             .install<ProxyManager>()
-            .install<LuaEventExecutor>()
             .start()
     }
 

@@ -12,6 +12,7 @@ data class ProxiedState(
     var relativePos: BlockPos = BlockPos.ZERO,
 
 
+
     val proxiedFaces: MutableMap<Direction, ProxiedType> = enumMapOf(
         Direction.NORTH to ProxiedType.NONE,
         Direction.EAST to ProxiedType.NONE,
@@ -21,6 +22,7 @@ data class ProxiedState(
         Direction.DOWN to ProxiedType.NONE
     )
 ) {
+    var absolutePos: BlockPos = BlockPos.ZERO
 
     fun getProxiedType(direction: Direction): ProxiedType {
         return proxiedFaces[direction] ?: ProxiedType.NONE
@@ -35,17 +37,21 @@ data class ProxiedState(
 
         override fun deserialize(buffer: Buffer): ProxiedState {
             val relativePos = buffer.readBlockPos()
+            val absolutePos = buffer.readBlockPos()
             val proxiedFaces: MutableMap<Direction, ProxiedType> = EnumMap(Direction::class.java)
 
             for (direction in Direction.entries) {
                 val type = ProxiedType.entries[buffer.readInt()]
                 proxiedFaces[direction] = type
             }
-            return ProxiedState(relativePos, proxiedFaces)
+            val state = ProxiedState(relativePos, proxiedFaces)
+            state.absolutePos = absolutePos
+            return state
         }
 
         override fun serialize(buffer: Buffer, value: ProxiedState) {
             buffer.writeBlockPos(value.relativePos)
+            buffer.writeBlockPos(value.absolutePos)
             for (direction in Direction.entries) {
                 buffer.writeInt(value.proxiedFaces[direction]!!.ordinal)
             }
