@@ -531,6 +531,7 @@ object ComplexLuaTranspiler {
                     val outputKey = "${sanitizeName("${currentFunction.originalName}_${currentFunction.id}")}_${sanitizeName(statement.name)}"
                     codeBuilder.append("${indent}globalOutputs['$outputKey'] = ${statement.value}\n")
                 }
+
                 else -> {}
             }
         }

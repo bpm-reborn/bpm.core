@@ -30,4 +30,4 @@ edges:
     type: string
 
 source: |
-  return string_a .. string_b
+   ${OUTPUT.result = string_a .. string_b}

@@ -25,4 +25,4 @@ edges:
     type: boolean
 
 source: |
-  return ValueA > ValueB
+  ${OUTPUT.Result = ValueA > ValueB}
