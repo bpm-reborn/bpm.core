@@ -17,4 +17,4 @@ edges:
     type: number
 
 source: |
-  return value
+  ${OUTPUT.result = value}

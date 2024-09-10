@@ -107,7 +107,7 @@ class NotificationManager {
         drawList.addRectFilled(
             xPos, yPos,
             xPos + totalWidth, yPos + headerHeight,
-            ImColor.rgba(notification.color),
+            bgColor,
             4f
         )
 

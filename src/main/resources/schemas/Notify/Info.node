@@ -25,6 +25,8 @@ edges:
     type: exec
 
 source: |
+  
+  World:print("Info Notification " .. message)
   local length = string.len(message)
   local time = length * 0.5
   Notify:message(message, time, "#22D8C9F5", "Info", "INFO")

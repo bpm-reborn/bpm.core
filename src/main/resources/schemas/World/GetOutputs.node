@@ -16,9 +16,4 @@ edges:
     type: itemhandler
 source: |
   local inputs = Network:getOutputs(_Uid)
-  if inputs then
-    World:print("Input handlers retrieved successfully")
-  else
-    World:print("No input handlers found")
-  end
   ${OUTPUT.inputs = inputs}

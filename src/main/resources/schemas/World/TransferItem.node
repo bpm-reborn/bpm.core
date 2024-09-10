@@ -53,7 +53,6 @@
       type: exec
 
   source: |
-    World:print("transferring items")
     local transferredAmount = Network:transferItem(from_handler, from_slot, to_handler, to_slot, max_amount)
     ${OUTPUT.transferred = transferredAmount}
     ${EXEC.exec_out}

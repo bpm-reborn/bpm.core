@@ -81,7 +81,7 @@ object Network : LuaBuiltin {
     private fun getItemHandler(world: ServerLevel, pos: BlockPos, direction: Direction?): IItemHandler? {
         val blockEntity = world.getBlockEntity(pos)
         if (blockEntity != null) {
-            // Try to get the item handler capability
+            //QUARRIS: This is not actually a compile error. Think we found a bug in intellij it's self.
             val cap = world.getCapability(Capabilities.ItemHandler.BLOCK, pos, direction)
             if (cap != null) {
                 return cap
