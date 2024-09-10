@@ -11,6 +11,7 @@ data class ProxiedState(
     //A position relative to the origin of the proxy block
     var relativePos: BlockPos = BlockPos.ZERO,
 
+
     val proxiedFaces: MutableMap<Direction, ProxiedType> = enumMapOf(
         Direction.NORTH to ProxiedType.NONE,
         Direction.EAST to ProxiedType.NONE,

@@ -21,4 +21,5 @@ edges:
     type: number
 
 source: |
-  return World:signalAt(value.x, value.y, value.z)
+  local vector = World:signalAt(value.x, value.y, value.z)
+  ${OUTPUT.result = vector}

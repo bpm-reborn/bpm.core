@@ -29,7 +29,11 @@ edges:
     description: 'The retrieved value of the variable.'
     direction: output
     type: exec
-
+  passed:
+    description: 'The value of the variable.'
+    direction: output
+    type: any
 source: |
   variables[name] = value
+  ${OUTPUT.passed = value}
   ${EXEC.exec_out}

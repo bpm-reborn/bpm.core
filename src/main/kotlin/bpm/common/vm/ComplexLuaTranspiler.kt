@@ -308,28 +308,29 @@ object ComplexLuaTranspiler {
         }
     }
 
-    private class CodeGenerator(private val workspace: Workspace) {
-
+    class CodeGenerator(private val workspace: Workspace) {
         private val indent = "  "
-        private lateinit var currentNode: IRFunction
         private val nodeDependencies = mutableMapOf<String, MutableSet<String>>()
         private val executionOrder = mutableListOf<String>()
+        private val nodeOutputs = mutableMapOf<String, Set<String>>()
 
         fun generate(ir: IR): String {
             buildDependencies(ir)
             determineExecutionOrder(ir)
+            buildNodeOutputs(ir)
 
             val codeBuilder = StringBuilder()
             generateWorkspaceAccessor(workspace, codeBuilder)
             generateVariableInitializations(ir, codeBuilder)
             generateBuiltIns(codeBuilder)
-            generateSetupFunction(ir, codeBuilder)
-            generateGlobalOutputsTable(codeBuilder)
             generateFunctionDeclarations(ir, codeBuilder)
+            generateGlobalOutputsTable(codeBuilder)
             generateFunctionImplementations(ir, codeBuilder)
-            generateMainExecution(ir, codeBuilder)
+            generateEventHandlers(ir, codeBuilder)
             return codeBuilder.toString()
         }
+
+
 
         private fun buildDependencies(ir: IR) {
             ir.functions.forEach { function ->
@@ -337,6 +338,15 @@ object ComplexLuaTranspiler {
                 function.inputConnections.forEach { (_, sourcePair) ->
                     nodeDependencies[function.id]!!.add(sourcePair.first)
                 }
+            }
+        }
+
+        private fun buildNodeOutputs(ir: IR) {
+            ir.functions.forEach { function ->
+                nodeOutputs[function.id] = function.body
+                    .filterIsInstance<IRStatement.OutputAssignment>()
+                    .map { it.name }
+                    .toSet()
             }
         }
 
@@ -358,6 +368,15 @@ object ComplexLuaTranspiler {
             ir.functions.forEach { function ->
                 if (function.id !in visited) visit(function.id)
             }
+        }
+
+        private fun generateFunctionDeclarations(ir: IR, codeBuilder: StringBuilder) {
+            codeBuilder.append("-- Function Declarations\n")
+            ir.functions.forEach { function ->
+                val functionName = sanitizeName("${function.originalName}_${function.id}")
+                codeBuilder.append("local $functionName\n")
+            }
+            codeBuilder.append("\n")
         }
 
 
@@ -394,51 +413,36 @@ object ComplexLuaTranspiler {
             codeBuilder.append("}\n\n")
         }
 
-        private fun generateSetupFunction(ir: IR, codeBuilder: StringBuilder) {
-            codeBuilder.append("-- Setup\n")
-            codeBuilder.append("local function setup()\n")
-            ir.functions.flatMap { it.setupBlocks }.forEach { setupBlock ->
-                setupBlock.lines().forEach { line ->
-                    codeBuilder.append("$indent${line.trim()}\n")
-                }
-            }
-
-            codeBuilder.append("end\n\n")
-        }
-
-        private fun generateFunctionDeclarations(ir: IR, codeBuilder: StringBuilder) {
-            codeBuilder.append("-- Function Declarations\n")
-            ir.functions.forEach { function ->
-                val functionName = sanitizeName("${function.originalName}_${function.id}")
-                codeBuilder.append("local $functionName\n")
-            }
-            codeBuilder.append("\n")
-        }
-
 
         private fun generateFunctionImplementations(ir: IR, codeBuilder: StringBuilder) {
             codeBuilder.append("-- Function Implementations\n")
             executionOrder.forEach { id ->
                 val function = ir.functions.find { it.id == id }
                 if (function != null) {
-                    generateFunction(function, codeBuilder)
+                    generateFunction(function, ir, codeBuilder)
                     codeBuilder.append("\n")
                 }
             }
         }
 
-        private fun generateFunction(function: IRFunction, codeBuilder: StringBuilder) {
+
+        private fun generateFunction(function: IRFunction, ir: IR, codeBuilder: StringBuilder) {
             val functionName = sanitizeName("${function.originalName}_${function.id}")
 
             codeBuilder.append("-- Node: ${function.originalName} (${function.id})\n")
             codeBuilder.append("$functionName = function()\n")
 
-            // Generate local variables for inputs
+            // Generate local variables for inputs and ensure dependency functions are called
             function.inputEdges.forEach { inputName ->
                 if (inputName in function.inputConnections) {
                     val (sourceNodeId, sourceNodeName) = function.inputConnections[inputName]!!
                     val sourceEdgeName = getSourceEdgeName(workspace, function.id, inputName)
                     val globalVarName = sanitizeName("${sourceNodeName}_${sourceNodeId}_${sanitizeName(sourceEdgeName)}")
+
+                    // Call the dependency function if it hasn't been called yet
+                    val dependencyFunctionName = sanitizeName("${sourceNodeName}_${sourceNodeId}")
+                    codeBuilder.append("${indent}$dependencyFunctionName()\n")
+
                     codeBuilder.append("${indent}local $inputName = globalOutputs['$globalVarName']\n")
                 } else {
                     val edge = workspace.graph.getEdges(workspace.graph.getNode(UUID.fromString(function.id))!!).find { it.name == inputName }
@@ -455,7 +459,7 @@ object ComplexLuaTranspiler {
 
             // Generate function body
             function.body.forEach { statement ->
-                generateStatement(statement, codeBuilder, functionName)
+                generateStatement(statement, codeBuilder, functionName, function)
             }
 
             codeBuilder.append("end\n")
@@ -471,23 +475,7 @@ object ComplexLuaTranspiler {
             return sourceEdge!!.name
         }
 
-
-        private fun getTargetNodes(workspace: Workspace, edge: Edge): List<Node> {
-            val connectedLinks = workspace.graph.links.filter { it.from == edge.uid }
-            return connectedLinks.mapNotNull { link ->
-                val targetEdge = workspace.graph.getEdge(link.to)
-                targetEdge?.let { workspace.graph.getNode(it.owner) }
-            }
-        }
-
-
-        private fun generateNodeCall(node: Node): String {
-            val functionName = sanitizeName("${node.name}_${node.uid}")
-            return "$functionName()"
-        }
-
-
-        private fun generateStatement(statement: IRStatement, codeBuilder: StringBuilder, functionName: String) {
+        private fun generateStatement(statement: IRStatement, codeBuilder: StringBuilder, functionName: String, function: IRFunction) {
             when (statement) {
                 is IRStatement.Literal -> codeBuilder.append("$indent${statement.value}\n")
                 is IRStatement.NodeReference -> {
@@ -495,7 +483,13 @@ object ComplexLuaTranspiler {
                     codeBuilder.append("${indent}local ${statement.name} = $inputCall\n")
                 }
                 is IRStatement.ExecReference -> {
-
+                    val execEdge = function.outputEdges[statement.name]
+                    if (execEdge != null) {
+                        execEdge.forEach { (targetNodeId, targetNodeName) ->
+                            val targetFunctionName = sanitizeName("${targetNodeName}_${targetNodeId}")
+                            codeBuilder.append("${indent}$targetFunctionName()\n")
+                        }
+                    }
                 }
                 is IRStatement.VarReference -> codeBuilder.append("${indent}variables['${statement.name}']\n")
                 is IRStatement.LambdaReference -> codeBuilder.append("${indent}${statement.name}\n")
@@ -507,7 +501,6 @@ object ComplexLuaTranspiler {
                 }
             }
         }
-
 
         private fun generateInputNodeCall(edge: Edge): String {
             val sourceNode = getSourceNode(workspace, edge)
@@ -524,31 +517,13 @@ object ComplexLuaTranspiler {
             }
         }
 
-//        private fun generateInputNodeCall(edge: Edge): String {
-//            val sourceNode = getSourceNode(workspace, edge)
-//            return if (sourceNode != null) {
-//                val sourceEdge = getSourceEdge(workspace, edge)
-//                if (sourceEdge != null) {
-//                    val sourceFunctionName = sanitizeName("${sourceNode.name}_${sourceNode.uid}")
-//                    "${sourceFunctionName}_${sanitizeName(sourceEdge.name)}()"
-//                } else {
-//                    getDefaultValue(edge)
-//                }
-//            } else {
-//                getDefaultValue(edge)
-//            }
-//        }
+
 
         private fun getSourceEdge(workspace: Workspace, targetEdge: Edge): Edge? {
             val connectedLink = workspace.graph.links.find { it.to == targetEdge.uid }
             return connectedLink?.let { workspace.graph.getEdge(it.from) }
         }
 
-
-        private fun getNodeLiteralValue(node: Node): String {
-            val nodeTemplate = listener<Schemas>(Endpoint.Side.SERVER).library["${node.type}/${node.name}"]
-            return nodeTemplate?.get("value")?.cast<Property.String>()?.get() ?: "nil"
-        }
 
         private fun getDefaultValue(edge: Edge): String {
             val value = edge.value
@@ -577,25 +552,17 @@ object ComplexLuaTranspiler {
                 } else null
             } else null
         }
-        private fun generateMainExecution(ir: IR, codeBuilder: StringBuilder) {
-            codeBuilder.append("-- Main Execution\n")
-            codeBuilder.append("setup()\n")
-            codeBuilder.append("local function main()\n")
-            executionOrder.forEach { id ->
-                val function = ir.functions.find { it.id == id }
-                if (function != null) {
-                    val functionName = sanitizeName("${function.originalName}_${function.id}")
-                    codeBuilder.append("${indent}$functionName()\n")
-                }
-            }
-            codeBuilder.append("end\n\n")
+
+        private fun generateEventHandlers(ir: IR, codeBuilder: StringBuilder) {
+            codeBuilder.append("-- Event Handlers\n")
             codeBuilder.append("return {\n")
             ir.functions.filter { it.nodeType == "Events" }.forEach { function ->
                 val functionName = sanitizeName("${function.originalName}_${function.id}")
-                codeBuilder.append("${indent}${function.originalName} = {main},\n")
+                codeBuilder.append("${indent}${function.originalName} = {$functionName},\n")
             }
             codeBuilder.append("}\n")
         }
+
 
 //        private fun generateMainExecution(ir: IR, codeBuilder: StringBuilder) {
 //            codeBuilder.append("-- Main Execution\n")

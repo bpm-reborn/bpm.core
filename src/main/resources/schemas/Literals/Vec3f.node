@@ -32,4 +32,5 @@ edges:
     type: vec3f
 
 source: |
-  return {x = x, y = y, z = z}
+  local vector = {x = x, y = y, z = z}
+  ${OUTPUT.result = vector}

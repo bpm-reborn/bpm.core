@@ -10,18 +10,10 @@ theme:
   icon: 0xf07c
 
 edges:
-  exec_in:
-    description: 'Execute the retrieval'
-    direction: input
-    type: exec
   inputs:
     description: 'The combined input item handler'
     direction: output
     type: itemhandler
-  exec_out:
-    description: 'Execution complete'
-    direction: output
-    type: exec
 source: |
   local inputs = Network:getInputs(_Uid)
   if inputs then
@@ -30,4 +22,3 @@ source: |
     World:print("No input handlers found")
   end
   ${OUTPUT.inputs = inputs}
-  ${EXEC.exec_out}

@@ -23,5 +23,4 @@ source: |
   vector.x = block:getX()
   vector.y = block:getY()
   vector.z = block:getZ()
-  World:print("Controller Position: " .. vector.x .. ", " .. vector.y .. ", " .. vector.z)
   ${OUTPUT.location = vector}

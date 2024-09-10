@@ -9,7 +9,7 @@ theme:
   height: 40
   icon: 0xf6ff
 edges:
-  location:
+  pos:
     description: 'The location to check for redstone power.'
     direction: input
     type: vec3i
@@ -21,10 +21,16 @@ edges:
     description: 'Called once when the location has no redstone power.'
     direction: output
     type: exec
+  level:
+    description: 'The redstone power level at the location.'
+    direction: output
+    type: number
+  exec_out:
+    description: 'The output execution flow'
+    direction: output
+    type: exec
 source: |
-  local locationLambda = ${LAMBDA.location}
-  local loc = locationLambda()
-  local power = World:signalAt(loc.x, loc.y, loc.z)
+  local power = World:signalAt(pos.x, pos.y, pos.z)
   if variables["power"] == nil then
       variables["power"] = 0
       return
@@ -37,3 +43,5 @@ source: |
           ${EXEC.off}
       end
   end
+  ${OUTPUT.level = power}
+  ${EXEC.exec_out}

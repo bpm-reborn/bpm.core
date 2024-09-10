@@ -257,10 +257,6 @@ object ClientRuntime : Listener {
             logger.debug { "Received workspace settings: ${packet.workspaceSettings}" }
         }
 
-        is NotifyMessage -> {
-            logger.info { "Received message: ${packet.message}" }
-        }
-
         is WorkspaceCreateResponsePacket -> {
             if (packet.success) {
                 logger.info { "Workspace created successfully: ${packet.workspaceUid}" }
