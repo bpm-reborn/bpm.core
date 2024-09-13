@@ -78,11 +78,10 @@ class VariablesMenu(private val canvasContext: CanvasContext) {
 
         val variables = workspace.graph.variables
         val contentHeight = variables.size * itemHeight
-        val boxHeight = kotlin.math.min(contentHeight, maxHeight)
+        val boxHeight = min(contentHeight, maxHeight)
 
         // Apply closing animation
         val animatedHeight = boxHeight * closingProgress
-
         drawBox(drawList, animatedHeight)
         drawHeader(drawList)
 
@@ -96,17 +95,15 @@ class VariablesMenu(private val canvasContext: CanvasContext) {
 
         if (isAddingVariable) {
             //Set popup position to be center of the screen
-//            popupPosition = Vector2f(
-//                (ImGui.getIO().displaySize.x - 200f) / 2,
-//                (ImGui.getIO().displaySize.y - 120f) / 2
-//            )
+            popupPosition = Vector2f(
+                (ImGui.getIO().displaySize.x - 200f) / 2,
+                (ImGui.getIO().displaySize.y - 120f) / 2
+            )
             renderAddVariablePopup(drawList)
         } else {
-
-
             drawVariableList(drawList, animatedHeight)
             // Render action menus after everything else
-            renderActionMenus(ImGui.getWindowDrawList())
+            renderActionMenus(drawList)
         }
 
         ImGui.popID()
@@ -183,7 +180,6 @@ class VariablesMenu(private val canvasContext: CanvasContext) {
             yOffset += 35f + 80f * progress
         }
     }
-
 
     private fun drawVariableItem(
         drawList: ImDrawList,
@@ -336,7 +332,7 @@ class VariablesMenu(private val canvasContext: CanvasContext) {
         // Handle expanded state if necessary
         if (progress > 0f) {
             val expandedHeight = 80f * progress
-            ImGui.getWindowDrawList().addRectFilled(
+            drawList.addRectFilled(
                 boxPosition.x + 5f, boxPosition.y + yOffset + 30f,
                 boxPosition.x + boxWidth - 5f, boxPosition.y + yOffset + 30f + expandedHeight,
                 ImColor.rgba(50, 50, 50, 255)

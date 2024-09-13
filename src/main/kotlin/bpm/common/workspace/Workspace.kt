@@ -71,8 +71,8 @@ data class Workspace(
         val zoom = settings.zoom
 
         // Apply zoom scaling and adjust for scrolled position
-        val x = (absX * zoom) + settings.scrolled.x
-        val y = (absY * zoom) + settings.scrolled.y
+        val x = (absX * zoom) + settings.position.x
+        val y = (absY * zoom) + settings.position.y
 
         return Vector2f(x, y)
     }
@@ -107,10 +107,6 @@ data class Workspace(
      */
     fun registerUser(user: User) {
         users[user.uid] = user
-    }
-
-    fun getEdge(uid: UUID): Edge? {
-        return graph.getEdge(uid)
     }
 
     /**
@@ -165,6 +161,22 @@ data class Workspace(
      * @return The Node with the specified UID, or null if no Node with the UID is found.
      */
     fun getNode(uid: UUID): Node? = graph.getNode(uid)
+
+    /**
+     * Retrieves a Link based on the given UID.
+     *
+     * @param uid The unique identifier of the Link to retrieve.
+     * @return The Link with the specified UID, or null if no Link with the UID is found.
+     */
+    fun getLink(uid: UUID): Link? = graph.getLink(uid)
+
+    /**
+     * Retrieves an Edge based on the given UID.
+     *
+     * @param uid The unique identifier of the Edge to retrieve.
+     * @return The Edge with the specified UID, or null if no Edge with the UID is found.
+     */
+    fun getEdge(uid: UUID): Edge? = graph.getEdge(uid)
 
     /**
      * Removes a node from the graph based on the given UID.

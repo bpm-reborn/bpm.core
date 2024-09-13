@@ -88,7 +88,7 @@ data class Node(override val properties: PropertyMap = Property.Object()) : Prop
      *
      * @property selected The boolean value representing whether or not the node is selected.
      */
-    var selected: Boolean by properties delegate { false }
+    //var selected: Boolean by properties delegate { false }
 
     /**
      * Represents a [dragged] variable of type [Boolean] that is false by default.

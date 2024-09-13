@@ -13,7 +13,7 @@ import kotlin.math.*
  * @property backgroundColor The background color of the graph.
  * @property gridColor The color of the grid lines in the graph.
  * @property gridSubColor The color of the sub grid lines in the graph.
- * @property scrolled The position of the view in the graph.
+ * @property position The position of the view in the graph.
  * @property zoom The zoom level of the graph.
  * @constructor Creates a new instance of GraphSettings with the specified properties.
  */
@@ -58,15 +58,15 @@ data class WorkspaceSettings(
     /**
      * The current position in a grid view (Top Left).
      *
-     * The [scrolled] represents the position of an element within a grid view.
+     * The [position] represents the position of an element within a grid view.
      * It is implemented as a delegated property which defaults to `Vector2i(0, 0)`.
      * This means that if no position is explicitly set, the default value will be `(0, 0)`.
      *
-     * @property scrolled The current position in the grid view.
+     * @property position The current position in the grid view.
      *
      * @see Vector2i
      */
-    var scrolled by properties to { Vector2f(0f, 0f) }
+    var position by properties to { Vector2f(0f, 0f) }
 
     /**
      * The variable bounds is a mutable property that represents a set of 4D vector bounds.
@@ -124,10 +124,10 @@ data class WorkspaceSettings(
      * Finds the center of the workspace based on the current position and the size of the bounds.
      */
     var center: Vector2f
-        get() = Vector2f(-scrolled.x + bounds.z / 2, -scrolled.y + bounds.w / 2)
+        get() = Vector2f(-position.x + bounds.z / 2, -position.y + bounds.w / 2)
         set(value) {
-            scrolled.x = -value.x + bounds.z / 2
-            scrolled.y = -value.y + bounds.w / 2
+            position.x = -value.x + bounds.z / 2
+            position.y = -value.y + bounds.w / 2
         }
 
 

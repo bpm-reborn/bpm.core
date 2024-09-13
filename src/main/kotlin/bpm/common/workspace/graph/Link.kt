@@ -8,35 +8,32 @@ import bpm.common.property.delegate
 import java.util.*
 
 /**
- * Represents a Connection between two entities.
+ * Represents a Connection between edges of 2 nodes.
  *
- * This class provides a way to create and manage connections by generating and accessing universally unique identifier (UUID) values.
- *
- * @property properties The map of properties associated with the connection.
+ * @property properties The property map to save the state of the link.
  */
 data class Link(override val properties: PropertyMap = Property.Object()) : PropertySupplier {
 
     /**
-     * Universally unique identifier (UUID) for identifying entities.
+     * The Unique Identifier for this Link.
      *
-     * This variable uses a properties delegate to generate a new random UUID
-     * using [UUID.randomUUID] each time it is accessed.
+     * This value is generated using [UUID.randomUUID] when created.
      */
     val uid: UUID by properties delegate { UUID.randomUUID() }
 
     /**
-     * A delegated property that generates a new random UUID when accessed.
-     * The UUID is generated using the [UUID.randomUUID] function.
+     * The Unique Identifier for the input edge.
      *
-     * @property from The property that holds the generated UUID value.
+     * This value is defaulted to [NetUtils.DefaultUUID] on creation,
+     * and later set to the actual uid of the edge.
      */
     val from: UUID by properties delegate { NetUtils.DefaultUUID }
 
     /**
-     * Represents a delegated property for generating and accessing a universally unique identifier (UUID) value.
-     * The generated UUID is assigned to the property 'to' upon its first access.
+     * The Unique Identifier for the output edge.
      *
-     * @property to The delegated property for the UUID value.
+     * This value is defaulted to [NetUtils.DefaultUUID] on creation,
+     * and later set to the actual uid of the edge.
      */
     val to: UUID by properties delegate { NetUtils.DefaultUUID }
 }

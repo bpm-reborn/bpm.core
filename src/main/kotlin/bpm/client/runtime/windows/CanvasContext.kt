@@ -24,8 +24,6 @@ import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.graph.User
 import bpm.common.workspace.packets.*
-import imgui.ImColor
-import imgui.ImDrawList
 import imgui.ImGui
 import imgui.flag.ImGuiMouseButton
 import imgui.flag.ImGuiMouseCursor
@@ -34,12 +32,11 @@ import org.joml.Vector2f
 import org.joml.Vector4f
 import java.util.*
 import kotlin.math.abs
-import kotlin.math.max
 
 class CanvasContext : Listener {
-
     private val runtime: ClientRuntime get() = Endpoint.installed()
-    private val dragOffset: Vector2f = Vector2f()
+    private val workspace: Workspace get() = runtime.workspace ?: throw IllegalStateException("Workspace is null")
+
     private val nodeMovePacket = NodeMoved()
     private var lastSent: Time = Time.now
 
@@ -49,40 +46,43 @@ class CanvasContext : Listener {
     // The maximum move threshold in pixels
     private val maxMoveThreshold = 5f
     private val connectedUsers = mutableMapOf<UUID, User>()
-    internal var isDraggingNode = false
-    internal var wasDraggingNode = false
 
     private var isSelecting: Boolean = false
     private var selectionStart: Vector2f? = null
     private var selectionEnd: Vector2f? = null
-    private val selectedNodes = mutableSetOf<UUID>()
-    private val selectedLinks = mutableSetOf<UUID>()
-    private val workspace: Workspace get() = runtime.workspace ?: throw IllegalStateException("Workspace is null")
+    private var selectedEdge: Pair<Node, Edge>? = null
+    private val selectedNodeIds = mutableSetOf<UUID>()
+    private val selectedLinkIds = mutableSetOf<UUID>()
+    private val nodesInSelectionBox = mutableSetOf<UUID>()
+    private val linksInSelectionBox = mutableSetOf<UUID>()
+    val selectedNodes get() = selectedNodeIds.mapNotNull(workspace::getNode)
+    val selectedLinks get() = selectedLinkIds.mapNotNull(workspace::getLink)
 
     private val headerFamily get() = Fonts.getFamily("Inter")["Bold"]
     private val headerFont get() = headerFamily[workspace.settings.fontHeaderSize]
     private val bodyFamily get() = Fonts.getFamily("Inter")["Regular"]
     private val bodyFont get() = bodyFamily[workspace.settings.fontSize]
-    private val fontawesomeFamily get() = Fonts.getFamily("Fa")["Regular"]
-
-    private var selectedEdge: Pair<Node, Edge>? = null
-    private var dragStartPos: Vector2f? = null
+    private val fontAwesomeFamily get() = Fonts.getFamily("Fa")["Regular"]
 
     internal var isLinking = false
 
-    private val gridSize = 20f // Grid size for snapping
+    private val dragOffset: Vector2f = Vector2f()
+    internal var isDraggingNode = false
+    internal var wasDraggingNode = false
     private var isDraggingGroup = false
     private val groupDragOffset = mutableMapOf<UUID, Vector2f>()
-    private val nodesInSelectionBox = mutableSetOf<UUID>()
-    private val linksInSelectionBox = mutableSetOf<UUID>()
+    private var draggedSourceEdge: Pair<Node, Edge>? = null
+    var draggedEdge: Pair<Node, Edge>? = null
+    var dragStartPos: Vector2f? = null
+
     var hoveredTitleBar: UUID? = null
     var hoveredPin: Pair<UUID, Edge>? = null
-    private var draggedEdge: Pair<Node, Edge>? = null
 
     internal val customActionMenu: CustomActionMenu by lazy { CustomActionMenu(workspace, this) }
-    private var draggedSourceEdge: Pair<Node, Edge>? = null
     internal val variablesMenu by lazy { VariablesMenu(this) }
-    private val notificationManager = NotificationManager()
+    val notificationManager = NotificationManager()
+
+    private val gridSize = 20f // Grid size for snapping
 
     /**
      * Represents the node library used in the application.
@@ -120,14 +120,14 @@ class CanvasContext : Listener {
         hoveredPin = null
 
         for (node in workspace.graph.nodes) {
-            val headerBounds = computeHeaderBounds(node)
+            val headerBounds = getHeaderBounds(node)
             if (headerBounds.contains(mousePos.x, mousePos.y)) {
                 hoveredTitleBar = node.uid
                 return
             }
 
             for (edge in workspace.graph.getEdges(node)) {
-                val edgeBounds = computeEdgeBounds(node, edge)
+                val edgeBounds = getEdgeBounds(node, edge)
                 if (isPointOverEdge(mousePos, edgeBounds)) {
                     hoveredPin = Pair(node.uid, edge)
                     return
@@ -155,11 +155,7 @@ class CanvasContext : Listener {
 
     fun notifications() {
 
-        val drawList = ImGui.getWindowDrawList()
-        val displaySize = ImGui.getIO().displaySize
-        notificationManager.renderNotifications(drawList, displaySize)
     }
-
 
     fun getHoverCursor(): Int {
         return when {
@@ -170,13 +166,12 @@ class CanvasContext : Listener {
     }
 
     fun isLinkSelected(link: Link): Boolean {
-        return selectedLinks.contains(link.uid)
+        return selectedLinkIds.contains(link.uid)
     }
 
     fun isNodeSelected(node: Node): Boolean {
-        return selectedNodes.contains(node.uid)
+        return selectedNodeIds.contains(node.uid)
     }
-
 
     private fun handleNodeDrag(node: Node, nodeBounds: Vector4f, headerBounds: Vector4f) {
         val mousePos = ImGui.getMousePos()
@@ -188,7 +183,7 @@ class CanvasContext : Listener {
 
             if (isDraggingGroup) {
                 // Move all selected nodes
-                for (selectedNodeId in selectedNodes) {
+                for (selectedNodeId in selectedNodeIds) {
                     val selectedNode = runtime.workspace!!.getNode(selectedNodeId)
                     if (selectedNode != null) {
                         val offset = groupDragOffset[selectedNodeId] ?: Vector2f()
@@ -218,8 +213,8 @@ class CanvasContext : Listener {
     }
 
 
-    fun computeEdgeBounds(owner: Node, edge: Edge): Vector4f {
-        val nodeBounds = computeNodeBounds(owner)
+    fun getEdgeBounds(owner: Node, edge: Edge): Vector4f {
+        val nodeBounds = getNodeBounds(owner)
         val nodePos = workspace.convertPosition(owner.x, owner.y)
         val nodeSize = workspace.convertSize(owner.width, owner.height)
         var xPos = 0f
@@ -249,8 +244,7 @@ class CanvasContext : Listener {
         return Vector4f(xPos + xOffset, yPos, textXPos, textYPos)
     }
 
-
-    fun computeNodeBounds(node: Node, headerPadding: Float = 20f): Vector4f {
+    fun getNodeBounds(node: Node, headerPadding: Float = 20f): Vector4f {
         val nodePos = convertToScreenCoordinates(Vector2f(node.x, node.y))
         val nodeSize = convertToScreenSize(Vector2f(node.width, node.height))
         val padding = headerPadding * zoom
@@ -271,7 +265,7 @@ class CanvasContext : Listener {
         )
     }
 
-    fun computeHeaderBounds(node: Node): Vector4f {
+    fun getHeaderBounds(node: Node): Vector4f {
         return headerFont.use {
             val nodePos = workspace.convertPosition(node.x, node.y)
             val nodeSize = workspace.convertSize(node.width, node.height)
@@ -285,14 +279,14 @@ class CanvasContext : Listener {
         }
     }
 
-    private fun computeLinkInSelectionBox(link: Link, topLeft: Vector2f, bottomRight: Vector2f): Boolean {
+    private fun isLinkInSelection(link: Link, topLeft: Vector2f, bottomRight: Vector2f): Boolean {
         val sourceEdge = workspace.graph.getEdge(link.from) ?: return false
         val sourceNode = workspace.getNode(sourceEdge.owner) ?: return false
         val targetEdge = workspace.graph.getEdge(link.to) ?: return false
         val targetNode = workspace.getNode(targetEdge.owner) ?: return false
 
-        val sourceBounds = computeEdgeBounds(sourceNode, sourceEdge)
-        val targetBounds = computeEdgeBounds(targetNode, targetEdge)
+        val sourceBounds = getEdgeBounds(sourceNode, sourceEdge)
+        val targetBounds = getEdgeBounds(targetNode, targetEdge)
 
         val startPos = Vector2f(sourceBounds.x, sourceBounds.y)
         val endPos = Vector2f(targetBounds.x, targetBounds.y)
@@ -313,8 +307,8 @@ class CanvasContext : Listener {
         return false
     }
 
-    private fun computeNodeInSelectionBox(node: Node, topLeft: Vector2f, bottomRight: Vector2f): Boolean {
-        val bounds = computeNodeBounds(node)
+    private fun isNodeInSelection(node: Node, topLeft: Vector2f, bottomRight: Vector2f): Boolean {
+        val bounds = getNodeBounds(node)
         return bounds.x < bottomRight.x && bounds.z > topLeft.x && bounds.y < bottomRight.y && bounds.w > topLeft.y
     }
 
@@ -337,7 +331,7 @@ class CanvasContext : Listener {
 
         if (isLeftClickPressed && !isDraggingNode) {
             val clickedOnNode = workspace.graph.nodes.any { node ->
-                val bounds = computeNodeBounds(node)
+                val bounds = getNodeBounds(node)
                 mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w
             }
 
@@ -373,13 +367,13 @@ class CanvasContext : Listener {
                 }
 
                 val nodesUnderMouse = workspace.graph.nodes.filter { node ->
-                    val bounds = computeNodeBounds(node)
+                    val bounds = getNodeBounds(node)
                     mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w
                 }
 
                 nodesUnderMouse.forEach { node ->
-                    selectedNodes.add(node.uid)
-                    node.selected = true
+                    selectedNodeIds.add(node.uid)
+                    //node.selected = true
                 }
             }
 
@@ -398,7 +392,7 @@ class CanvasContext : Listener {
         nodesInSelectionBox.clear()
 
         for (node in workspace.graph.nodes) {
-            if (computeNodeInSelectionBox(node, topLeft, bottomRight)) {
+            if (isNodeInSelection(node, topLeft, bottomRight)) {
                 nodesInSelectionBox.add(node.uid)
             }
         }
@@ -413,7 +407,7 @@ class CanvasContext : Listener {
 
         linksInSelectionBox.clear()
         workspace.graph.links.forEach { link ->
-            if (computeLinkInSelectionBox(link, topLeft, bottomRight)) {
+            if (isLinkInSelection(link, topLeft, bottomRight)) {
                 linksInSelectionBox.add(link.uid)
             }
         }
@@ -433,24 +427,24 @@ class CanvasContext : Listener {
 
         workspace.graph.nodes.forEach { node ->
             if (nodesInSelectionBox.contains(node.uid)) {
-                selectedNodes.add(node.uid)
-                node.selected = true
+                selectedNodeIds.add(node.uid)
+                //node.selected = true
             }
         }
         nodesInSelectionBox.clear()
 
         workspace.graph.links.forEach { link ->
             if (linksInSelectionBox.contains(link.uid)) {
-                selectedLinks.add(link.uid)
+                selectedLinkIds.add(link.uid)
             }
         }
         linksInSelectionBox.clear()
     }
 
     private fun clearSelection() {
-        selectedNodes.clear()
-        selectedLinks.clear()
-        workspace.graph.nodes.forEach { it.selected = false }
+        selectedNodeIds.clear()
+        selectedLinkIds.clear()
+        //workspace.graph.nodes.forEach { it.selected = false }
     }
 
     private fun findLinkUnderMouse(mousePos: Vector2f): Link? {
@@ -479,8 +473,8 @@ class CanvasContext : Listener {
         val targetEdge = workspace.graph.getEdge(link.to) ?: return false
         val targetNode = workspace.getNode(targetEdge.owner) ?: return false
 
-        val sourceBounds = computeEdgeBounds(sourceNode, sourceEdge)
-        val targetBounds = computeEdgeBounds(targetNode, targetEdge)
+        val sourceBounds = getEdgeBounds(sourceNode, sourceEdge)
+        val targetBounds = getEdgeBounds(targetNode, targetEdge)
 
         val startPos = Vector2f(sourceBounds.x, sourceBounds.y)
         val endPos = Vector2f(targetBounds.x, targetBounds.y)
@@ -504,37 +498,37 @@ class CanvasContext : Listener {
     }
 
     fun isMouseOverNode(node: Node, mousePos: Vector2f): Boolean {
-        val bounds = computeNodeBounds(node)
+        val bounds = getNodeBounds(node)
         return mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w
     }
 
     fun selectLink(link: Link) {
-        selectedLinks.add(link.uid)
+        selectedLinkIds.add(link.uid)
     }
 
     fun unselectLink(link: Link) {
-        selectedLinks.remove(link.uid)
+        selectedLinkIds.remove(link.uid)
     }
 
     fun clearLinkSelection() {
-        selectedLinks.clear()
+        selectedLinkIds.clear()
     }
 
     fun getSelectedLinks(): Set<UUID> {
-        return selectedLinks.toSet()
+        return selectedLinkIds.toSet()
     }
 
 
     private fun handleLinkSelection(link: Link, isCtrlPressed: Boolean) {
         if (isCtrlPressed) {
-            if (selectedLinks.contains(link.uid)) {
-                selectedLinks.remove(link.uid)
+            if (selectedLinkIds.contains(link.uid)) {
+                selectedLinkIds.remove(link.uid)
             } else {
-                selectedLinks.add(link.uid)
+                selectedLinkIds.add(link.uid)
             }
         } else {
             clearSelection()
-            selectedLinks.add(link.uid)
+            selectedLinkIds.add(link.uid)
         }
     }
 
@@ -570,10 +564,10 @@ class CanvasContext : Listener {
             runtime.selectedNode = node
             isDraggingNode = true
 
-            if (selectedNodes.contains(node.uid)) {
+            if (selectedNodeIds.contains(node.uid)) {
                 isDraggingGroup = true
                 // Calculate offsets for all selected nodes
-                for (selectedNodeId in selectedNodes) {
+                for (selectedNodeId in selectedNodeIds) {
                     val selectedNode = runtime.workspace!!.getNode(selectedNodeId)
                     if (selectedNode != null) {
                         groupDragOffset[selectedNodeId] = Vector2f(mx - selectedNode.x, my - selectedNode.y)
@@ -581,8 +575,8 @@ class CanvasContext : Listener {
                 }
             } else {
                 // If the dragged node is not in the selection, clear the selection and select only this node
-                selectedNodes.clear()
-                selectedNodes.add(node.uid)
+                selectedNodeIds.clear()
+                selectedNodeIds.add(node.uid)
             }
         }
     }
@@ -601,47 +595,19 @@ class CanvasContext : Listener {
         }
     }
 
-    fun handleContextMenu(contextMenuPosition: Vector2f) {
-        if (ImGui.beginPopup("CanvasContextMenu", ImGuiPopupFlags.MouseButtonRight)) {
-            if (ImGui.beginMenu("Create Node")) {
-                for (nodeTypeMeta in nodeLibrary) {
-                    if (ImGui.menuItem(nodeTypeMeta.nodeTypeName)) {
-                        createNode(contextMenuPosition, nodeTypeMeta.nodeTypeName)
-                    }
-                }
-                ImGui.endMenu()
-            }
-
-            if (selectedNodes.isNotEmpty() || selectedLinks.isNotEmpty()) {
-                if (ImGui.menuItem("Delete Selected")) {
-                    deleteSelected()
-                }
-            }
-
-            ImGui.endPopup()
-        }
-    }
-
-
-    fun createNode(position: Vector2f, nodeType: String) {
-        // Convert screen position to world position
-        val worldPos = convertToWorldCoordinates(position)
-        client.send(NodeCreateRequest(nodeType, worldPos))
-    }
-
     fun createVariableNode(type: bpm.common.workspace.packets.NodeType, position: Vector2f, name: String) {
         val worldPos = convertToWorldCoordinates(position)
         client.send(VariableNodeCreateRequest(type, worldPos, name))
     }
 
-    fun convertToScreenCoordinates(worldPos: Vector2f): Vector2f {
+    private fun convertToScreenCoordinates(worldPos: Vector2f): Vector2f {
         return Vector2f(
-            (worldPos.x * workspace.settings.zoom) + workspace.settings.scrolled.x,
-            (worldPos.y * workspace.settings.zoom) + workspace.settings.scrolled.y
+            (worldPos.x * workspace.settings.zoom) + workspace.settings.position.x,
+            (worldPos.y * workspace.settings.zoom) + workspace.settings.position.y
         )
     }
 
-    fun convertToScreenSize(worldSize: Vector2f): Vector2f {
+    private fun convertToScreenSize(worldSize: Vector2f): Vector2f {
         return Vector2f(
             worldSize.x * workspace.settings.zoom, worldSize.y * workspace.settings.zoom
         )
@@ -649,14 +615,13 @@ class CanvasContext : Listener {
 
     fun convertToWorldCoordinates(screenPos: Vector2f): Vector2f {
         return Vector2f(
-            (screenPos.x - workspace.settings.scrolled.x) / workspace.settings.zoom,
-            (screenPos.y - workspace.settings.scrolled.y) / workspace.settings.zoom
+            (screenPos.x - workspace.settings.position.x) / workspace.settings.zoom,
+            (screenPos.y - workspace.settings.position.y) / workspace.settings.zoom
         )
     }
 
-
     private fun deleteSelected() {
-        for (nodeId in selectedNodes) {
+        for (nodeId in selectedNodeIds) {
             //colects all the links that are connected to the node
             val links = workspace.graph.getLinks(nodeId)
             for (link in links) {
@@ -667,12 +632,13 @@ class CanvasContext : Listener {
             client.send(NodeDeleteRequest(nodeId))
 
         }
-        for (linkId in selectedLinks) {
+
+        for (linkId in selectedLinkIds) {
             // Notify the server about link deletion
             client.send(LinkDeleteRequest(linkId))
         }
-        selectedNodes.clear()
-        selectedLinks.clear()
+        selectedNodeIds.clear()
+        selectedLinkIds.clear()
 
         // Reset any state that might prevent adding new nodes
         isDraggingNode = false
@@ -750,100 +716,9 @@ class CanvasContext : Listener {
 
     }
 
-    fun tooltip(
-        icon: String,
-        text: String,
-        iconFontSize: Int = 28,
-        textFontSize: Int = 24,
-        iconColor: Int = ImColor.rgba(33, 150, 243, 255)
-    ) {
-        val drawList = ImGui.getForegroundDrawList()
-        val iconFont = fontawesomeFamily[iconFontSize]
-        val textFont = headerFamily[textFontSize]
-
-        // Draws a custom tool tip with an icon and text.
-        val iconSize = iconFont.calcTextSizeA(iconFontSize.toFloat(), Float.MAX_VALUE, 0f, icon)
-        val textSize = textFont.calcTextSizeA(textFontSize.toFloat(), Float.MAX_VALUE, 0f, text)
-        val padding = 10f
-        val tooltipWidth = iconSize.x + textSize.x + padding * 3
-        val tooltipHeight = max(iconSize.y, textSize.y) + padding * 2
-
-        val tooltipPos = Vector2f(ImGui.getMousePos().x + 16, ImGui.getMousePos().y - tooltipHeight / 2)
-        val tooltipBounds = Vector4f(
-            tooltipPos.x, tooltipPos.y, tooltipPos.x + tooltipWidth, tooltipPos.y + tooltipHeight
-        )
-
-        drawList.addRectFilled(
-            tooltipBounds.x,
-            tooltipBounds.y,
-            tooltipBounds.z,
-            tooltipBounds.w,
-            ImColor.rgba(30, 30, 30, 255),
-            40f,
-        )
-
-        drawList.addRect(
-            tooltipBounds.x,
-            tooltipBounds.y,
-            tooltipBounds.z,
-            tooltipBounds.w,
-            ImColor.rgba(200, 200, 200, 255),
-            40f,
-        )
-        val leftMargin = 3.33f
-        //Draw circle around the icon
-        drawList.addCircleFilled(
-            tooltipBounds.x + padding + iconSize.x / 2 + leftMargin,
-            tooltipBounds.y + padding + iconSize.y / 2,
-            iconSize.x / 2 + padding / 1.75f + 1,
-            iconColor
-        )
-
-        drawList.addText(
-            iconFont,
-            iconFontSize.toFloat() + 8,
-            tooltipBounds.x + padding - 2f + leftMargin,
-            tooltipBounds.y + padding - 8f,
-            ImColor.rgba(255, 255, 255, 255),
-            icon.toString()
-        )
-
-        drawList.addText(
-            textFont,
-            textFontSize.toFloat(),
-            tooltipBounds.x + iconSize.x + padding * 2 + leftMargin,
-            tooltipBounds.y + padding + 2,
-            ImColor.rgba(255, 255, 255, 255),
-            text
-        )
-
-        if (tooltipBounds.x < 0) {
-            tooltipBounds.x = 0f
-            tooltipBounds.z = tooltipWidth
-        }
-
-        if (tooltipBounds.z > ImGui.getMainViewport().size.x) {
-            tooltipBounds.z = ImGui.getMainViewport().size.x
-            tooltipBounds.x = tooltipBounds.z - tooltipWidth
-        }
-
-        if (tooltipBounds.y < 0) {
-            tooltipBounds.y = 0f
-            tooltipBounds.w = tooltipHeight
-        }
-
-        if (tooltipBounds.w > ImGui.getMainViewport().size.y) {
-            tooltipBounds.w = ImGui.getMainViewport().size.y
-            tooltipBounds.y = tooltipBounds.w - tooltipHeight
-        }
-
-
-    }
-
-
     fun start(node: Node, edge: Edge) {
         selectedEdge = Pair(node, edge)
-        val edgeBounds = computeEdgeBounds(node, edge)
+        val edgeBounds = getEdgeBounds(node, edge)
         dragStartPos = Vector2f(edgeBounds.x, edgeBounds.y)
         isLinking = true
     }
@@ -857,7 +732,7 @@ class CanvasContext : Listener {
         workspace.settings.zoom = 1f
     }
 
-    fun findCenter(): Vector2f {
+    private fun findCenter(): Vector2f {
         if (workspace.graph.nodes.isEmpty())
             return Vector2f()
 
@@ -905,7 +780,7 @@ class CanvasContext : Listener {
     private fun findEdgeUnderMouse(): Pair<Node, Edge>? {
         val mousePos = ImGui.getMousePos()
         for (node in workspace.graph.nodes) {
-            val nodeBounds = computeNodeBounds(node)
+            val nodeBounds = getNodeBounds(node)
             val edges = workspace.graph.getEdges(node)
             val inputEdges = edges.filter { it.direction == "input" }
             val outputEdges = edges.filter { it.direction == "output" }
@@ -991,30 +866,14 @@ class CanvasContext : Listener {
         return distanceSquared <= hitboxRadius * hitboxRadius
     }
 
-    fun handleEdgeDragging(drawList: ImDrawList) {
+    fun handleEdgeDragging() {
         val draggedEdge = draggedEdge
         val dragStartPos = dragStartPos
 
         if (draggedEdge != null && dragStartPos != null) {
             val (sourceNode, sourceEdge) = draggedEdge
-            val nodeBounds = computeNodeBounds(sourceNode)
-            val sourcePos = getEdgePosition(sourceNode, sourceEdge, nodeBounds)
-            val mousePos = ImGui.getMousePos()
 
-            // Draw the dragging line
-            drawList.addBezierCubic(
-                sourcePos.x,
-                sourcePos.y,
-                sourcePos.x + 50f * zoom,
-                sourcePos.y,
-                mousePos.x - 50f * zoom,
-                mousePos.y,
-                mousePos.x,
-                mousePos.y,
-                ImColor.rgba(255, 255, 255, 200),
-                2f * zoom,
-                20
-            )
+            val mousePos = ImGui.getMousePos()
 
             if (ImGui.isMouseReleased(ImGuiMouseButton.Left)) {
                 val targetEdge = findEdgeUnderMouse()
@@ -1067,14 +926,12 @@ class CanvasContext : Listener {
         }
     }
 
-
     fun startEdgeDrag(node: Node, edge: Edge) {
         draggedEdge = Pair(node, edge)
-        val edgeBounds = computeEdgeBounds(node, edge)
+        val edgeBounds = getEdgeBounds(node, edge)
         dragStartPos = Vector2f(edgeBounds.x, edgeBounds.y)
         isLinking = true
     }
-
 
     fun getEdgePosition(node: Node, edge: Edge, nodeBounds: Vector4f): Vector2f {
         val edgeSpacing = 20f * zoom
