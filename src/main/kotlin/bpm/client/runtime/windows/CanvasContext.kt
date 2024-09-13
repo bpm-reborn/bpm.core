@@ -620,28 +620,23 @@ class CanvasContext : Listener {
         )
     }
 
-    private fun deleteSelected() {
+    fun deleteSelected() {
         for (nodeId in selectedNodeIds) {
-            //colects all the links that are connected to the node
-            val links = workspace.graph.getLinks(nodeId)
-            for (link in links) {
-                client.send(LinkDeleteRequest(link.uid))
-            }
-
             // Notify the server about node deletion
             client.send(NodeDeleteRequest(nodeId))
-
         }
 
         for (linkId in selectedLinkIds) {
             // Notify the server about link deletion
             client.send(LinkDeleteRequest(linkId))
         }
+
         selectedNodeIds.clear()
         selectedLinkIds.clear()
 
         // Reset any state that might prevent adding new nodes
         isDraggingNode = false
+        isSelecting = false
         selectionStart = null
         selectionEnd = null
     }

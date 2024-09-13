@@ -3,13 +3,16 @@ package bpm.client.runtime.windows
 import bpm.client.font.Fonts
 import bpm.client.render.IRender
 import bpm.client.runtime.ClientRuntime
+import bpm.client.runtime.Keyboard
 import bpm.client.utils.toVec2f
+import bpm.common.network.Client
 import bpm.common.network.Endpoint
 import bpm.common.utils.FontAwesome
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.WorkspaceSettings
 import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
+import bpm.common.workspace.packets.NodeDeleteRequest
 import imgui.ImGui
 import imgui.ImVec2
 import imgui.flag.ImGuiButtonFlags
@@ -65,9 +68,9 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     /**
      * A private constant representing the offset vector.
      *
-     * This vector represents the amount of scrolling applied to the context.
+     * This vector represents the position of the canvas relative to the center of the workspace.
      *
-     * @return The scrolled vector.
+     * @return The position vector of the canvas.
      */
     private val position: Vector2f get() = workspace.settings.position
 
@@ -160,6 +163,8 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         }
         context.variablesMenu.update()
 
+        handleKeys()
+
         // Render the selection context overlay
         // selectionContextOverlay.render(selectedNodes)
 
@@ -215,11 +220,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
             val selectedNodes = context.selectedNodes.ifEmpty { findNodesUnderMouse(mousePos) }.toSet()
             val selectedLinks = context.selectedLinks.ifEmpty { findLinksUnderMouse(mousePos) }.toSet()
 
-            if (selectedNodes.isNotEmpty() || selectedLinks.isNotEmpty()) {
-                customActionMenu.open(mousePos, selectedNodes, selectedLinks)
-            } else {
-                customActionMenu.open(mousePos)
-            }
+            customActionMenu.open(mousePos, selectedNodes.isNotEmpty() || selectedLinks.isNotEmpty())
             context.variablesMenu.closePopup()
         }
     }
@@ -291,7 +292,6 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         currentTime += ImGui.getIO().deltaTime
     }
 
-
     /**
      * Initializes the canvas and sets up the scrolling and the canvas size
      */
@@ -309,6 +309,13 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
             canvasSize.y,
             ImGuiButtonFlags.MouseButtonLeft or ImGuiButtonFlags.MouseButtonRight or ImGuiButtonFlags.MouseButtonMiddle
         )
+    }
+
+    private fun handleKeys() {
+        if (Keyboard.isKeyPressed(ClientRuntime.Key.DELETE)) {
+            context.deleteSelected()
+            customActionMenu.close()
+        }
     }
 
     /**
@@ -340,28 +347,12 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
             val zoomDelta = mouseWheel * 0.10f
             context.zoom += zoomDelta
             context.zoom = context.zoom.coerceIn(0.5f, 2f)
-            //println(canvasCtx.zoom)
         }
 
-//        if (ImGui.isMouseClicked(ImGuiMouseButton.Right)) {
-//            contextMenuPosition = Vector2f(io.mousePos.x, io.mousePos.y)
-//            ImGui.openPopup("CanvasContextMenu")
-//        }
-        // Open custom action menu on right-click
-        if (ImGui.isMouseClicked(ImGuiMouseButton.Right) && !initialOpen) {
-            val mousePos = ImGui.getMousePos()
-            customActionMenu.open(mousePos)
-            context.variablesMenu.closePopup()
-        }
         // Adjust scrolled to keep the center point consistent
         val center = workspace.viewportCenter
         position.x -= (center.x - position.x) * (context.zoom - zoom) / zoom
         position.y -= (center.y - position.y) * (context.zoom - zoom) / zoom
-
-        // Unselect all nodes after dragging is complete
-//        if (ImGui.isMouseReleased(ImGuiMouseButton.Left) && canvasCtx.isDraggingNode) {
-//            canvasCtx.unselectAllNodes()
-//        }
     }
 }
 

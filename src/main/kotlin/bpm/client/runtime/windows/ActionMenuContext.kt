@@ -19,7 +19,6 @@ import bpm.common.property.castOr
 import bpm.common.schemas.Schemas
 import bpm.common.type.NodeLibrary
 import bpm.common.workspace.Workspace
-import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.packets.LinkDeleteRequest
 import bpm.common.workspace.packets.NodeDeleteRequest
@@ -68,24 +67,6 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
 
     private var clipboard = mutableListOf<Node>()
     private val logger = KotlinLogging.logger { }
-    private var selectedLinks: Set<Link> = emptySet()
-
-    fun copyToClipboard(nodes: List<Node>) {
-        clipboard.clear()
-        //We need to copy the nodes, updating their positions to be relative to the mouse,
-        //and then add them to the clipboard
-        for (node in nodes) {
-            val copy = node.properties.copy().cast<PropertyMap>()
-            copy["x"].cast<Property.Float>().set(node.x - menuPosition.x)
-            copy["y"].cast<Property.Float>().set(node.y - menuPosition.y)
-            clipboard.add(Node(copy))
-            logger.debug { "Copied node ${node.name} to clipboard" }
-        }
-    }
-
-    fun hasClipboardContent(): Boolean {
-        return clipboard.isNotEmpty()
-    }
 
     private var cursorBlinkTime = 0f
     private val cursorBlinkDuration = 0.53f
@@ -100,8 +81,23 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
 
     private lateinit var folderStructure: MutableList<Any>
 
-    private var selectedNodes: Set<Node> = emptySet()
     private var isNodeMenu = false
+
+    private val selectionText: String
+        get() {
+            val nodeCount = canvasCtx.selectedNodes.size
+            val linkCount = canvasCtx.selectedLinks.size
+
+            return when {
+                nodeCount == 0 && linkCount == 0 -> "No items selected"
+                nodeCount == 1 && linkCount == 0 -> "Selected: 1 node (${canvasCtx.selectedNodes.first().name})"
+                nodeCount == 0 && linkCount == 1 -> "Selected: 1 link"
+                nodeCount > 1 && linkCount == 0 -> "Selected: $nodeCount nodes"
+                nodeCount == 0 && linkCount > 1 -> "Selected: $linkCount links"
+                nodeCount == 1 && linkCount == 1 -> "Selected: 1 node and 1 link"
+                else -> "Selected: $nodeCount nodes and $linkCount links"
+            }
+        }
 
     init {
         buildFolderStructure()
@@ -146,24 +142,6 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
     }
 
     //"Delete node" if one node is selected, "Delete link, if one link is selected, "Delete nodes & links" if multiple nodes are selected
-
-    private val selectionText: String
-        get() {
-            val nodeCount = selectedNodes.size
-            val linkCount = selectedLinks.size
-
-            return when {
-                nodeCount == 0 && linkCount == 0 -> "No items selected"
-                nodeCount == 1 && linkCount == 0 -> "Selected: 1 node (${selectedNodes.first().name})"
-                nodeCount == 0 && linkCount == 1 -> "Selected: 1 link"
-                nodeCount > 1 && linkCount == 0 -> "Selected: $nodeCount nodes"
-                nodeCount == 0 && linkCount > 1 -> "Selected: $linkCount links"
-                nodeCount == 1 && linkCount == 1 -> "Selected: 1 node and 1 link"
-                else -> "Selected: $nodeCount nodes and $linkCount links"
-            }
-        }
-
-
     private fun renderNodeMenu(drawList: ImDrawList) {
         val padding = 10f
         var yPos = menuPosition.y + padding
@@ -178,12 +156,11 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
         yPos += 30f
 
 
-        val nodes = selectedNodes.size
-        val links = selectedLinks.size
+        val nodes = canvasCtx.selectedNodes.size
+        val links = canvasCtx.selectedLinks.size
         // Render action buttons
         renderActionButton(drawList, "Delete       (Del)", FontAwesome.Trash, yPos) {
-            deleteSelectedNodes()
-            deleteSelectedLinks()
+            canvasCtx.deleteSelected()
         }
         yPos += 40f
 
@@ -217,7 +194,7 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
     }
 
     private fun deleteSelectedLinks() {
-        selectedLinks.forEach { link ->
+        canvasCtx.selectedLinks.forEach { link ->
             canvasCtx.client.send(LinkDeleteRequest(link.uid))
         }
     }
@@ -253,18 +230,17 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
 
     private fun deleteNode(nodeId: UUID) {
         //colects all the links that are connected to the node
-        val links = workspace.graph.getLinks(nodeId)
+        /*val links = workspace.graph.getLinks(nodeId)
         for (link in links) {
             Client { it.send(LinkDeleteRequest(link.uid)) }
-        }
+        }*/
         Client { it.send(NodeDeleteRequest(nodeId)) }
     }
 
     private fun deleteSelectedNodes() {
-        selectedNodes.forEach { node ->
+        canvasCtx.selectedNodes.forEach { node ->
             deleteNode(node.uid)
         }
-
     }
 
     private fun cutSelectedNodes() {
@@ -273,7 +249,7 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
     }
 
     private fun copySelectedNodes() {
-        copyToClipboard(selectedNodes.toList())
+        copyToClipboard(canvasCtx.selectedNodes.toList())
     }
 
     private fun pasteNodes() {
@@ -523,6 +499,23 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
 //            close()
 //        }
 //    }
+
+    fun copyToClipboard(nodes: List<Node>) {
+        clipboard.clear()
+        //We need to copy the nodes, updating their positions to be relative to the mouse,
+        //and then add them to the clipboard
+        for (node in nodes) {
+            val copy = node.properties.copy().cast<PropertyMap>()
+            copy["x"].cast<Property.Float>().set(node.x - menuPosition.x)
+            copy["y"].cast<Property.Float>().set(node.y - menuPosition.y)
+            clipboard.add(Node(copy))
+            logger.debug { "Copied node ${node.name} to clipboard" }
+        }
+    }
+
+    fun hasClipboardContent(): Boolean {
+        return clipboard.isNotEmpty()
+    }
 
     private fun renderNode(drawList: ImDrawList, node: NodeItem, depth: Int, yOffset: Float) {
         val isHovered = node.name == hoveredNodeType || ImGui.isMouseHoveringRect(
@@ -1004,7 +997,7 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
             height += 40f  // Paste button
         }
         height += 10f  // Separator
-        if (selectedLinks.isNotEmpty()) {
+        if (canvasCtx.selectedLinks.isNotEmpty()) {
             height += 40f  // Delete Links button
         }
         return height
@@ -1014,8 +1007,7 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
 
     fun open(
         position: ImVec2,
-        selectedNodes: Set<Node> = emptySet(),
-        selectedLinks: Set<Link> = emptySet(),
+        isNodeMenu: Boolean,
         rebuild: Boolean = true
     ) {
         if (rebuild) buildFolderStructure()
@@ -1057,9 +1049,7 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
         cursorPosition = 0
         selectionStart = 0
         selectionEnd = 0
-        this.selectedNodes = selectedNodes
-        this.selectedLinks = selectedLinks
-        isNodeMenu = selectedNodes.isNotEmpty() || selectedLinks.isNotEmpty()
+        this.isNodeMenu = isNodeMenu
     }
 
     fun close() {
@@ -1098,7 +1088,7 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
 
     fun openWithFilteredNodes(position: Vector2f, compatibleNodes: List<String>) {
         buildFilteredFolderStructure(compatibleNodes)
-        open(ImVec2(position.x, position.y), rebuild = false)
+        open(ImVec2(position.x, position.y), true, rebuild = false)
         searchText = ""
         hoveredNodeType = ""
         scrollPosition = 0f

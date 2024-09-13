@@ -151,7 +151,17 @@ object ServerRuntime : Listener {
 
         is NodeDeleteRequest -> {
             val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
-            workspace?.removeNode(packet.uuid)
+            val node: Node = workspace?.getNode(packet.uuid)?:let { return }
+
+            workspace.removeNode(packet.uuid)
+
+            workspace.graph.getLinks(node).forEach { link ->
+                workspace.removeLink(link.uid)
+
+                sendToUsersInWorkspace(users[from]?.workspaceUid ?: error("User not in workspace"), new<LinkDeleted> {
+                    this.uuid = link.uid
+                })
+            }
 
             sendToUsersInWorkspace(users[from]?.workspaceUid ?: error("User not in workspace"), new<NodeDeleted> {
                 this.uuid = packet.uuid
