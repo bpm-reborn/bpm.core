@@ -688,7 +688,13 @@ class CanvasGraphics(
 
 
     fun drawExecLink(
-        drawList: ImDrawList, startPos: Vector2f, endPos: Vector2f, startColor: Int, endColor: Int, zoom: Float, time: Float
+        drawList: ImDrawList,
+        startPos: Vector2f,
+        endPos: Vector2f,
+        startColor: Int,
+        endColor: Int,
+        zoom: Float,
+        time: Float
     ) {
         val midX = (startPos.x + endPos.x) / 2
         val controlPoint1 = Vector2f(midX, startPos.y)
@@ -886,7 +892,12 @@ class CanvasGraphics(
      * A helper method to assist with the drawing of the grids
      */
     fun drawGrid(
-        drawList: ImDrawList, position: Vector2f, bounds: Vector4f, zoom: Float, step: Float = 20f, color: Int = ImColor.rgba(33, 33, 33, 120)
+        drawList: ImDrawList,
+        position: Vector2f,
+        bounds: Vector4f,
+        zoom: Float,
+        step: Float = 20f,
+        color: Int = ImColor.rgba(33, 33, 33, 120)
     ) {
         val zoomedStep = step * zoom
         var x = fmodf(position.x, zoomedStep)

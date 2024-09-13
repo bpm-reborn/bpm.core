@@ -38,7 +38,6 @@ object EvalContext {
         val functionGroups = workspaceFunctionGroups.computeIfAbsent(workspace.uid) { ConcurrentHashMap() }
         functionGroups.clear()
         try {
-            lua.gc()
             val compiledSource = ComplexLuaTranspiler.generateLuaScript(workspace)
             logger.debug { "Compiled Lua script: $compiledSource" }
             val result = lua.eval(compiledSource)[0]

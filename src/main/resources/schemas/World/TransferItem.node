@@ -1,58 +1,58 @@
-  description: "Transfers items from one item handler to another"
-  group: Network
-  name: Transfer Item
-  extends: Base/Node
+description: "Transfers items from one item handler to another"
+group: Items
+name: Transfer Item
+extends: Base/Node
 
-  theme:
-    color: '#f7a121'
-    height: 100
-    width: 160
-    icon: 0xf362
+theme:
+  color: '#f7a121'
+  height: 100
+  width: 160
+  icon: 0xf362
 
-  edges:
-    exec_in:
-      description: 'Execute the transfer'
-      direction: input
-      type: exec
-    from_handler:
-      description: 'The item handler to extract from'
-      direction: input
-      type: itemhandler
-    from_slot:
-      description: 'The slot to extract from'
-      direction: input
-      type: number
-      value:
-        type: int
-        default: 0
-    to_handler:
-      description: 'The item handler to insert into'
-      direction: input
-      type: itemhandler
-    to_slot:
-      description: 'The slot to insert into'
-      direction: input
-      type: number
-      value:
-        type: int
-        default: 0
-    max_amount:
-      description: 'The maximum number of items to transfer'
-      direction: input
-      type: number
-      value:
-        type: int
-        default: 64
-    transferred:
-      description: 'The number of items transferred'
-      direction: output
-      type: number
-    exec_out:
-      description: 'Execution complete'
-      direction: output
-      type: exec
+edges:
+  exec_in:
+    description: 'Execute the transfer'
+    direction: input
+    type: exec
+  from_handler:
+    description: 'The item handler to extract from'
+    direction: input
+    type: itemhandler
+  from_slot:
+    description: 'The slot to extract from'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: 0
+  to_handler:
+    description: 'The item handler to insert into'
+    direction: input
+    type: itemhandler
+  to_slot:
+    description: 'The slot to insert into'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: 0
+  max_amount:
+    description: 'The maximum number of items to transfer'
+    direction: input
+    type: number
+    value:
+      type: int
+      default: 64
+  transferred:
+    description: 'The number of items transferred'
+    direction: output
+    type: number
+  exec_out:
+    description: 'Execution complete'
+    direction: output
+    type: exec
 
-  source: |
-    local transferredAmount = Network:transferItem(from_handler, from_slot, to_handler, to_slot, max_amount)
-    ${OUTPUT.transferred = transferredAmount}
-    ${EXEC.exec_out}
+source: |
+  local transferredAmount = Network:transferItem(from_handler, from_slot, to_handler, to_slot, max_amount)
+  ${OUTPUT.transferred = transferredAmount}
+  ${EXEC.exec_out}

@@ -203,7 +203,7 @@ object PipeNetManager {
                 }
             }
         }
-        ClientRuntime.logger.debug("Found ${buffer.size} proxiable blocks in radius $radius")
+        logger.debug("Found ${buffer.size} proxiable blocks in radius $radius")
         return buffer
     }
 

@@ -28,7 +28,6 @@ class CanvasButton(
         drawList.addText(
             font, fontSize, x + width / 2 - 4f, y, ImColor.rgba(255, 255, 255, 255), icon
         )
-
     }
 
     fun handleClick() {

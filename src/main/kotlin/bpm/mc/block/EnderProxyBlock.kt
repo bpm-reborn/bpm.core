@@ -1,6 +1,6 @@
 package bpm.mc.block
 
-import bpm.client.runtime.ClientRuntime.logger
+import bpm.common.logging.KotlinLogging
 import bpm.mc.visual.ProxyScreen
 import bpm.pipe.PipeNetManager
 import net.minecraft.core.BlockPos
@@ -24,7 +24,7 @@ import net.neoforged.neoforge.capabilities.Capabilities
 class EnderProxyBlock(properties: Properties) : BasePipeBlock(properties) {
 
     private val shapeCache = mutableMapOf<Int, VoxelShape>()
-
+    private val logger = KotlinLogging.logger {}
     private val visualShapeCache = mutableMapOf<Int, VoxelShape>()
     private val collisionShapeCache = mutableMapOf<Int, VoxelShape>()
 

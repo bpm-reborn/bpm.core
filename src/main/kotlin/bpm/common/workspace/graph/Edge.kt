@@ -15,5 +15,4 @@ data class Edge(override val properties: PropertyMap = Property.Object()) : Prop
     val icon: Int by properties delegate { 0 }
     val description: String by properties delegate { "" }
     val value: PropertyMap get() = properties.getTyped("value")
-
 }

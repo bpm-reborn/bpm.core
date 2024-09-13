@@ -329,7 +329,6 @@ object ClientRuntime : Listener {
         canvasWindow?.open()
     }
 
-
     /**
      * Enumeration representing different types of mouse buttons.
      *
