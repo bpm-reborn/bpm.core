@@ -27,7 +27,6 @@ import bpm.common.workspace.packets.*
 import imgui.ImGui
 import imgui.flag.ImGuiMouseButton
 import imgui.flag.ImGuiMouseCursor
-import imgui.flag.ImGuiPopupFlags
 import org.joml.Vector2f
 import org.joml.Vector4f
 import java.util.*
@@ -687,12 +686,12 @@ class CanvasContext : Listener {
                 draggedSourceEdge = null
             }
         } else if (packet is NodeDeleted) {
-            workspace.removeNode(packet.uuid)
+            packet.uuids.forEach(workspace::removeNode)
         } else if (packet is LinkCreated) {
             val link = packet.link
             workspace.addLink(link)
         } else if (packet is LinkDeleted) {
-            workspace.removeLink(packet.uuid)
+            packet.uuids.forEach(workspace::removeLink)
         } else if (packet is EdgePropertyUpdate) {
             val edge = workspace.graph.getEdge(packet.edgeUid) ?: return
             edge.properties["value"] = packet.property

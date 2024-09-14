@@ -1,11 +1,13 @@
 package bpm.common.workspace.packets
 
 import bpm.common.memory.Buffer
-import bpm.common.network.NetUtils
+import bpm.common.memory.readSet
+import bpm.common.memory.writeList
+import bpm.common.memory.writeSet
 import bpm.common.packets.Packet
 import java.util.UUID
 
-data class NodeDeleted(var uuid: UUID = NetUtils.DefaultUUID) : Packet {
+data class NodeDeleted(var uuids: MutableSet<UUID> = mutableSetOf()) : Packet {
 
     /**
      * Serializes the provided Buffer.
@@ -13,7 +15,7 @@ data class NodeDeleted(var uuid: UUID = NetUtils.DefaultUUID) : Packet {
      * @param buffer The Buffer to be serialized.
      */
     override fun serialize(buffer: Buffer) {
-        buffer.writeUUID(uuid)
+        buffer.writeSet(uuids)
     }
 
 
@@ -23,6 +25,6 @@ data class NodeDeleted(var uuid: UUID = NetUtils.DefaultUUID) : Packet {
      * @param buffer The buffer to deserialize.
      */
     override fun deserialize(buffer: Buffer) {
-        uuid = buffer.readUUID() ?: error("Failed to read properties from buffer!")
+        uuids.addAll(buffer.readSet())
     }
 }

@@ -4,7 +4,6 @@ import bpm.common.logging.KotlinLogging
 import bpm.common.network.Endpoint
 import bpm.common.network.Listener
 import bpm.common.network.Network.new
-import bpm.common.network.Server
 import bpm.common.network.listener
 import bpm.common.packets.Packet
 import bpm.common.packets.internal.ConnectRequest
@@ -23,14 +22,11 @@ import bpm.common.workspace.graph.Edge
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.graph.User
 import bpm.common.workspace.packets.*
-import bpm.server.lua.Notify
 import net.minecraft.resources.ResourceKey
-import net.minecraft.server.MinecraftServer
 import net.minecraft.world.level.Level
 import net.neoforged.neoforge.server.ServerLifecycleHooks
 import org.joml.Vector2f
 import org.joml.Vector4f
-import org.joml.Vector4i
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -100,6 +96,7 @@ object ServerRuntime : Listener {
             type = NotifyMessage.NotificationType.ERROR
         })
     }
+
     /**
      * Returns true if the function was executed successfully, false otherwise.
      */
@@ -149,24 +146,30 @@ object ServerRuntime : Listener {
             packet.position,
         )
 
-        is NodeDeleteRequest -> {
-            val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
-            val node: Node = workspace?.getNode(packet.uuid)?:let { return }
+        is NodeDeleteRequest ->
+            with(workspaces[users[from]?.workspaceUid] ?: error("User not in workspace")) {
+                val linksToDelete: MutableSet<UUID> = mutableSetOf()
+                packet.uuids.forEach { uuid ->
+                    val node: Node = getNode(uuid) ?: let { return }
 
-            workspace.removeNode(packet.uuid)
+                    graph.getLinks(node).forEach { link ->
+                        linksToDelete.add(link.uid)
+                        removeLink(link.uid)
+                    }
 
-            workspace.graph.getLinks(node).forEach { link ->
-                workspace.removeLink(link.uid)
+                    removeNode(uuid)
+                }
 
-                sendToUsersInWorkspace(users[from]?.workspaceUid ?: error("User not in workspace"), new<LinkDeleted> {
-                    this.uuid = link.uid
+                // Delete links
+                sendToUsersInWorkspace(uid, new<LinkDeleted> {
+                    this.uuids.addAll(linksToDelete)
+                })
+
+                // Delete node
+                sendToUsersInWorkspace(uid, new<NodeDeleted> {
+                    this.uuids.addAll(packet.uuids)
                 })
             }
-
-            sendToUsersInWorkspace(users[from]?.workspaceUid ?: error("User not in workspace"), new<NodeDeleted> {
-                this.uuid = packet.uuid
-            })
-        }
 
         is LinkCreateRequest -> {
             val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
@@ -178,13 +181,14 @@ object ServerRuntime : Listener {
             })
         }
 
-        is LinkDeleteRequest -> {
-            val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
-            workspace?.removeLink(packet.uuid)
-            sendToUsersInWorkspace(users[from]?.workspaceUid ?: error("User not in workspace"), new<LinkDeleted> {
-                this.uuid = packet.uuid
-            })
-        }
+        is LinkDeleteRequest ->
+            with(workspaces[users[from]?.workspaceUid] ?: error("User not in workspace")) {
+                packet.uuids.forEach(::removeLink)
+
+                sendToUsersInWorkspace(uid, new<LinkDeleted> {
+                    this.uuids.addAll(packet.uuids)
+                })
+            }
 
         is WorkspaceCompileRequest -> {
             val workspace = workspaces[packet.workspaceId] ?: error("Workspace not found")
@@ -225,7 +229,8 @@ object ServerRuntime : Listener {
         is VariableNodeCreateRequest -> {
             val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
                 ?: error("Workspace not found")
-            val type = if (packet.type == bpm.common.workspace.packets.NodeType.GetVariable) "Variables/Get Variable" else "Variables/Set Variable"
+            val type =
+                if (packet.type == bpm.common.workspace.packets.NodeType.GetVariable) "Variables/Get Variable" else "Variables/Set Variable"
             val library = listener<Schemas>(Endpoint.Side.SERVER).library
             val nodeType = library[type] ?: error("Node type not found")
             val edges = nodeType.properties["edges"] as? Property.Object ?: error("Edges not found")
@@ -346,6 +351,7 @@ object ServerRuntime : Listener {
     private fun intToUnicodeEscaped(codePoint: Int): String {
         return "\\u" + codePoint.toString(16).padStart(4, '0')
     }
+
     //Parses to a vector4f, checks if alpha is present
     private fun parseColor(color: String): Vector4f {
         val color = color.removePrefix("#")
@@ -549,6 +555,7 @@ object ServerRuntime : Listener {
         //send the packet to all clients that have the same workspace opened, except the sender.
         server.sendToAll(nodeMovePacket, *clients.toTypedArray())
     }
+
     //Removes any function callbacks that were registered for the workspace
     fun closeWorkspace(workspaceUid: UUID) {
         val workspace = workspaces[workspaceUid] ?: return
