@@ -4,6 +4,7 @@ import bpm.client.font.Fonts
 import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.Keyboard
 import bpm.client.runtime.Platform
+import bpm.client.runtime.panel.*
 import bpm.client.utils.use
 import bpm.common.logging.KotlinLogging
 import bpm.common.network.Client
@@ -27,13 +28,13 @@ import bpm.common.workspace.packets.*
 import imgui.ImGui
 import imgui.flag.ImGuiMouseButton
 import imgui.flag.ImGuiMouseCursor
-import imgui.flag.ImGuiPopupFlags
 import org.joml.Vector2f
 import org.joml.Vector4f
 import java.util.*
 import kotlin.math.abs
 
 class CanvasContext : Listener {
+
     private val runtime: ClientRuntime get() = Endpoint.installed()
     private val workspace: Workspace get() = runtime.workspace ?: throw IllegalStateException("Workspace is null")
 

@@ -1,6 +1,8 @@
 package bpm.client.runtime.windows
 
 import bpm.client.font.Fonts
+import bpm.client.runtime.panel.ProxiesPanel
+import bpm.client.runtime.panel.VariablesPanel
 import bpm.client.utils.use
 import bpm.common.network.Client
 import bpm.common.network.Endpoint
@@ -51,6 +53,14 @@ class CanvasGraphics(
         body()
         drawList.popClipRect()
     }
+
+    fun renderPanels(drawList: ImDrawList) {
+        val panelPosition = Vector2f(10f, 10f)
+        VariablesPanel.render(drawList, panelPosition)
+        panelPosition.y += VariablesPanel.panelHeight + 10f
+        ProxiesPanel.render(drawList, panelPosition)
+    }
+
 
     fun renderLinks(drawList: ImDrawList, links: Collection<Link>) {
         for (link in links) {
@@ -134,21 +144,6 @@ class CanvasGraphics(
         // Render the selection context overlay
     }
 
-    inline fun renderButton(
-        font: ImFont,
-        x: Float,
-        y: Float,
-        icon: String,
-        fontSize: Float = 20f,
-        width: Float = 30f,
-        height: Float = 30f,
-        padding: Float = 5f,
-        color: Int = ImColor.rgba(50, 50, 50, 255),
-        hoverColor: Int = ImColor.rgba(60, 60, 60, 255),
-        crossinline onClick: () -> Unit = {}
-    ) {
-
-    }
 
     private fun renderNodeHeader(drawList: ImDrawList, node: Node, titleBounds: Vector4f, nodeBounds: Vector4f) {
         val paddingX = 12f * context.zoom
@@ -390,23 +385,6 @@ class CanvasGraphics(
             }
         }
 
-        // Handle edge interaction
-//        val mousePos = ImGui.getMousePos()
-//        if (canvasCtx.isPointOverEdge(Vector2f(mousePos.x, mousePos.y), pos)) {
-//            drawList.addCircle(
-//                pos.x,
-//                pos.y,
-//                edgeRadius + 2f * canvasCtx.zoom,
-//                ImColor.rgba(255, 255, 255, 200),
-//                12,
-//                1.5f * canvasCtx.zoom
-//            )
-//
-//            if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
-//                canvasCtx.handleEdgeClick(node, edge)
-//            }
-//        }
-
         val mousePos = ImGui.getMousePos()
         if (context.isPointOverEdge(Vector2f(mousePos.x, mousePos.y), pos)) {
             drawList.addCircle(
@@ -539,7 +517,6 @@ class CanvasGraphics(
 
                     if (ImGui.beginPopup("ColorPicker")) {
                         val floatColor = colorValue.toFloatArray()
-                        val colorPickerPos = ImGui.getCursorScreenPos()
                         if (ImGui.colorPicker4("##color", floatColor)) {
                             colorValue =
                                 Property.Vec4f(Vector4f(floatColor[0], floatColor[1], floatColor[2], floatColor[3]))
@@ -1064,5 +1041,6 @@ class CanvasGraphics(
             }
         }
     }
+
 
 }

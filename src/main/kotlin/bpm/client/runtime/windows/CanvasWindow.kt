@@ -5,14 +5,12 @@ import bpm.client.render.IRender
 import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.Keyboard
 import bpm.client.utils.toVec2f
-import bpm.common.network.Client
 import bpm.common.network.Endpoint
 import bpm.common.utils.FontAwesome
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.WorkspaceSettings
 import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
-import bpm.common.workspace.packets.NodeDeleteRequest
 import imgui.ImGui
 import imgui.ImVec2
 import imgui.flag.ImGuiButtonFlags
@@ -164,12 +162,6 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         context.variablesMenu.update()
 
         handleKeys()
-
-        // Render the selection context overlay
-        // selectionContextOverlay.render(selectedNodes)
-
-        // Render the variables menu
-
         /**
          * Renders the background and the grids for the canvas
          */
@@ -182,10 +174,10 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
             buttons.forEach {
                 it.render(drawList)
             }
-
             graphics.renderMousePosText(drawList, bounds, mousePos.toVec2f)
             customActionMenu.render(drawList)
-            context.variablesMenu.render(drawList)
+//            context.variablesMenu.render(drawList)
+            graphics.renderPanels(drawList)
             context.notificationManager.renderNotifications(drawList, displaySize)
         }
 
@@ -269,24 +261,6 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         }
     }
 
-    private fun getNodeIcon(nodeType: String): String {
-        return when (nodeType) {
-            "Math" -> FontAwesome.Calculator
-            "Logic" -> FontAwesome.CodeBranch
-            "Input" -> FontAwesome.ArrowRightToBracket
-            "Output" -> FontAwesome.ArrowRightFromBracket
-            "String" -> FontAwesome.Font
-            "Array" -> FontAwesome.ListOl
-            "Object" -> FontAwesome.Cube
-            "Function" -> FontAwesome.Gear
-            "Network" -> FontAwesome.Globe
-            "File" -> FontAwesome.File
-            "Database" -> FontAwesome.Database
-            "Time" -> FontAwesome.Clock
-            // Add more mappings as needed
-            else -> FontAwesome.PuzzlePiece // Default icon
-        }
-    }
 
     private fun updateAnimationTime() {
         currentTime += ImGui.getIO().deltaTime
