@@ -31,7 +31,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
      * @property context The canvas context instance.
      */
     val context = Endpoint.installed<CanvasContext>()
-    val graphics: CanvasGraphics = CanvasGraphics(this, context)
+    val graphics = CanvasGraphics(this, context)
 
     private val buttons: MutableSet<CanvasButton> = HashSet()
 
