@@ -55,10 +55,10 @@ object ClientRuntime : Listener {
     /**This stores the glfw backend implementation for imgui**/
     private lateinit var imGuiGlfw: ImGuiImplGlfw
     private lateinit var imGuiGl3: ImGuiImplGl3
-    private var queuedWorkspaceLibrary: WorkspaceLibrary? = null
     private lateinit var io: ImGuiIO
     private val started = AtomicBoolean(false)
-    private var canvasWindow: CanvasWindow? = null
+    var canvasWindow: CanvasWindow? = null
+        private set
     internal val logger = KotlinLogging.logger { }
 
     operator fun get(workspaceUid: UUID): Workspace? {

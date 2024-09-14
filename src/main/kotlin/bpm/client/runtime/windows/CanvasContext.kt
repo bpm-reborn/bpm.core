@@ -601,7 +601,7 @@ class CanvasContext : Listener {
         client.send(VariableNodeCreateRequest(type, worldPos, name))
     }
 
-    private fun convertToScreenCoordinates(worldPos: Vector2f): Vector2f {
+     fun convertToScreenCoordinates(worldPos: Vector2f): Vector2f {
         return Vector2f(
             (worldPos.x * workspace.settings.zoom) + workspace.settings.position.x,
             (worldPos.y * workspace.settings.zoom) + workspace.settings.position.y

@@ -145,7 +145,7 @@ class CanvasGraphics(
     }
 
 
-    private fun renderNodeHeader(drawList: ImDrawList, node: Node, titleBounds: Vector4f, nodeBounds: Vector4f) {
+     fun renderNodeHeader(drawList: ImDrawList, node: Node, titleBounds: Vector4f, nodeBounds: Vector4f) {
         val paddingX = 12f * context.zoom
         val paddingY = 5f * context.zoom
 
