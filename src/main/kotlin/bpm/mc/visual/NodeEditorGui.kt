@@ -20,36 +20,14 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
 import java.util.*
 
-object NodeEditorGui : Screen(Component.literal("Node Editor")) {
+class NodeEditorGui : Screen(Component.literal("Node Editor")) {
+
     private var workspaceUuid: UUID? = null
     private var openTime: Long = 0
-    private val inventoryRenderer = MinecraftInventoryRenderer()
-
-    private val testItemStacks = listOf(
-        ItemStack.EMPTY,
-        ItemStack(Items.DIAMOND, 3),
-        ItemStack(Items.GOLDEN_APPLE),
-        ItemStack(Items.IRON_SWORD),
-        ItemStack(Items.BOW),
-        ItemStack(Items.ARROW, 64),
-        ItemStack(Items.DIAMOND_PICKAXE),
-        ItemStack(Items.DIAMOND_AXE),
-        ItemStack(Items.DIAMOND_SHOVEL),
-        ItemStack(Items.DIAMOND_HOE),
-        ItemStack(Items.DIAMOND_HELMET),
-    )
-
-    fun open(uuid: UUID) {
-        workspaceUuid = uuid
-        Minecraft.getInstance().setScreen(this)
-    }
 
     override fun init() {
         super.init()
         openTime = System.currentTimeMillis()
-        Client {
-            it.send(NodeLibraryRequest())
-        }
         Overlay2D.skipped = true
     }
 
@@ -58,10 +36,6 @@ object NodeEditorGui : Screen(Component.literal("Node Editor")) {
             ClientRuntime.newFrame()
             ClientRuntime.process()
             ClientRuntime.endFrame()
-//
-//            ClientRuntime.newFrame()
-//            inventoryRenderer.renderInventory(testItemStacks, pGuiGraphics)
-//            ClientRuntime.endFrame()
         } catch (e: Exception) {
             Bpm.LOGGER.error("Error rendering NodeEditorGui", e)
         }
@@ -81,4 +55,16 @@ object NodeEditorGui : Screen(Component.literal("Node Editor")) {
     }
 
     override fun isPauseScreen(): Boolean = false
+
+    companion object {
+
+        fun open(uuid: UUID) {
+            Client {
+                it.send(NodeLibraryRequest())
+            }
+            val nodeEditorGui = NodeEditorGui()
+            nodeEditorGui.workspaceUuid = uuid
+            Minecraft.getInstance().setScreen(nodeEditorGui)
+        }
+    }
 }
