@@ -1,11 +1,16 @@
 package bpm.common.workspace.packets
 
 import bpm.common.memory.Buffer
+import bpm.common.memory.readSet
+import bpm.common.memory.writeSet
 import bpm.common.network.NetUtils
 import bpm.common.packets.Packet
 import java.util.*
 
-data class LinkDeleteRequest(var uuid: UUID = NetUtils.DefaultUUID) : Packet {
+class LinkDeleteRequest(vararg uuid: UUID = arrayOf()) : Packet {
+
+    private val _uuids: MutableSet<UUID> = uuid.toMutableSet()
+    val uuids: Set<UUID> get() = _uuids
 
     /**
      * Serializes the provided Buffer.
@@ -13,7 +18,7 @@ data class LinkDeleteRequest(var uuid: UUID = NetUtils.DefaultUUID) : Packet {
      * @param buffer The Buffer to be serialized.
      */
     override fun serialize(buffer: Buffer) {
-        buffer.writeUUID(uuid)
+        buffer.writeSet(_uuids)
     }
 
 
@@ -23,6 +28,6 @@ data class LinkDeleteRequest(var uuid: UUID = NetUtils.DefaultUUID) : Packet {
      * @param buffer The buffer to deserialize.
      */
     override fun deserialize(buffer: Buffer) {
-        uuid = buffer.readUUID() ?: error("Failed to read properties from buffer!")
+        _uuids.addAll(buffer.readSet())
     }
 }
