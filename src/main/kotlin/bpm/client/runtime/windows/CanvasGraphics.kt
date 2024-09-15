@@ -1,8 +1,9 @@
 package bpm.client.runtime.windows
 
 import bpm.client.font.Fonts
-import bpm.client.runtime.panel.ProxiesPanel
-import bpm.client.runtime.panel.VariablesPanel
+import bpm.client.render.panel.PanelManager
+import bpm.client.render.panel.ProxiesPanel
+import bpm.client.render.panel.VariablesPanel
 import bpm.client.utils.use
 import bpm.common.network.Client
 import bpm.common.network.Endpoint
@@ -35,6 +36,11 @@ class CanvasGraphics(
     private val context: CanvasContext
 ) {
 
+
+    val panels = PanelManager()
+    val variablesPanel = VariablesPanel(panels).apply { panels.addPanel(this) }
+    val proxiesPanel = ProxiesPanel(panels).apply { panels.addPanel(this) }
+
     private val headerFamily get() = Fonts.getFamily("Inter")["Bold"]
     private val headerFont get() = headerFamily[window.workspace.settings.fontHeaderSize]
     private val bodyFamily get() = Fonts.getFamily("Inter")["Regular"]
@@ -47,6 +53,7 @@ class CanvasGraphics(
     private val execSegmentLength = 10f // Length of each segment in the exec link
     private val execGapRatio = 0.5f // Ratio of gap to segment length
 
+
     inline fun renderBackground(drawList: ImDrawList, clipBounds: Vector4f, crossinline body: () -> Unit) {
         //Handle the clipping of anything outside of our canvas bounds
         drawList.pushClipRect(clipBounds.x, clipBounds.y, clipBounds.z, clipBounds.w, false)
@@ -54,12 +61,7 @@ class CanvasGraphics(
         drawList.popClipRect()
     }
 
-    fun renderPanels(drawList: ImDrawList) {
-        val panelPosition = Vector2f(10f, 10f)
-        VariablesPanel.render(drawList, panelPosition)
-        panelPosition.y += VariablesPanel.panelHeight + 10f
-        ProxiesPanel.render(drawList, panelPosition)
-    }
+    fun renderPanels(drawList: ImDrawList) = panels.renderPanels(this, drawList)
 
 
     fun renderLinks(drawList: ImDrawList, links: Collection<Link>) {
@@ -77,7 +79,8 @@ class CanvasGraphics(
 
             val sourceColor = ImColor.rgba(sourceNode.color.x, sourceNode.color.y, sourceNode.color.z, 255)
             val targetColor = ImColor.rgba(targetNode.color.x, targetNode.color.y, targetNode.color.z, 255)
-
+            sourcePos.y -= 5f * context.zoom
+            targetPos.y -= 5f * context.zoom
             if (sourceEdge.type == "exec" || targetEdge.type == "exec") {
                 drawExecLink(drawList, sourcePos, targetPos, sourceColor, targetColor, context.zoom, window.currentTime)
             } else {
@@ -134,8 +137,9 @@ class CanvasGraphics(
             val nodeColor = ImColor.rgba(rawColor.x, rawColor.y, rawColor.z, rawColor.w)
             renderNodeBody(drawList, node, nodeBounds, nodeColor)
             renderNodeHeader(drawList, node, headerBounds, nodeBounds)
+//            nodeBounds.y += 5f * context.zoom
             renderEdges(drawList, node, nodeBounds)
-
+//            nodeBounds.y -= 5f * context.zoom
             context.handleNode(node, nodeBounds, headerBounds)
         }
 
@@ -145,9 +149,9 @@ class CanvasGraphics(
     }
 
 
-     fun renderNodeHeader(drawList: ImDrawList, node: Node, titleBounds: Vector4f, nodeBounds: Vector4f) {
+    fun renderNodeHeader(drawList: ImDrawList, node: Node, titleBounds: Vector4f, nodeBounds: Vector4f) {
         val paddingX = 12f * context.zoom
-        val paddingY = 5f * context.zoom
+        val paddingY = 2f * context.zoom
 
         val icon = node.icon.toChar().toString()
         val iconSize = 24f * context.zoom
@@ -180,8 +184,8 @@ class CanvasGraphics(
             drawList,
             fontAwesome,
             iconSize,
-            nodeBounds.x + paddingX / 2f - 4 * context.zoom,
-            nodeBounds.y - 15f * context.zoom,
+            nodeBounds.x + paddingX / 2f - 3.5f * context.zoom,
+            nodeBounds.y - 5 * context.zoom,
             ImColor.rgba(255, 255, 255, 255),
             icon,
             scale = 1f,
@@ -564,7 +568,7 @@ class CanvasGraphics(
         if (window.hoveredNode?.uid == node.uid || context.isNodeInSelectionBox(node)) {
             drawList.addRect(
                 adjustedBounds.x - 1f * context.zoom,
-                adjustedBounds.y - 1f * context.zoom,
+                adjustedBounds.y + 2 * context.zoom,
                 adjustedBounds.z + 1f * context.zoom,
                 adjustedBounds.w + 1f * context.zoom,
                 ImColor.rgba(69, 163, 230, 185),
@@ -579,7 +583,7 @@ class CanvasGraphics(
             //selectedNodes.add(node.uid)
             drawList.addRect(
                 adjustedBounds.x - 1.5f * context.zoom,
-                adjustedBounds.y - 1.5f * context.zoom,
+                adjustedBounds.y + 1.5f * context.zoom,
                 adjustedBounds.z + 1.5f * context.zoom,
                 adjustedBounds.w + 1.5f * context.zoom,
                 ImColor.rgba(255, 255, 255, 255),

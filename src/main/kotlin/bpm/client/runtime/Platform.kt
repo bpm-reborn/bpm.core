@@ -118,6 +118,34 @@ object Platform {
         return Vector2f(x[0].toFloat(), y[0].toFloat())
     }
 
+    var cursorLocked = false
+        private set
+    private var lockedCursorX = 0.0
+    private var lockedCursorY = 0.0
+
+    fun lockCursor(x: Double, y: Double) {
+        cursorLocked = true
+        lockedCursorX = x
+        lockedCursorY = y
+    }
+
+    fun unlockCursor() {
+        cursorLocked = false
+    }
+
+    fun updateCursorPosition() {
+        if (cursorLocked) {
+            GLFW.glfwSetCursorPos(windowHandle, lockedCursorX, lockedCursorY)
+        }
+    }
+
+    fun captureMouse() {
+        GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED)
+    }
+
+    fun releaseMouse() {
+        GLFW.glfwSetInputMode(windowHandle, GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL)
+    }
 
     enum class MouseIcon(val cursor: Long) {
         ARROW(GLFW.glfwCreateStandardCursor(GLFW.GLFW_ARROW_CURSOR)),
