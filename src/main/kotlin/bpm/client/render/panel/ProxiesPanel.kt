@@ -1,6 +1,7 @@
 package bpm.client.render.panel
 
 import bpm.client.font.Fonts
+import bpm.client.render.Gui
 import bpm.client.runtime.windows.CanvasGraphics
 import bpm.client.utils.toVec2f
 import bpm.client.utils.use
@@ -68,6 +69,7 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
         val viewportSize = ImGui.getMainViewport().size
         val screenpos = ImGui.getCursorScreenPos()
 
+
         drawList.addRectFilled(
             screenpos.x,
             screenpos.y,
@@ -88,9 +90,11 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
         val pos = Vector2f(screenpos.x - windowPos.x, screenpos.y - windowPos.y)
 
         //Don't render if it's not visible
-        if (screenpos.y + size.y > 0 && screenpos.y < bodySize.y) {
-            renderBlockItem(buffer, proxy.blockName, Vector2f(pos.x, pos.y), windowSize.toVec2f, 0f)
-        }
+//        if (pos.y + size.y > 0 && pos.y < bodySize.y) {
+//            renderBlockItem(buffer, proxy.blockName, Vector2f(pos.x, pos.y), windowSize.toVec2f, 0f)
+        //TODO: figure out clipping when it's intersecting with our imgui clip rect
+        Gui.drawBlockItem(proxy.blockName, pos.x, pos.y)
+//        }
 
 
         // Separator line
@@ -174,8 +178,15 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
         val screenScale = minecraft.window.guiScale
 
         // Scale the item
-        val scale = 42.0f / screenScale.toFloat()
-
+        var scale = 42.0f / screenScale.toFloat()
+        val isMacos = System.getProperty("os.name").contains("mac", ignoreCase = true)
+        val isRetina = isMacos && minecraft.window.screenWidth.toFloat() * screenScale > 1500.0f
+        //if retina, we need to modify the position to double
+        if (isRetina) {
+            position.x *= 2
+            position.y *= 2
+            scale *= 2
+        }
         pose.pushPose()
         pose.translate(position.x.toDouble() / screenScale, position.y.toDouble() / screenScale, 100.0)
         pose.scale(scale, scale, scale)

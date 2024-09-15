@@ -1,2 +1,3 @@
-# Kotlin Modding Skeleton
-Provides an example mod written in Kotlin using Kotlin for Forge.
+# Meng.core
+
+Meng.core is a minecraft mod that turns minecraft in a true sandbox.
