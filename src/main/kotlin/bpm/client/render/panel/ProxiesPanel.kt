@@ -2,28 +2,27 @@ package bpm.client.render.panel
 
 import bpm.client.font.Fonts
 import bpm.client.runtime.windows.CanvasGraphics
-import bpm.client.utils.PropertyInput
 import bpm.client.utils.toVec2f
 import bpm.client.utils.use
-import bpm.common.property.Property
 import com.mojang.blaze3d.systems.RenderSystem
+import com.mojang.blaze3d.vertex.PoseStack
+import com.mojang.blaze3d.vertex.VertexSorting
 import imgui.ImColor
 import imgui.ImDrawList
 import imgui.ImGui
-import imgui.flag.ImGuiCol
-import imgui.flag.ImGuiStyleVar
 import net.minecraft.client.Minecraft
-import net.minecraft.world.item.ItemStack
-import net.minecraft.world.item.Items
+import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.renderer.GameRenderer
+import net.minecraft.client.renderer.MultiBufferSource
+import net.minecraft.client.renderer.texture.OverlayTexture
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.resources.ResourceLocation
+import net.minecraft.world.item.ItemDisplayContext
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
+import org.joml.Matrix4f
 import org.joml.Vector2f
 import org.joml.Vector3i
-import com.mojang.blaze3d.vertex.PoseStack
-import net.minecraft.client.renderer.MultiBufferSource
-import net.minecraft.client.renderer.RenderType
-import net.minecraft.client.renderer.texture.OverlayTexture
-import net.minecraft.world.item.ItemDisplayContext
 
 class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) {
 
@@ -39,6 +38,12 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
         ProxyData("minecraft:dirt", Vector3i(10, 64, -30)),
         ProxyData("minecraft:stone", Vector3i(-5, 70, 15)),
         ProxyData("minecraft:oak_log", Vector3i(100, 68, -50))
+    )
+
+
+    private val guigraphics: GuiGraphics = GuiGraphics(
+        Minecraft.getInstance(),
+        Minecraft.getInstance().renderBuffers().bufferSource()
     )
 
     override fun renderBody(graphics: CanvasGraphics, drawList: ImDrawList, position: Vector2f, size: Vector2f) {
@@ -59,12 +64,15 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
     ) {
         val windowSize = ImGui.getWindowSize()
         // Background
-        val pos = ImGui.getCursorScreenPos()
+
+        val viewportSize = ImGui.getMainViewport().size
+        val screenpos = ImGui.getCursorScreenPos()
+
         drawList.addRectFilled(
-            pos.x,
-            pos.y,
-            pos.x + size.x,
-            pos.y + size.y,
+            screenpos.x,
+            screenpos.y,
+            screenpos.x + size.x,
+            screenpos.y + size.y,
             backgroundColor,
             10f
         )
@@ -73,20 +81,24 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
         val itemSize = 32f
         val leftSpaceWidth = itemSize + 10f
         val buffer = Minecraft.getInstance().renderBuffers().bufferSource()
-        val bufferBuilder = buffer.getBuffer(RenderType.solid())
         // Render item
+        val windowPos = ImGui.getWindowViewport().pos
+
+        //Normalize the screen cursor position using the current windows size
+        val pos = Vector2f(screenpos.x - windowPos.x, screenpos.y - windowPos.y)
+
         //Don't render if it's not visible
-        if (pos.y + size.y > 0 && pos.y < bodySize.y) {
-            renderBlockItem(buffer, proxy.blockName, Vector2f(pos.x + 10f, pos.y + 10f), windowSize.toVec2f,0f)
+        if (screenpos.y + size.y > 0 && screenpos.y < bodySize.y) {
+            renderBlockItem(buffer, proxy.blockName, Vector2f(pos.x, pos.y), windowSize.toVec2f, 0f)
         }
 
 
         // Separator line
         drawList.addLine(
-            pos.x + leftSpaceWidth,
-            pos.y,
-            pos.x + leftSpaceWidth,
-            pos.y + size.y,
+            screenpos.x + leftSpaceWidth,
+            screenpos.y,
+            screenpos.x + leftSpaceWidth,
+            screenpos.y + size.y,
             ImColor.rgba(100, 100, 100, 255),
             2f
         )
@@ -96,8 +108,8 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
             drawList.addText(
                 titleFont.title,
                 18f,
-                pos.x + leftSpaceWidth + 10f,
-                pos.y + 10f,
+                screenpos.x + leftSpaceWidth + 10f,
+                screenpos.y + 10f,
                 ImColor.rgba(255, 255, 255, 255),
                 proxy.blockName.split(":").last().replace("_", " ").capitalize()
             )
@@ -109,17 +121,16 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
             drawList.addText(
                 bodyFont.body,
                 14f,
-                pos.x + leftSpaceWidth + 10f,
-                pos.y + 35f,
+                screenpos.x + leftSpaceWidth + 10f,
+                screenpos.y + 35f,
                 ImColor.rgba(200, 200, 200, 255),
                 positionText
             )
         }
     }
 
-    private val poseStack = PoseStack()
     private fun renderBlockItem(
-        bufferSource: MultiBufferSource,
+        bufferSource: MultiBufferSource.BufferSource,
         blockId: String,
         position: Vector2f,
         containerSize: Vector2f,
@@ -127,29 +138,65 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
     ) {
         val item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(blockId)) ?: Items.AIR
         val itemStack = ItemStack(item)
-        poseStack.setIdentity()
-        poseStack.pushPose()
-        //Normalizies the position with the resolution
-//        poseStack.scale( Minecraft.getInstance().window.width.toFloat(),  Minecraft.getInstance().window.height.toFloat(), 1f)
+        val minecraft = Minecraft.getInstance()
+//        RenderSystem.disableDepthTest()
+//        RenderSystem.enableBlend()
+//        RenderSystem.defaultBlendFunc()
+//        val pose = guigraphics.pose()
+//        pose.setIdentity()
+//        pose.pushPose()
+//
+//
+//        guigraphics.pose().translate(0f, 0f, -1000.0f)
+//        guigraphics.renderItem(
+//            itemStack,
+//            position.x.toInt(), position.y.toInt()
+//        )
+//        guigraphics.pose().popPose()
+//
+//        RenderSystem.disableBlend()
+//        RenderSystem.enableDepthTest()
+//
 
-//        poseStack.scale(32f, 32f, 1f)
-//        poseStack.translate((position.x + 16f).toDouble(), (position.y + 24f).toDouble(), 0.0)
-        poseStack.translate(position.x.toDouble() * 2, position.y.toDouble() * 2, 0.0)
-        poseStack.scale(80.0f, 80.0f, 80.0f)
-        poseStack.translate(0.25, 0.5, 0.25)
+        RenderSystem.enableBlend()
+        RenderSystem.defaultBlendFunc()
+        RenderSystem.setShader { GameRenderer.getPositionColorShader() }
+
+        val matrix4f = Matrix4f().setOrtho(
+            0.0f,
+            minecraft.window.screenWidth.toFloat(),
+            minecraft.window.screenHeight.toFloat(),
+            0.0f,
+            0.1f,
+            3000.0f
+        )
+        val pose = PoseStack()
+        val screenScale = minecraft.window.guiScale
+
+        // Scale the item
+        val scale = 42.0f / screenScale.toFloat()
+
+        pose.pushPose()
+        pose.translate(position.x.toDouble() / screenScale, position.y.toDouble() / screenScale, 100.0)
+        pose.scale(scale, scale, scale)
+        pose.translate(0.5, 0.75, 100.0)
+//        pose.mulPose(matrix4f)
+
+        // Render the item
         Minecraft.getInstance().itemRenderer.renderStatic(
             itemStack,
             ItemDisplayContext.GUI,
             15728880, // Fullbright
             OverlayTexture.NO_OVERLAY,
-            poseStack,
+            pose,
             bufferSource,
             null,
             0
         )
-        poseStack.popPose()
-    }
 
+        pose.popPose()
+
+    }
 
     private data class ProxyData(val blockName: String, val position: Vector3i)
 }

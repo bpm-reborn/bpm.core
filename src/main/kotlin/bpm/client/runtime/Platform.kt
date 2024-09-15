@@ -7,6 +7,7 @@ import org.lwjgl.glfw.GLFW.glfwGetKey
 
 object Platform {
 
+
     /**
      * Represents the handle of a window.
      *

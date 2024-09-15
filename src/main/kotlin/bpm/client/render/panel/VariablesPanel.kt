@@ -56,7 +56,7 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
         val filteredVariables = filterVariables(workspace.graph.variables)
 
         filteredVariables.forEach { (name, variable) ->
-            renderVariable(drawList, name, variable, Vector2f(size.x - 25f, 70f))
+            renderVariable(drawList, name, variable, Vector2f(size.x - 30f, 70f))
             ImGui.dummy(0f, 10f)
         }
     }
@@ -129,7 +129,8 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
         size: Vector2f
     ) {
         val startCursorPos = ImGui.getCursorScreenPos().toVec2f
-
+        //Add margin if the height is less than 70
+            startCursorPos.x += 10f
         // Background
         drawList.addRectFilled(
             startCursorPos.x,
@@ -465,19 +466,7 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
                 nodeBounds
             )
 
-//            drawList.addRectFilled(
-//                mousePos.x, mousePos.y,
-//                mousePos.x + headerWidth, mousePos.y + headerHeight,
-//                ImColor.rgba(80, 80, 80, 200)
-//            )
-//            textFont.use {
-//                drawList.addText(
-//                    textFont, 14f,
-//                    mousePos.x + 5f, mousePos.y + 5f,
-//                    ImColor.rgba(255, 255, 255, 255),
-//                    "$nodeType $name"
-//                )
-//            }
+
             ImGui.setMouseCursor(ImGuiMouseCursor.None)
         } else if (draggedVar != null && ImGui.isMouseReleased(ImGuiMouseButton.Left)) {
             val mousePos = ImGui.getMousePos().toVec2f

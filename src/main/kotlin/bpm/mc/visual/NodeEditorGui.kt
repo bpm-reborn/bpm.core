@@ -33,6 +33,7 @@ class NodeEditorGui : Screen(Component.literal("Node Editor")) {
 
     override fun render(pGuiGraphics: GuiGraphics, pMouseX: Int, pMouseY: Int, pPartialTick: Float) {
         try {
+            super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick)
             ClientRuntime.newFrame()
             ClientRuntime.process()
             ClientRuntime.endFrame()
