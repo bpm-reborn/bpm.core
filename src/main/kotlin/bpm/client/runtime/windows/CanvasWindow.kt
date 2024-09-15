@@ -31,10 +31,9 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
      * @property context The canvas context instance.
      */
     val context = Endpoint.installed<CanvasContext>()
-    val graphics = CanvasGraphics(this, context)
 
     private val buttons: MutableSet<CanvasButton> = HashSet()
-
+    private val graphics get() = context.graphics
     private val headerFamily get() = Fonts.getFamily("Inter")["Bold"]
     private val headerFont get() = headerFamily[workspace.settings.fontHeaderSize]
     private val bodyFamily get() = Fonts.getFamily("Inter")["Regular"]
@@ -73,7 +72,6 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     private val position: Vector2f get() = workspace.settings.position
 
     var currentTime = 0f
-    private val customActionMenu = context.customActionMenu
 
     private var hoveredNodeId: UUID? = null
     private var hoveredLinkId: UUID? = null
@@ -135,7 +133,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         )
         val drawList = ImGui.getWindowDrawList()
 
-        val isActionMenuHovered = customActionMenu.isVisible() && customActionMenu.isHovered()
+        val isActionMenuHovered = CustomActionMenu.isVisible() && CustomActionMenu.isHovered()
         val isVariablesMenuHovered = false
 
         setupCanvas()
@@ -149,7 +147,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
         updateAnimationTime()
         context.handleEdgeDragging()
-        context.handleSelection(selectionContextOverlay.isHovered() || isVariablesMenuHovered)
+        context.handleSelection(selectionContextOverlay.isHovered() || isVariablesMenuHovered || graphics.panels.isAnyHovered() || graphics.variablesPanel.draggingNode)
         handleHover()
         handleContextMenu()
 
@@ -162,6 +160,8 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         context.variablesMenu.update()
 
         handleKeys()
+
+        val foreground = ImGui.getForegroundDrawList()
         /**
          * Renders the background and the grids for the canvas
          */
@@ -172,10 +172,11 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
             graphics.renderEdgeDrag(drawList, context.draggedEdge, context.dragStartPos)
             graphics.renderSelectionBox(drawList)
             buttons.forEach {
-                it.render(drawList)
+                it.render(foreground)
             }
+            CustomActionMenu.render(foreground)
+
             graphics.renderMousePosText(drawList, bounds, mousePos.toVec2f)
-            customActionMenu.render(drawList)
 //            context.variablesMenu.render(drawList)
             graphics.renderPanels(drawList)
             context.notificationManager.renderNotifications(drawList, displaySize)
@@ -192,7 +193,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     fun close() {
         savedSettings[workspace.uid] = workspace.settings
         this.position
-        this.customActionMenu.close()
+        CustomActionMenu.close()
     }
 
     fun open() {
@@ -212,7 +213,13 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
             val selectedNodes = context.selectedNodes.ifEmpty { findNodesUnderMouse(mousePos) }.toSet()
             val selectedLinks = context.selectedLinks.ifEmpty { findLinksUnderMouse(mousePos) }.toSet()
 
-            customActionMenu.open(mousePos, selectedNodes.isNotEmpty() || selectedLinks.isNotEmpty())
+            CustomActionMenu.open(
+                mousePos,
+                selectedNodes.isNotEmpty() || selectedLinks.isNotEmpty(),
+                true,
+                selectedNodes,
+                selectedLinks
+            )
             context.variablesMenu.closePopup()
         }
     }
@@ -288,7 +295,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     private fun handleKeys() {
         if (Keyboard.isKeyPressed(ClientRuntime.Key.DELETE)) {
             context.deleteSelected()
-            customActionMenu.close()
+            CustomActionMenu.close()
         }
     }
 

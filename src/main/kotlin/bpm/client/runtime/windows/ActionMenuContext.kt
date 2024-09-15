@@ -19,6 +19,7 @@ import bpm.common.property.castOr
 import bpm.common.schemas.Schemas
 import bpm.common.type.NodeLibrary
 import bpm.common.workspace.Workspace
+import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.packets.LinkDeleteRequest
 import bpm.common.workspace.packets.NodeDeleteRequest
@@ -26,35 +27,36 @@ import org.joml.Vector2f
 import java.util.*
 import kotlin.math.max
 
-class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: CanvasContext) {
+object CustomActionMenu {
 
-    private var isOpen = false
-    private var animationProgress = 0f
-    private val animationDuration = 0.2f
-    private var menuWidth = 250f
-    private var menuHeight = 400f
-    private val maxMenuWidth = 300f
-    private val maxMenuHeight = 500f
-    private val minMenuWidth = 250f
-    private val minMenuHeight = 100f
-    private var menuPosition = ImVec2()
-    private var searchText = ""
-    private var hoveredNodeType = ""
-    private var scrollPosition = 0f
-    private var targetScrollPosition = 0f
-    private var lastContentHeight = 0f
-    private var contentHeightSmoothingFactor = 0.2f
+    val canvasCtx = Client.installed<CanvasContext>()
+    var isOpen = false
+    var animationProgress = 0f
+    val animationDuration = 0.2f
+    var menuWidth = 250f
+    var menuHeight = 400f
+    val maxMenuWidth = 300f
+    val maxMenuHeight = 500f
+    val minMenuWidth = 250f
+    val minMenuHeight = 100f
+    var menuPosition = ImVec2()
+    var searchText = ""
+    var hoveredNodeType = ""
+    var scrollPosition = 0f
+    var targetScrollPosition = 0f
+    var lastContentHeight = 0f
+    var contentHeightSmoothingFactor = 0.2f
 
 
-    private val backgroundColor = ImColor.rgba(30, 30, 30, 240)
-    private val searchBarColor = ImColor.rgba(45, 45, 45, 255)
-    private val textColor = ImColor.rgba(220, 220, 220, 255)
-    private val accentColor = ImColor.rgba(100, 65, 165, 255)
-    private val hoverColor = ImColor.rgba(70, 70, 70, 255)
-    private val folderColor = ImColor.rgba(60, 60, 60, 255)
-    private val nodeLibrary: NodeLibrary get() = Client.installed<Schemas>().library
-    private val bodyFont get() = Fonts.getFamily("Inter")["Regular"][14]
-    private val iconFont get() = Fonts.getFamily("Fa")["Bold"][18]
+    val backgroundColor = ImColor.rgba(30, 30, 30, 240)
+    val searchBarColor = ImColor.rgba(45, 45, 45, 255)
+    val textColor = ImColor.rgba(220, 220, 220, 255)
+    val accentColor = ImColor.rgba(100, 65, 165, 255)
+    val hoverColor = ImColor.rgba(70, 70, 70, 255)
+    val folderColor = ImColor.rgba(60, 60, 60, 255)
+    val nodeLibrary: NodeLibrary get() = Client.installed<Schemas>().library
+    val bodyFont get() = Fonts.getFamily("Inter")["Regular"][14]
+    val iconFont get() = Fonts.getFamily("Fa")["Bold"][18]
 
     private var isSearchBarFocused = false
     private var isSearchBarHovered = false
@@ -83,21 +85,6 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
 
     private var isNodeMenu = false
 
-    private val selectionText: String
-        get() {
-            val nodeCount = canvasCtx.selectedNodes.size
-            val linkCount = canvasCtx.selectedLinks.size
-
-            return when {
-                nodeCount == 0 && linkCount == 0 -> "No items selected"
-                nodeCount == 1 && linkCount == 0 -> "Selected: 1 node (${canvasCtx.selectedNodes.first().name})"
-                nodeCount == 0 && linkCount == 1 -> "Selected: 1 link"
-                nodeCount > 1 && linkCount == 0 -> "Selected: $nodeCount nodes"
-                nodeCount == 0 && linkCount > 1 -> "Selected: $linkCount links"
-                nodeCount == 1 && linkCount == 1 -> "Selected: 1 node and 1 link"
-                else -> "Selected: $nodeCount nodes and $linkCount links"
-            }
-        }
 
     init {
         buildFolderStructure()
@@ -145,7 +132,17 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
     private fun renderNodeMenu(drawList: ImDrawList) {
         val padding = 10f
         var yPos = menuPosition.y + padding
-
+        val nodeCount = selectedNodes.size
+        val linkCount = selectedLinks.size
+        val selectionText = when {
+            nodeCount == 0 && linkCount == 0 -> "No items selected"
+            nodeCount == 1 && linkCount == 0 -> "Selected: 1 node (${selectedNodes.first().name})"
+            nodeCount == 0 && linkCount == 1 -> "Selected: 1 link"
+            nodeCount > 1 && linkCount == 0 -> "Selected: $nodeCount nodes"
+            nodeCount == 0 && linkCount > 1 -> "Selected: $linkCount links"
+            nodeCount == 1 && linkCount == 1 -> "Selected: 1 node and 1 link"
+            else -> "Selected: $nodeCount nodes and $linkCount links"
+        }
         // Render selection info
         bodyFont.use {
 
@@ -156,26 +153,25 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
         yPos += 30f
 
 
-        val nodes = canvasCtx.selectedNodes.size
-        val links = canvasCtx.selectedLinks.size
         // Render action buttons
-        renderActionButton(drawList, "Delete       (Del)", FontAwesome.Trash, yPos) {
-            canvasCtx.deleteSelected()
+        if (renderActionButton(drawList, "Delete       (Del)", FontAwesome.Trash, yPos)) {
+            deleteSelectedNodes()
+            deleteSelectedLinks()
         }
         yPos += 40f
 
-        renderActionButton(drawList, "Cut             (Ctrl+X)", FontAwesome.Scissors, yPos) {
+        if (renderActionButton(drawList, "Cut             (Ctrl+X)", FontAwesome.Scissors, yPos)) {
             cutSelectedNodes()
         }
         yPos += 40f
 
-        renderActionButton(drawList, "Copy          (Ctrl+C)", FontAwesome.Copy, yPos) {
+        if (renderActionButton(drawList, "Copy          (Ctrl+C)", FontAwesome.Copy, yPos)) {
             copySelectedNodes()
         }
         yPos += 40f
         // Only show paste if there's something in the clipboard
         if (hasClipboardContent()) {
-            renderActionButton(drawList, "Paste     (Ctrl+V)", FontAwesome.Paste, yPos) {
+            if (renderActionButton(drawList, "Paste     (Ctrl+V)", FontAwesome.Paste, yPos)) {
                 pasteNodes()
             }
         }
@@ -194,12 +190,17 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
     }
 
     private fun deleteSelectedLinks() {
-        canvasCtx.selectedLinks.forEach { link ->
+        selectedLinks.forEach { link ->
             canvasCtx.client.send(LinkDeleteRequest(link.uid))
         }
     }
 
-    private fun renderActionButton(drawList: ImDrawList, label: String, icon: String, yPos: Float, action: () -> Unit) {
+    private fun renderActionButton(
+        drawList: ImDrawList,
+        label: String,
+        icon: String,
+        yPos: Float,
+    ): Boolean {
         val padding = 10f
         val buttonWidth = menuWidth - 2 * padding
         val buttonHeight = 30f
@@ -221,11 +222,11 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
                 bodyFont, 14f, xPos + 35f, yPos + 8f, textColor, label
             )
         }
-
         if (isHovered && ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
-            action()
             close()
+            return true
         }
+        return false
     }
 
     private fun deleteNode(nodeId: UUID) {
@@ -238,7 +239,7 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
     }
 
     private fun deleteSelectedNodes() {
-        canvasCtx.selectedNodes.forEach { node ->
+        selectedNodes.forEach { node ->
             deleteNode(node.uid)
         }
     }
@@ -1004,13 +1005,23 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
     }
 
     var isInitialOpen = true
+    private val selectedNodes = mutableSetOf<Node>()
+    private val selectedLinks = mutableSetOf<Link>()
 
     fun open(
         position: ImVec2,
         isNodeMenu: Boolean,
-        rebuild: Boolean = true
+        rebuild: Boolean = true,
+        nodes: Set<Node>,
+        links: Set<Link>
     ) {
-        if (rebuild) buildFolderStructure()
+        if (rebuild) {
+            buildFolderStructure()
+            selectedNodes.clear()
+            selectedNodes.addAll(nodes)
+            selectedLinks.clear()
+            selectedLinks.addAll(links)
+        }
         if (isInitialOpen) {
             isInitialOpen = false
             return
@@ -1088,7 +1099,7 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
 
     fun openWithFilteredNodes(position: Vector2f, compatibleNodes: List<String>) {
         buildFilteredFolderStructure(compatibleNodes)
-        open(ImVec2(position.x, position.y), true, rebuild = false)
+        open(ImVec2(position.x, position.y), true, rebuild = false, emptySet(), emptySet())
         searchText = ""
         hoveredNodeType = ""
         scrollPosition = 0f
@@ -1124,14 +1135,11 @@ class CustomActionMenu(private val workspace: Workspace, private val canvasCtx: 
     }
 
 
-    companion object {
-
-        private fun minOf(a: Int, b: Int): Int = if (a < b) a else b
-        private fun maxOf(a: Int, b: Int): Int = if (a > b) a else b
+    private fun minOf(a: Int, b: Int): Int = if (a < b) a else b
+    private fun maxOf(a: Int, b: Int): Int = if (a > b) a else b
 
 
-        private fun ImRect.contains(pos: ImVec2): Boolean {
-            return pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y
-        }
+    private fun ImRect.contains(pos: ImVec2): Boolean {
+        return pos.x >= min.x && pos.x <= max.x && pos.y >= min.y && pos.y <= max.y
     }
 }

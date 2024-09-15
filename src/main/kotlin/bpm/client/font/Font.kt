@@ -4,7 +4,7 @@ import imgui.ImFont
 import bpm.common.logging.KotlinLogging
 import kotlin.math.*
 
-data class Font(val type: FontType, private val sizedFonts: Map<Int, ImFont>) {
+data class Font(val type: String, private val sizedFonts: Map<Int, ImFont>) {
 
     /**
      * Represents a font family used for text rendering.
@@ -25,7 +25,7 @@ data class Font(val type: FontType, private val sizedFonts: Map<Int, ImFont>) {
      * @return The generated name string.
      */
     val name: String
-        get() = "${this.family.name.lowercase()}-${type.name.lowercase()}"
+        get() = "${this.family.name.lowercase()}-${type.lowercase()}"
 
     /**
      * Gets the header font with size 24.

@@ -15,23 +15,39 @@ object Fonts {
      *
      * @param name The name of the font family.
      * @param sizes The range of font sizes supported by the font family. Default value is 8..16.
-     * @param types The list of font types supported by the font family. Default value is FontType.entries.
+     * @param fontTypes The list of font types supported by the font family. Default value is FontType.entries.
      * @param fontPath The path pattern of the font files for the font family. Default value is "$*/
     fun register(
         name: String,
         sizes: IntRange = 8..16,
-        types: List<FontType> = FontType.entries,
-        glyphRange: Pair<Short, Short>? = null,
-        fontPath: String = "/fonts/$name-%t.ttf",
-        merge: Boolean = false
+        glyphRange: Pair<Short, Short>?,
+        merge: Boolean,
+        vararg fontTypes: String
     ) {
+        val fontPath = "/fonts/$name-%t.ttf"
+        val types = if (fontTypes.isEmpty()) FontType.entries.map { it.name } else fontTypes.toList()
         val unloadedFontFamily = UnloadedFontFamily(name,
             sizes,
-            types.associateWith { FontDataLoader.loadFromResources(fontPath.replace("%t", it.name), glyphRange, merge) })
+            types.associateWith { FontDataLoader.loadFromResources(fontPath.replace("%t", it), glyphRange, merge) })
 //            types.associateWith { FontDataLoader.loadFromResources(fontPath.replace("%t", it.name), glyphRange, merge) })
         unloadedFontFamilies[name] = unloadedFontFamily
         logger.info { "Registered font family: $name, $sizes, $types" }
     }
+    fun register(
+        name: String,
+        sizes: IntRange = 8..16,
+        vararg fontTypes: String
+    ) {
+        val fontPath = "/fonts/$name-%t.ttf"
+        val types = if (fontTypes.isEmpty()) FontType.entries.map { it.name } else fontTypes.toList()
+        val unloadedFontFamily = UnloadedFontFamily(name,
+            sizes,
+            types.associateWith { FontDataLoader.loadFromResources(fontPath.replace("%t", it), null, false) })
+//            types.associateWith { FontDataLoader.loadFromResources(fontPath.replace("%t", it.name), glyphRange, merge) })
+        unloadedFontFamilies[name] = unloadedFontFamily
+        logger.info { "Registered font family: $name, $sizes, $types" }
+    }
+
 
     /**
      * Method to load font families that were previously unloaded.
@@ -56,7 +72,7 @@ object Fonts {
      * @param unloadedFontData The font data to be loaded.
      */
     private fun loadFontFamily(unloadedFontData: UnloadedFontFamily) {
-        val loadedFonts = mutableMapOf<FontType, Font>()
+        val loadedFonts = mutableMapOf<String, Font>()
         // Iterate over each font type to load the font into the ImFont collection
         unloadedFontData.data.forEach { (type, fontData) ->
             val sizedFonts = mutableMapOf<Int, ImFont>()
@@ -136,6 +152,6 @@ object Fonts {
     }
 
     private data class UnloadedFontFamily(
-        val name: String, val sizes: IntRange, val data: Map<FontType, FontData>,
+        val name: String, val sizes: IntRange, val data: Map<String, FontData>,
     )
 }

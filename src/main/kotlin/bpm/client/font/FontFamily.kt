@@ -2,7 +2,7 @@ package bpm.client.font
 
 import bpm.common.logging.KotlinLogging
 
-data class FontFamily(val name: String, private val loadedFonts: MutableMap<FontType, Font> = mutableMapOf()) {
+data class FontFamily(val name: String, private val loadedFonts: MutableMap<String, Font> = mutableMapOf()) {
 
 
     /**
@@ -82,13 +82,7 @@ data class FontFamily(val name: String, private val loadedFonts: MutableMap<Font
      * @return The font of the specified type.
      * @throws IllegalArgumentException if the specified type is Type.Regular and no Regular font is found for the font family.
      */
-    operator fun get(type: FontType): Font {
-        if (type !in loadedFonts && type == FontType.Regular) throw IllegalArgumentException("Regular font not found for font family $name")
-        if (type !in loadedFonts) return get(FontType.Regular)
-        return loadedFonts[type]!!
-    }
-
-
+    operator fun get(type: FontType): Font = this[type.name]
     /**
      * Retrieves the element of the specified type from the collection.
      *
@@ -96,9 +90,11 @@ data class FontFamily(val name: String, private val loadedFonts: MutableMap<Font
      * @return the element of the specified type
      * @throws IllegalArgumentException if the specified type is invalid or not found in the collection
      */
-    operator
-
-    fun get(type: String) = get(FontType.valueOf(type))
+    operator fun get(type: String): Font {
+        if (type !in loadedFonts && type == FontType.Regular.name) throw IllegalArgumentException("Regular font not found for font family $name")
+        if (type !in loadedFonts) return get(FontType.Regular)
+        return loadedFonts[type]!!
+    }
 
     /**
      * Determines whether the given type exists in the fonts collection.
@@ -106,7 +102,9 @@ data class FontFamily(val name: String, private val loadedFonts: MutableMap<Font
      * @param type The type to check for existence in the fonts collection.
      * @return `true` if the fonts collection contains the specified type, `false` otherwise.
      */
-    operator fun contains(type: FontType) = loadedFonts.containsKey(type)
+    operator fun contains(type: FontType) = loadedFonts.containsKey(type.name)
+
+    operator fun contains(type: String) = type in loadedFonts
     /**
      * Executes the given closure on each element in the collection of loaded fonts.
      *

@@ -1,10 +1,10 @@
 package bpm.client.runtime.windows
 
 import bpm.client.font.Fonts
+import bpm.client.render.panel.VariablesPanel
 import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.Keyboard
 import bpm.client.runtime.Platform
-import bpm.client.runtime.panel.*
 import bpm.client.utils.use
 import bpm.common.logging.KotlinLogging
 import bpm.common.network.Client
@@ -79,11 +79,11 @@ class CanvasContext : Listener {
     var hoveredTitleBar: UUID? = null
     var hoveredPin: Pair<UUID, Edge>? = null
 
-    internal val customActionMenu: CustomActionMenu by lazy { CustomActionMenu(workspace, this) }
     internal val variablesMenu by lazy { VariablesMenu(this) }
     val notificationManager = NotificationManager()
 
     private val gridSize = 20f // Grid size for snapping
+    val graphics by lazy { CanvasGraphics(runtime.canvasWindow!!, this) }
 
     /**
      * Represents the node library used in the application.
@@ -160,7 +160,8 @@ class CanvasContext : Listener {
 
     fun getHoverCursor(): Int {
         return when {
-            hoveredTitleBar != null -> ImGuiMouseCursor.Hand
+            hoveredTitleBar != null && !isDraggingNode -> ImGuiMouseCursor.Hand
+            isDraggingNode -> ImGuiMouseCursor.None
             hoveredPin != null -> ImGuiMouseCursor.ResizeAll
             else -> ImGuiMouseCursor.Arrow
         }
@@ -208,6 +209,7 @@ class CanvasContext : Listener {
             isDraggingGroup = false
             groupDragOffset.clear()
             wasDraggingNode = true
+
             // We're not unselecting nodes here anymore
             // unselectAllNodes()
         }
@@ -219,7 +221,7 @@ class CanvasContext : Listener {
         val nodePos = workspace.convertPosition(owner.x, owner.y)
         val nodeSize = workspace.convertSize(owner.width, owner.height)
         var xPos = 0f
-        var yOffset = 0f
+        var yOffset: Float
         var yPos = 0f
         var xOffset = 0f
         var textXPos = 0f
@@ -245,7 +247,7 @@ class CanvasContext : Listener {
         return Vector4f(xPos + xOffset, yPos, textXPos, textYPos)
     }
 
-    fun getNodeBounds(node: Node, headerPadding: Float = 20f): Vector4f {
+    fun getNodeBounds(node: Node, headerPadding: Float = 30f): Vector4f {
         val nodePos = convertToScreenCoordinates(Vector2f(node.x, node.y))
         val nodeSize = convertToScreenSize(Vector2f(node.width, node.height))
         val padding = headerPadding * zoom
@@ -254,13 +256,13 @@ class CanvasContext : Listener {
         val inputCount = workspace.graph.getEdges(node).count { it.direction == "input" }
         val outputCount = workspace.graph.getEdges(node).count { it.direction == "output" }
         val edgeCount = maxOf(inputCount, outputCount)
-        val minHeight = (edgeCount + 1) * 20f * zoom
+        val minHeight = (edgeCount) * 20f * zoom
 
-        nodeSize.y = maxOf(nodeSize.y, minHeight)
+        nodeSize.y = minHeight
 //
         return Vector4f(
             nodePos.x - padding / 2f,
-            nodePos.y - padding / 2f,
+            nodePos.y - padding - 2 * zoom,
             nodePos.x + nodeSize.x,
             nodePos.y + nodeSize.y,
         )
@@ -271,10 +273,9 @@ class CanvasContext : Listener {
             val nodePos = workspace.convertPosition(node.x, node.y)
             val nodeSize = workspace.convertSize(node.width, node.height)
             val titleSize = ImGui.calcTextSize(node.name)
-            val titleWidth = titleSize.x + 4f * zoom
             val titleHeight = titleSize.y
             val titleX = nodePos.x - 8 * zoom
-            val titleY = (nodePos.y - titleHeight / 2) - 8 * zoom
+            val titleY = ((nodePos.y - titleHeight / 2) - 8 * zoom) - 15f * zoom
 
             Vector4f(titleX, titleY, nodePos.x + nodeSize.x, titleY + titleHeight)
         }
@@ -350,7 +351,7 @@ class CanvasContext : Listener {
             }
         }
 
-        if (isLeftClickDragging && selectionStart != null) {
+        if (isLeftClickDragging && selectionStart != null && !(graphics.panels.isAnyHovered() || graphics.variablesPanel.draggingNode)) {
             isSelecting = true
             selectionEnd = Vector2f(mousePos.x, mousePos.y)
             updateNodesInSelectionBox()
@@ -554,12 +555,13 @@ class CanvasContext : Listener {
     }
 
     fun handleStartDrag(node: Node, headerBounds: Vector4f) {
-        if (node.dragged || (runtime.selectedNode != null && runtime.selectedNode!!.uid != node.uid) || selectionStart != null) return
+        if ((node.dragged || selectionStart != null || isDraggingNode)) return
         val mousePos = ImGui.getMousePos()
         val mx = mousePos.x / runtime.workspace!!.settings.zoom
         val my = mousePos.y / runtime.workspace!!.settings.zoom
-        val headerHovered = headerBounds.contains(mousePos.x, mousePos.y)
-        if (headerHovered && ImGui.isMouseDown(ImGuiMouseButton.Left) && !node.dragged) {
+        //Expand the header bounds to include the entire node
+//        val headerHovered = headerBounds.contains(mousePos.x, mousePos.y)
+        if (hoveredTitleBar == node.uid && ImGui.isMouseDown(ImGuiMouseButton.Left) && !node.dragged) {
             dragOffset.set(mx - node.x, my - node.y)
             node.dragged = true
             runtime.selectedNode = node
@@ -574,6 +576,7 @@ class CanvasContext : Listener {
                         groupDragOffset[selectedNodeId] = Vector2f(mx - selectedNode.x, my - selectedNode.y)
                     }
                 }
+
             } else {
                 // If the dragged node is not in the selection, clear the selection and select only this node
                 selectedNodeIds.clear()
@@ -601,7 +604,7 @@ class CanvasContext : Listener {
         client.send(VariableNodeCreateRequest(type, worldPos, name))
     }
 
-     fun convertToScreenCoordinates(worldPos: Vector2f): Vector2f {
+    fun convertToScreenCoordinates(worldPos: Vector2f): Vector2f {
         return Vector2f(
             (worldPos.x * workspace.settings.zoom) + workspace.settings.position.x,
             (worldPos.y * workspace.settings.zoom) + workspace.settings.position.y
@@ -621,7 +624,35 @@ class CanvasContext : Listener {
         )
     }
 
+    //COllect the selected nodes from the selection start and end if selectionNodesIds is empty
+    private fun collectSelectedNodes() {
+        if (selectedNodeIds.isEmpty()) {
+            val topLeft = Vector2f(
+                minOf(selectionStart!!.x, selectionEnd!!.x),
+                minOf(selectionStart!!.y, selectionEnd!!.y)
+            )
+            val bottomRight = Vector2f(
+                maxOf(selectionStart!!.x, selectionEnd!!.x),
+                maxOf(selectionStart!!.y, selectionEnd!!.y)
+            )
+
+            for (node in workspace.graph.nodes) {
+                if (isNodeInSelection(node, topLeft, bottomRight)) {
+                    selectedNodeIds.add(node.uid)
+                }
+            }
+            for (link in workspace.graph.links) {
+                if (isLinkInSelection(link, topLeft, bottomRight)) {
+                    selectedLinkIds.add(link.uid)
+                }
+            }
+        }
+    }
+
     fun deleteSelected() {
+        if (selectedNodeIds.isEmpty() || selectedLinkIds.isEmpty() && selectionStart != null && selectionEnd != null) {
+            collectSelectedNodes()
+        }
         for (nodeId in selectedNodeIds) {
             // Notify the server about node deletion
             client.send(NodeDeleteRequest(nodeId))
@@ -632,14 +663,14 @@ class CanvasContext : Listener {
             client.send(LinkDeleteRequest(linkId))
         }
 
-        selectedNodeIds.clear()
-        selectedLinkIds.clear()
+//        selectedNodeIds.clear()
+//        selectedLinkIds.clear()
 
         // Reset any state that might prevent adding new nodes
-        isDraggingNode = false
-        isSelecting = false
-        selectionStart = null
-        selectionEnd = null
+//        isDraggingNode = false
+//        isSelecting = false
+//        selectionStart = null
+//        selectionEnd = null
     }
 
 
@@ -782,7 +813,7 @@ class CanvasContext : Listener {
             val outputEdges = edges.filter { it.direction == "output" }
 
             val edgeSpacing = 20f * zoom
-            val edgeStartY = nodeBounds.y + 30f * zoom  // Start below the header
+            val edgeStartY = nodeBounds.y + 30f * zoom
 
             // Check input edges
             inputEdges.forEachIndexed { index, edge ->
@@ -903,7 +934,7 @@ class CanvasContext : Listener {
 
     private fun openActionMenuWithCompatibleNodes(sourceEdge: Edge, position: Vector2f) {
         val compatibleNodes = getCompatibleNodes(sourceEdge)
-        customActionMenu.openWithFilteredNodes(position, compatibleNodes)
+        CustomActionMenu.openWithFilteredNodes(position, compatibleNodes)
     }
 
 
@@ -931,7 +962,7 @@ class CanvasContext : Listener {
 
     fun getEdgePosition(node: Node, edge: Edge, nodeBounds: Vector4f): Vector2f {
         val edgeSpacing = 20f * zoom
-        val edgeStartY = nodeBounds.y + 30f * zoom  // Start below the header
+        val edgeStartY = nodeBounds.y + 35f * zoom  // Start below the header
 
         val edges = workspace.graph.getEdges(node)
         val edgesOfSameDirection = edges.filter { it.direction == edge.direction }

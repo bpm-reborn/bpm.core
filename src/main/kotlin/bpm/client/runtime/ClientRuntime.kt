@@ -300,12 +300,13 @@ object ClientRuntime : Listener {
     private fun initializeFonts() {
         try {
             Fonts.register("Inter", 8..50)
+            Fonts.register("Minecraft", 8..50, "Title", "Body")
             Fonts.register(
                 "Fa",
                 24..84,
-                listOf(FontType.Regular),
-                Pair(FontAwesome.IconMin, FontAwesome.IconMax),
-                merge = true
+                FontAwesome.IconMin to FontAwesome.IconMax,
+                true,
+                "Regular"
             )
             Fonts.registerFonts()
         } catch (e: Exception) {
