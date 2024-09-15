@@ -3,6 +3,7 @@ package bpm.client.render.panel
 import bpm.client.font.Fonts
 import bpm.client.runtime.windows.CanvasGraphics
 import bpm.client.utils.PropertyInput
+import bpm.client.utils.toVec2f
 import bpm.client.utils.use
 import bpm.common.property.Property
 import com.mojang.blaze3d.systems.RenderSystem
@@ -56,6 +57,7 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
         size: Vector2f,
         bodySize: Vector2f
     ) {
+        val windowSize = ImGui.getWindowSize()
         // Background
         val pos = ImGui.getCursorScreenPos()
         drawList.addRectFilled(
@@ -75,7 +77,7 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
         // Render item
         //Don't render if it's not visible
         if (pos.y + size.y > 0 && pos.y < bodySize.y) {
-            renderBlockItem(buffer, proxy.blockName, Vector2f(pos.x + 10f, pos.y + 10f), 0f)
+            renderBlockItem(buffer, proxy.blockName, Vector2f(pos.x + 10f, pos.y + 10f), windowSize.toVec2f,0f)
         }
 
 
@@ -120,18 +122,21 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
         bufferSource: MultiBufferSource,
         blockId: String,
         position: Vector2f,
+        containerSize: Vector2f,
         partialTicks: Float
     ) {
         val item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(blockId)) ?: Items.AIR
         val itemStack = ItemStack(item)
         poseStack.setIdentity()
         poseStack.pushPose()
-        val resolution = Minecraft.getInstance().window.guiScale.toFloat()
         //Normalizies the position with the resolution
-        poseStack.scale(1f / resolution, 1f / resolution, 1f)
-        poseStack.translate(position.x, position.y, 1f)
-        poseStack.translate(11.0, 20.0, 0.0)
-        poseStack.scale(32f, 32f, 32f)
+//        poseStack.scale( Minecraft.getInstance().window.width.toFloat(),  Minecraft.getInstance().window.height.toFloat(), 1f)
+
+//        poseStack.scale(32f, 32f, 1f)
+//        poseStack.translate((position.x + 16f).toDouble(), (position.y + 24f).toDouble(), 0.0)
+        poseStack.translate(position.x.toDouble() * 2, position.y.toDouble() * 2, 0.0)
+        poseStack.scale(80.0f, 80.0f, 80.0f)
+        poseStack.translate(0.25, 0.5, 0.25)
         Minecraft.getInstance().itemRenderer.renderStatic(
             itemStack,
             ItemDisplayContext.GUI,
