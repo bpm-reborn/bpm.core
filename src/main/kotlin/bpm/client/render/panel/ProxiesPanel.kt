@@ -1,108 +1,167 @@
 package bpm.client.render.panel
 
 import bpm.client.font.Fonts
-import bpm.client.render.Gui
-import bpm.client.runtime.windows.CanvasGraphics
-import bpm.client.utils.toVec2f
+import bpm.client.runtime.ClientRuntime
 import bpm.client.utils.use
-import com.mojang.blaze3d.systems.RenderSystem
-import com.mojang.blaze3d.vertex.PoseStack
-import com.mojang.blaze3d.vertex.VertexSorting
+import bpm.common.utils.FontAwesome
+import bpm.pipe.proxy.ProxiedState
+import bpm.pipe.proxy.ProxiedType
+import bpm.pipe.proxy.ProxyState
 import imgui.ImColor
 import imgui.ImDrawList
 import imgui.ImGui
-import net.minecraft.client.Minecraft
+import imgui.flag.ImGuiMouseButton
+import imgui.flag.ImGuiMouseCursor
 import net.minecraft.client.gui.GuiGraphics
-import net.minecraft.client.renderer.GameRenderer
-import net.minecraft.client.renderer.MultiBufferSource
-import net.minecraft.client.renderer.texture.OverlayTexture
-import net.minecraft.core.registries.BuiltInRegistries
-import net.minecraft.resources.ResourceLocation
-import net.minecraft.world.item.ItemDisplayContext
+import net.minecraft.core.BlockPos
 import net.minecraft.world.item.ItemStack
-import net.minecraft.world.item.Items
-import org.joml.Matrix4f
 import org.joml.Vector2f
+import org.joml.Vector3f
 import org.joml.Vector3i
 
-class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) {
+object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
 
     private val titleFont = Fonts.getFamily("Inter")["Bold"]
     private val bodyFont = Fonts.getFamily("Inter")["Light"]
-    private val faFont = Fonts.getFamily("Fa")["Regular"][18]
+    private val recordedDrawCall = mutableListOf<(gfx: GuiGraphics) -> Unit>()
+    private val unClippedRecordedDrawCalls = mutableListOf<(gfx: GuiGraphics) -> Unit>()
+    private var draggedProxy: ProxyState? = null
+    override fun onResize() = Unit
 
-    private val accentColor = ImColor.rgba(0, 122, 255, 255)
-    private val buttonColor = ImColor.rgba(58, 58, 60, 255)
-    private val buttonHoverColor = ImColor.rgba(68, 68, 70, 255)
-    private val backgroundColor = ImColor.rgba(40, 40, 40, 255)
-    private val proxyList = mutableListOf(
-        ProxyData("minecraft:dirt", Vector3i(10, 64, -30)),
-        ProxyData("minecraft:stone", Vector3i(-5, 70, 15)),
-        ProxyData("minecraft:oak_log", Vector3i(100, 68, -50))
-    )
-
-
-    private val guigraphics: GuiGraphics = GuiGraphics(
-        Minecraft.getInstance(),
-        Minecraft.getInstance().renderBuffers().bufferSource()
-    )
-
-    override fun renderBody(graphics: CanvasGraphics, drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        proxyList.forEachIndexed { index, proxy ->
-            val height = 60f
-//            val pos = Vector2f(position.x + 10f, position.y + index * (height + 10f) + 10f)
-            renderProxy(drawList, proxy, position, Vector2f(size.x - 25f, height), size)
-            ImGui.dummy(0f, height + 10f)
+    override fun renderBody(
+        drawList: ImDrawList, position: Vector2f, size: Vector2f
+    ) {
+        ClientRuntime.proxies.forEach { proxyState ->
+            renderProxyState(drawList, proxyState, position, size)
+            ImGui.dummy(0f, 10f) // Add some space between proxy states
         }
+        handleProxyDragging(drawList)
+    }
+
+    private fun renderProxyState(
+        drawList: ImDrawList,
+        proxyState: ProxyState,
+        position: Vector2f,
+        size: Vector2f
+    ) {
+        val screenpos = ImGui.getCursorScreenPos()
+        val windowPos = ImGui.getWindowViewport().pos
+        val pos = Vector2f(screenpos.x - windowPos.x + 10f, screenpos.y - windowPos.y + 10f)
+
+        // Render the proxy state
+        renderProxy(drawList, proxyState.origin, pos, Vector2f(size.x - 20f, 60f))
+        ImGui.dummy(0f, 70f)
+        // Check for dragging
+        if (ImGui.isMouseClicked(ImGuiMouseButton.Left) && isMouseOver(pos, size.x - 20f, 60f)) {
+            draggedProxy = proxyState
+        }
+
+        // Render proxied blocks
+        ImGui.indent(20f)
+        var index = 0
+        proxyState.proxiedBlocks.filter { it.value.proxiedFaces.values.any { it != ProxiedType.NONE } }
+            .forEach { (blockPos, proxiedState) ->
+
+                //Draw connection lines
+                val pos1 = Vector2f(pos.x + 40, ImGui.getCursorScreenPosY() + 10f)
+                val originPos = Vector2f(pos1.x + 10f, pos1.y + 30f)
+
+                val thickness = 3f
+                drawList.addLine(
+                    pos1.x - 20f, pos1.y + 30f, originPos.x, originPos.y, ImColor.rgba(100, 100, 100, 255), thickness
+                )
+                if (index != 0) {
+                    //Add veritcal connnection line
+                    drawList.addLine(
+                        pos1.x - 20f, pos1.y, pos1.x - 20f, pos1.y - 30f, ImColor.rgba(100, 100, 100, 255), thickness
+                    )
+                    drawList.addLine(
+                        pos1.x - 20f,
+                        pos1.y - 15f,
+                        pos1.x - 20f,
+                        pos1.y + 30f,
+                        ImColor.rgba(100, 100, 100, 255),
+                        thickness
+                    )
+
+                } else {
+//                    drawList.addCircleFilled(pos1.x - 20f, pos1.y - 12f, 5f, ImColor.rgba(100, 100, 100, 255))
+
+                    drawList.addLine(
+                        pos1.x - 20f,
+                        pos1.y - 15f,
+                        pos1.x - 20f,
+                        pos1.y + 30f,
+                        ImColor.rgba(100, 100, 100, 255),
+                        thickness
+                    )
+                }
+                drawList.addCircleFilled(pos1.x - 20f, pos1.y + 30f, 5f, ImColor.rgba(12, 12, 12, 255))
+                drawList.addCircle(pos1.x - 20f, pos1.y + 30f, 5f, ImColor.rgba(66, 66, 66, 255), 12, 2f)
+
+                index++
+
+//                drawList.addCircleFilled(originPos.x, originPos.y, 5f, ImColor.rgba(100, 100, 100, 255))
+
+                renderProxiedBlock(
+                    drawList,
+                    blockPos,
+                    proxiedState,
+                    Vector2f(pos.x + 50f, ImGui.getCursorScreenPosY() + 10f),
+                    Vector2f(size.x - 70f, 60f)
+                )
+                ImGui.dummy(0f, 60f)
+            }
+        ImGui.unindent(20f)
+    }
+
+    override fun renderPost(gfx: GuiGraphics, scaledPos: Vector3f, scaledSize: Vector3f) {
+        val transformedPos = graphics.toScreenSpaceVector(scaledPos.x, scaledPos.y + 30f)
+        val transformedSize = graphics.toScreenSpaceVector(scaledSize.x, scaledSize.y - 100f)
+        gfx.enableScissor(
+            transformedPos.x.toInt(),
+            transformedPos.y.toInt(),
+            transformedSize.x.toInt() + transformedPos.x.toInt(),
+            transformedSize.y.toInt() + transformedPos.y.toInt()
+        )
+        recordedDrawCall.forEach { it(gfx) }
+        recordedDrawCall.clear()
+        gfx.disableScissor()
+
+        unClippedRecordedDrawCalls.forEach { it(gfx) }
+        unClippedRecordedDrawCalls.clear()
     }
 
     private fun renderProxy(
-        drawList: ImDrawList,
-        proxy: ProxyData,
-        position: Vector2f,
-        size: Vector2f,
-        bodySize: Vector2f
+        drawList: ImDrawList, origin: BlockPos, position: Vector2f, size: Vector2f, clipped: Boolean = true
     ) {
-        val windowSize = ImGui.getWindowSize()
+        val level = ClientRuntime.level ?: return
+        val blockState = level.getBlockState(origin)
+        val itemStack = ItemStack(blockState.block)
+
         // Background
-
-        val viewportSize = ImGui.getMainViewport().size
-        val screenpos = ImGui.getCursorScreenPos()
-
-
         drawList.addRectFilled(
-            screenpos.x,
-            screenpos.y,
-            screenpos.x + size.x,
-            screenpos.y + size.y,
-            backgroundColor,
-            10f
+            position.x, position.y, position.x + size.x, position.y + size.y, ImColor.rgba(60, 60, 60, 255), 5f
         )
 
-        // Left space for item rendering
+        // Item rendering
         val itemSize = 32f
         val leftSpaceWidth = itemSize + 10f
-        val buffer = Minecraft.getInstance().renderBuffers().bufferSource()
-        // Render item
-        val windowPos = ImGui.getWindowViewport().pos
-
-        //Normalize the screen cursor position using the current windows size
-        val pos = Vector2f(screenpos.x - windowPos.x, screenpos.y - windowPos.y)
-
-        //Don't render if it's not visible
-//        if (pos.y + size.y > 0 && pos.y < bodySize.y) {
-//            renderBlockItem(buffer, proxy.blockName, Vector2f(pos.x, pos.y), windowSize.toVec2f, 0f)
-        //TODO: figure out clipping when it's intersecting with our imgui clip rect
-        Gui.drawBlockItem(proxy.blockName, pos.x, pos.y)
-//        }
-
+        //Record the draw call
+        (if (clipped) recordedDrawCall else unClippedRecordedDrawCalls).add {
+            graphics.renderBlockItem(
+                itemStack,
+                position.x,
+                position.y,
+            )
+        }
 
         // Separator line
         drawList.addLine(
-            screenpos.x + leftSpaceWidth,
-            screenpos.y,
-            screenpos.x + leftSpaceWidth,
-            screenpos.y + size.y,
+            position.x + leftSpaceWidth,
+            position.y,
+            position.x + leftSpaceWidth,
+            position.y + size.y,
             ImColor.rgba(100, 100, 100, 255),
             2f
         )
@@ -112,101 +171,76 @@ class ProxiesPanel(manager: PanelManager) : Panel("Proxies", "\uf1ec", manager) 
             drawList.addText(
                 titleFont.title,
                 18f,
-                screenpos.x + leftSpaceWidth + 10f,
-                screenpos.y + 10f,
+                position.x + leftSpaceWidth + 10f,
+                position.y + 10f,
                 ImColor.rgba(255, 255, 255, 255),
-                proxy.blockName.split(":").last().replace("_", " ").capitalize()
+                itemStack.displayName.string
             )
         }
 
         // Block position
-        val positionText = "Position: ${proxy.position.x}, ${proxy.position.y}, ${proxy.position.z}"
+        val positionText = "Origin: ${origin.x}, ${origin.y}, ${origin.z}"
         bodyFont.body.use {
             drawList.addText(
                 bodyFont.body,
                 14f,
-                screenpos.x + leftSpaceWidth + 10f,
-                screenpos.y + 35f,
+                position.x + leftSpaceWidth + 10f,
+                position.y + 35f,
                 ImColor.rgba(200, 200, 200, 255),
                 positionText
             )
         }
     }
 
-    private fun renderBlockItem(
-        bufferSource: MultiBufferSource.BufferSource,
-        blockId: String,
-        position: Vector2f,
-        containerSize: Vector2f,
-        partialTicks: Float
-    ) {
-        val item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(blockId)) ?: Items.AIR
-        val itemStack = ItemStack(item)
-        val minecraft = Minecraft.getInstance()
-//        RenderSystem.disableDepthTest()
-//        RenderSystem.enableBlend()
-//        RenderSystem.defaultBlendFunc()
-//        val pose = guigraphics.pose()
-//        pose.setIdentity()
-//        pose.pushPose()
-//
-//
-//        guigraphics.pose().translate(0f, 0f, -1000.0f)
-//        guigraphics.renderItem(
-//            itemStack,
-//            position.x.toInt(), position.y.toInt()
-//        )
-//        guigraphics.pose().popPose()
-//
-//        RenderSystem.disableBlend()
-//        RenderSystem.enableDepthTest()
-//
+    private fun handleProxyDragging(drawList: ImDrawList) {
+        val draggedProxyState = draggedProxy
+        if (draggedProxyState != null && ImGui.isMouseDragging(ImGuiMouseButton.Left)) {
+            val mousePos = ImGui.getMousePos()
 
-        RenderSystem.enableBlend()
-        RenderSystem.defaultBlendFunc()
-        RenderSystem.setShader { GameRenderer.getPositionColorShader() }
+            // Render a preview of the dragged proxy
+            renderProxy(
+                ImGui.getForegroundDrawList(),
+                draggedProxyState.origin,
+                Vector2f(mousePos.x + 20f, mousePos.y),
+                Vector2f(200f, 60f),
+                false
+            )
 
-        val matrix4f = Matrix4f().setOrtho(
-            0.0f,
-            minecraft.window.screenWidth.toFloat(),
-            minecraft.window.screenHeight.toFloat(),
-            0.0f,
-            0.1f,
-            3000.0f
-        )
-        val pose = PoseStack()
-        val screenScale = minecraft.window.guiScale
-
-        // Scale the item
-        var scale = 42.0f / screenScale.toFloat()
-        val isMacos = System.getProperty("os.name").contains("mac", ignoreCase = true)
-        val isRetina = isMacos && minecraft.window.screenWidth.toFloat() * screenScale > 1500.0f
-        //if retina, we need to modify the position to double
-        if (isRetina) {
-            position.x *= 2
-            position.y *= 2
-            scale *= 2
+            ImGui.setMouseCursor(ImGuiMouseCursor.None)
+        } else if (draggedProxyState != null && ImGui.isMouseReleased(ImGuiMouseButton.Left)) {
+            // Handle the drop action here (e.g., create a node in the canvas)
+            val mousePos = ImGui.getMousePos()
+            // TODO: Implement the creation of a proxy node in the canvas
+            draggedProxy = null
         }
-        pose.pushPose()
-        pose.translate(position.x.toDouble() / screenScale, position.y.toDouble() / screenScale, 100.0)
-        pose.scale(scale, scale, scale)
-        pose.translate(0.5, 0.75, 100.0)
-//        pose.mulPose(matrix4f)
+    }
 
-        // Render the item
-        Minecraft.getInstance().itemRenderer.renderStatic(
-            itemStack,
-            ItemDisplayContext.GUI,
-            15728880, // Fullbright
-            OverlayTexture.NO_OVERLAY,
-            pose,
-            bufferSource,
-            null,
-            0
+    private fun renderProxiedBlock(
+        drawList: ImDrawList,
+        relativePos: BlockPos,
+        proxiedState: ProxiedState,
+        position: Vector2f,
+        size: Vector2f
+    ) {
+        // Background
+        drawList.addRectFilled(
+            position.x, position.y, position.x + size.x, position.y + size.y, ImColor.rgba(50, 50, 50, 255), 8f
         )
 
-        pose.popPose()
+        // Proxied block info
+        val infoText = "Relative Pos: ${relativePos.x}, ${relativePos.y}, ${relativePos.z}"
+        bodyFont.body.use {
+            drawList.addText(
+                bodyFont.body,
+                14f,
+                position.x + 10f,
+                position.y + 10f,
+                ImColor.rgba(200, 200, 200, 255),
+                infoText
+            )
+        }
 
+        renderProxy(drawList, relativePos, Vector2f(position.x, position.y), Vector2f(size.x, size.y))
     }
 
     private data class ProxyData(val blockName: String, val position: Vector3i)

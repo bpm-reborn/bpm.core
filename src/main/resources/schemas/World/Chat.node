@@ -1,0 +1,26 @@
+description: "Sends a chat message to all the player in the world of the controller's workspace"
+group: World
+name: Send Chat
+extends: Base/Node
+
+theme:
+  color: '#b3f721'
+  height: 40
+  width: 120
+  icon: 0xf3cf
+edges:
+  exec_in:
+    description: 'The input execution edge'
+    direction: input
+    type: exec
+  message:
+    description: 'The message to send'
+    direction: input
+    type: string
+  exec_out:
+    description: 'The output execution edge'
+    direction: output
+    type: exec
+source: |
+  World:sendChat(_Uid, message)
+  ${EXEC.exec_out}

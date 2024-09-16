@@ -323,7 +323,7 @@ class CanvasContext : Listener {
     }
 
     fun handleSelection(isPropertyWindowHovered: Boolean) {
-        if (isLinking || isPropertyWindowHovered) return
+        if (isLinking || isPropertyWindowHovered ) return
 
         val mousePos = ImGui.getMousePos()
         val isLeftClickPressed = ImGui.isMouseClicked(ImGuiMouseButton.Left)
@@ -351,7 +351,7 @@ class CanvasContext : Listener {
             }
         }
 
-        if (isLeftClickDragging && selectionStart != null && !(graphics.panels.isAnyHovered() || graphics.variablesPanel.draggingNode)) {
+        if (isLeftClickDragging && selectionStart != null) {
             isSelecting = true
             selectionEnd = Vector2f(mousePos.x, mousePos.y)
             updateNodesInSelectionBox()

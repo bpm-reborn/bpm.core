@@ -1,7 +1,7 @@
-# Add.node
+# AddInt.node
 description: "Adds two values together"
 group: Math
-name: Add
+name: Add Integers
 extends: Base/Node
 
 theme:
@@ -15,18 +15,14 @@ edges:
     direction: input
     type: number
     value:
-      type: float
-      min: -100
-      max: 100
+      type: int
       default: 0
   value_b:
     description: 'The second value to add'
     direction: input
     type: number
     value:
-      type: float
-      min: -100
-      max: 100
+      type: int
       default: 0
   result:
     description: 'The result of the addition'
@@ -34,4 +30,4 @@ edges:
     type: number
 
 source: |
-  return value_a + value_b
+  ${OUTPUT.result = value_a + value_b}

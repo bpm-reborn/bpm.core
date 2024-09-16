@@ -1,11 +1,13 @@
 package bpm.server.lua
 
+import bpm.client.render.panel.ConsolePanel
 import bpm.pipe.PipeNetManager
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.core.particles.ParticleOptions
 import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
 import net.minecraft.sounds.SoundSource
 import net.minecraft.world.entity.EntityType
@@ -27,7 +29,20 @@ object World : LuaBuiltin {
 
     @JvmStatic
     fun print(message: String) {
-        println(message)
+        ConsolePanel.log(message)
+    }
+
+    @JvmStatic
+    fun sendChat(workspaceUid: String, message: String) {
+        val uuid = UUID.fromString(workspaceUid)
+        val level = PipeNetManager.getWorldForController(uuid) ?: return
+        level.players().forEach {
+            it.sendSystemMessage(
+                Component.literal(
+                    message
+                )
+            )
+        }
     }
 
     @JvmStatic

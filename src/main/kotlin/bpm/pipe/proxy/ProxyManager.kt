@@ -3,10 +3,11 @@ package bpm.pipe.proxy
 import bpm.common.network.Listener
 import bpm.common.network.Server
 import bpm.common.packets.Packet
+import bpm.pipe.PipeNetManager
 import net.minecraft.core.BlockPos
 import java.util.*
 
-//Todo: make this serializable by providing a serializer
+
 object ProxyManager : Listener {
 
     private val proxies = mutableMapOf<BlockPos, ProxyState>()
@@ -46,6 +47,13 @@ object ProxyManager : Listener {
             proxy.proxiedBlocks.clear()
             proxy.proxiedBlocks.putAll(blocks)
             Server.send(PacketProxyResponse(packet.proxyOrigin, proxy), from)
+        } else if (packet is PacketProxiedStatesRequest) {
+            val uuid = packet.workspaceUid
+            //Find all the proxies states assosiated with the workspace
+            val proxies = PipeNetManager.getProxies(uuid)
+            //Send the proxies states to the client
+            Server.send(PacketProxiedStatesResponse(uuid, proxies.toMutableList()), from)
         }
     }
+
 }

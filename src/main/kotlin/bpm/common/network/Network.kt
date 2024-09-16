@@ -2,12 +2,6 @@ package bpm.common.network
 
 import bpm.common.logging.KotlinLogging
 import bpm.common.packets.Packet
-import bpm.common.packets.graph.GraphListRequestPacket
-import bpm.common.packets.graph.GraphListResponsePacket
-import bpm.common.packets.internal.ConnectRequest
-import bpm.common.packets.internal.ConnectResponsePacket
-import bpm.common.packets.internal.DisconnectPacket
-import bpm.common.packets.internal.Heartbeat
 import bpm.common.utils.*
 import bpm.common.workspace.packets.*
 import java.util.concurrent.ConcurrentHashMap
@@ -57,57 +51,6 @@ object Network {
     fun register(packet: KClass<out Packet>): Network = register(packet) { packet.instantiate }
 
 
-    /**
-     * Finds all packets on the class path and creates a list of them. It will register all packets dynamically.
-     */
-    fun registerPackets() {
-        logger.info { "Registering all packets" }
-
-        // Graph packets
-        register(GraphListRequestPacket::class)
-        register(GraphListResponsePacket::class)
-
-        // Internal packets
-        register(ConnectRequest::class)
-        register(ConnectResponsePacket::class)
-        register(DisconnectPacket::class)
-        register(Heartbeat::class)
-
-        // Workspace packets
-        register(EdgePropertyUpdate::class)
-        register(LinkCreated::class)
-        register(LinkCreateRequest::class)
-        register(LinkDeleted::class)
-        register(LinkDeleteRequest::class)
-        register(NodeCreated::class)
-        register(NodeCreateRequest::class)
-        register(NodeDeleted::class)
-        register(NodeDeleteRequest::class)
-        register(NodeLibraryReloadRequest::class)
-        register(NodeLibraryRequest::class)
-        register(NodeLibraryResponse::class)
-        register(NodeMoved::class)
-        register(NodeSelected::class)
-        register(NotifyMessage::class)
-        register(UserConnectedToWorkspace::class)
-        register(VariableCreated::class)
-        register(VariableCreateRequest::class)
-        register(VariableDeleted::class)
-        register(VariableDeleteRequest::class)
-        register(VariableNodeCreateRequest::class)
-        register(VariableUpdated::class)
-        register(VariableUpdateRequest::class)
-        register(WorkspaceCompileRequest::class)
-        register(WorkspaceCreated::class)
-        register(WorkspaceCreateRequestPacket::class)
-        register(WorkspaceCreateResponsePacket::class)
-        register(WorkspaceLibrary::class)
-        register(WorkspaceLibraryRequest::class)
-        register(WorkspaceLoad::class)
-        register(WorkspaceSelected::class)
-
-        logger.info { "Registered ${packets.size} packets" }
-    }
 
     /**
      * Registers a packet type with a packet supplier function in the packet registry.

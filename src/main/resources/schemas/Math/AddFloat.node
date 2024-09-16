@@ -1,0 +1,32 @@
+description: "Adds two float values together"
+group: Math
+name: Add Floats
+extends: Base/Node
+
+theme:
+  color: '#2a9d8f'
+  width: 140
+  height: 60
+  icon: 0xe55f
+edges:
+  value_a:
+    description: 'The first value to add'
+    direction: input
+    type: number
+    value:
+      type: float
+      default: 0
+  value_b:
+    description: 'The second value to add'
+    direction: input
+    type: number
+    value:
+      type: float
+      default: 0
+  result:
+    description: 'The result of the addition'
+    direction: output
+    type: number
+
+source: |
+  ${OUTPUT.result = value_a + value_b}

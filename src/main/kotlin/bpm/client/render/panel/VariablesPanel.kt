@@ -1,7 +1,5 @@
 package bpm.client.render.panel
 
-import bpm.client.font.Fonts
-import bpm.client.render.Gui
 import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.ClientRuntime.logger
 import bpm.client.runtime.windows.CanvasContext
@@ -26,20 +24,19 @@ import imgui.ImDrawList
 import imgui.ImGui
 import imgui.flag.*
 import imgui.type.ImString
+import net.minecraft.client.gui.GuiGraphics
 import org.joml.Vector2f
 import org.joml.Vector3f
 import org.joml.Vector4f
 import org.joml.Vector4i
 
-class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manager) {
+object VariablesPanel : Panel("Variables", "\uf1ec") {
 
-    val draggingNode: Boolean
+    override val isDragging: Boolean
         get() = draggedVariable != null
+
     private val canvasContext by lazy { Client.installed<CanvasContext>() }
     private val workspace get() = ClientRuntime.workspace ?: error("Workspace not available")
-    private val titleFont = Fonts.getFamily("Inter")["Bold"]
-    private val bodyFont = Fonts.getFamily("Inter")["Light"]
-    private val faFont = Fonts.getFamily("Fa")["Regular"][18]
 
     private var variableValueBuffer = ImString(256)
     private val variableNameBuffer = ImString(256)
@@ -47,11 +44,13 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
     private val searchBuffer = ImString(256)
     private var draggedVariable: Triple<String, Property<*>, String>? = null
     private val accentColor = ImColor.rgba(0, 122, 255, 255)
-    private val buttonColor = ImColor.rgba(58, 58, 60, 255)
-    private val buttonHoverColor = ImColor.rgba(68, 68, 70, 255)
 
 
-    override fun renderBody(graphics: CanvasGraphics, drawList: ImDrawList, position: Vector2f, size: Vector2f) {
+    override fun renderBody(
+        drawList: ImDrawList,
+        position: Vector2f,
+        size: Vector2f
+    ) {
         // Filter variables based on search input
         val filteredVariables = filterVariables(workspace.graph.variables)
 
@@ -73,52 +72,55 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
         }
     }
 
-    override fun renderAfter(graphics: CanvasGraphics, drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        val pos = Vector2f(position.x, position.y + size.y - 60f)
-        ImGui.setNextWindowPos(pos.x - 10f, pos.y)
-        val panelWidth = size.x
-        ImGui.pushClipRect(pos.x, pos.y, pos.x + panelWidth, pos.y + 60f, false)
-        if (ImGui.beginChild(
-                "Variablesscrolling",
-                panelWidth,
-                60f,
-                false,
-                ImGuiWindowFlags.NoScrollbar or ImGuiWindowFlags.NoScrollWithMouse
-            )
-        ) {
-            renderSearchAndAddBar(drawList, pos, Vector2f(panelWidth - 20f, 40f))
-            handleVariableDragging(graphics, ImGui.getForegroundDrawList())
-        }
-        ImGui.endChild()
+//    override fun renderAfter(graphics: CanvasGraphics, drawList: ImDrawList, position: Vector2f, size: Vector2f) {
+//        val pos = Vector2f(position.x, position.y + size.y - 60f)
+//        ImGui.setNextWindowPos(pos.x - 10f, pos.y)
+//        val panelWidth = size.x
+//        ImGui.pushClipRect(pos.x, pos.y, pos.x + panelWidth, pos.y + 60f, false)
+//        if (ImGui.beginChild(
+//                "Variablesscrolling",
+//                panelWidth,
+//                60f,
+//                false,
+//                ImGuiWindowFlags.NoScrollbar or ImGuiWindowFlags.NoScrollWithMouse
+//            )
+//        ) {
+//
+//        }
+//        ImGui.endChild()
+//        ImGui.popClipRect()
+//    }
 
-        ImGui.popClipRect()
+    override fun renderFooterContent(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
+        renderSearchAndAddBar(drawList, position, Vector2f(panelWidth - 20f, 40f))
+        handleVariableDragging(graphics, ImGui.getForegroundDrawList())
     }
 
+
     private fun renderSearchAndAddBar(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        val barHeight = 40f
-        val barY = position.y + 10f
-        position.x += 15f
-        // Background for the entire bar
-        drawList.addRectFilled(
-            position.x,
-            barY,
-            position.x + size.x,
-            barY + barHeight,
-            ImColor.rgba(40, 40, 40, 255),
-            10f
-        )
+//        val barHeight = 40f
+//        val barY = position.y + 10f
+//        position.x += 15f
+//        // Background for the entire bar
+//        drawList.addRectFilled(
+//            position.x,
+//            barY,
+//            position.x + size.x,
+//            barY + barHeight,
+//            ImColor.rgba(40, 40, 40, 255),
+//            10f
+//        )
+//
+//        // Search input
 
-        // Search input
 
+        renderSearchInput(drawList, position, size)
         // Add variable button
         renderAddVariableButton(
             drawList,
-            Vector2f(position.x + size.x - 45f, barY + 5f),
-            Vector2f(35f, barHeight - 10f)
+            Vector2f(position.x + size.x - 35f, position.y + 10f),
+            Vector2f(30f, 30f)
         )
-
-        renderSearchInput(drawList, Vector2f(position.x + 10f, barY + 5f), Vector2f(size.x - 60f, barHeight - 10f))
-
     }
 
 
@@ -130,14 +132,16 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
     ) {
         val startCursorPos = ImGui.getCursorScreenPos().toVec2f
         //Add margin if the height is less than 70
-            startCursorPos.x += 10f
+        startCursorPos.x += 15f
+        startCursorPos.y += 15f
         // Background
         drawList.addRectFilled(
             startCursorPos.x,
             startCursorPos.y,
             startCursorPos.x + size.x,
             startCursorPos.y + size.y,
-            ImColor.rgba(60, 60, 60, 255)
+            ImColor.rgba(60, 60, 60, 255),
+            5f
         )
 
         // Delete button
@@ -147,7 +151,7 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
         renderVariableName(drawList, startCursorPos, name, size)
 
         // Value input
-        handleVariableInput(drawList, name, variable, startCursorPos, size.x - 10f, 0f)
+        handleVariableInput(drawList, name, variable, startCursorPos, size.x - 25f, 0f)
 
 
         // Get and Set buttons
@@ -158,21 +162,34 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
 
 
     private fun renderSearchInput(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
+        val searchBarHeight = 30f
+        val searchBarY = position.y + 10f
+
+        // Search bar background
+        drawList.addRectFilled(
+            position.x + 5f,
+            searchBarY,
+            position.x + size.x - 5f,
+            searchBarY + searchBarHeight,
+            ImColor.rgba(60, 60, 60, 255),
+            5f
+        )
+
         // Search icon
-        faFont.use {
+        iconFam[20].use {
             drawList.addText(
-                faFont,
-                32f,
-                position.x + 5f,
-                position.y - 2f,
+                it,
+                20f,
+                position.x + 15f,
+                searchBarY + 5f,
                 ImColor.rgba(150, 150, 150, 255),
-                FontAwesome.MagnifyingGlass
+                FontAwesome.AlignCenter
             )
         }
 
-        // Search input field
-        titleFont.header.use {
-            ImGui.setCursorScreenPos(position.x + 25f, position.y)
+        // Search input
+        bodyFam[18].use {
+            ImGui.setCursorScreenPos(position.x + 25f, position.y + 12)
             ImGui.pushItemWidth(size.x - 30f)
             ImGui.pushStyleColor(ImGuiCol.FrameBg, ImColor.rgba(60, 60, 60, 0).toInt())
             ImGui.pushStyleColor(ImGuiCol.Text, ImColor.rgba(200, 200, 200, 255).toInt())
@@ -192,9 +209,9 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
         if (ImGui.isItemHovered()) {
             ImGui.setMouseCursor(ImGuiMouseCursor.Hand)
         }
-        faFont.use {
+        iconFam.header.use {
             drawList.addText(
-                faFont,
+                iconFam.header,
                 18f,
                 startCursorPos.x + 10f,
                 startCursorPos.y + 8f,
@@ -207,9 +224,9 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
     private fun renderVariableName(drawList: ImDrawList, startCursorPos: Vector2f, name: String, size: Vector2f) {
         val textSize = ImGui.calcTextSize(name)
         val centerX = startCursorPos.x + (size.x - textSize.x) / 2
-        textFont.use {
+        boldFam.header.use {
             drawList.addText(
-                textFont,
+                boldFam.header,
                 18f,
                 centerX,
                 startCursorPos.y + 10f,
@@ -232,9 +249,9 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
             5f
         )
 
-        faFont.use {
+        iconFam.header.use {
             drawList.addText(
-                faFont,
+                iconFam.header,
                 24f,
                 position.x + size.x / 2 - 7f,
                 position.y + size.y / 2 - 8f,
@@ -245,7 +262,7 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
 
         if (isHovered) {
             ImGui.setMouseCursor(ImGuiMouseCursor.Hand)
-            Gui.toolTip("Add Variable")
+            graphics.renderTooltip("Add Variable")
         }
 
         if (ImGui.isMouseClicked(ImGuiMouseButton.Left) && isHovered) {
@@ -310,7 +327,7 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
         val totalButtonHeight = buttonSize * 2 + buttonSpacing
 
         val getButtonPos = Vector2f(
-            startCursorPos.x + size.x - buttonSize,
+            startCursorPos.x + size.x - buttonSize - 5f,
             startCursorPos.y + (size.y - totalButtonHeight) / 2
         )
         val setButtonPos = Vector2f(
@@ -352,7 +369,7 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
             pos.x + (width - textSize.x) / 2,
             pos.y + (height - textSize.y) / 2
         )
-        drawList.addText(textFont, 14f, textPos.x, textPos.y, ImColor.rgba(255, 255, 255, 255), label)
+        drawList.addText(boldFam.header, 14f, textPos.x, textPos.y, ImColor.rgba(255, 255, 255, 255), label)
     }
 
     private fun drawIconButton(drawList: ImDrawList, icon: String, pos: Vector2f, size: Float) {
@@ -365,30 +382,25 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
                 10f
             )
             ImGui.setMouseCursor(ImGuiMouseCursor.Hand)
-            Gui.toolTip("Drag to create a new node")
+            graphics.renderTooltip("Drag to create a new node")
         }
         drawList.addRectFilled(
             pos.x, pos.y, pos.x + size, pos.y + size,
             ImColor.rgba(27, 29, 28, 255),
             10f
         )
-        faFont.use {
+        iconFam.header.use {
 
             val textSize = ImGui.calcTextSize(icon)
             val textPos = Vector2f(
                 pos.x + (textSize.x / 2) + 1,
                 pos.y + 5F
             )
-            drawList.addText(faFont, 18f, textPos.x, textPos.y, ImColor.rgba(255, 255, 255, 255), icon)
+            drawList.addText(iconFam.header, 18f, textPos.x, textPos.y, ImColor.rgba(255, 255, 255, 255), icon)
 
         }
     }
 
-    private fun isMouseOver(pos: Vector2f, width: Float, height: Float): Boolean {
-        val mousePos = ImGui.getMousePos()
-        return mousePos.x >= pos.x && mousePos.x <= pos.x + width &&
-                mousePos.y >= pos.y && mousePos.y <= pos.y + height
-    }
 
     private fun handleVariableInput(
         drawList: ImDrawList,
@@ -519,7 +531,7 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
         // Render icon
         graphics.drawShadowedText(
             drawList,
-            faFont,
+            iconFam.header,
             iconSize,
             nodeBounds.x + paddingX / 2f - 4,
             nodeBounds.y,
@@ -546,7 +558,7 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
         var displayText = fullText
 
         // Render node name
-        bodyFont.title.use {
+        bodyFam.title.use {
             val textSize = ImGui.calcTextSize(fullText)
 
             if (textSize.x > availableWidth) {
@@ -560,7 +572,7 @@ class VariablesPanel(manager: PanelManager) : Panel("Variables", "\uf1ec", manag
             // Render truncated or full text
             graphics.drawShadowedText(
                 drawList,
-                bodyFont.title,
+                bodyFam.title,
                 20f,
                 textX,
                 textY,

@@ -1,6 +1,7 @@
 package bpm.client.runtime.windows
 
 import bpm.client.font.Fonts
+import bpm.client.render.panel.ConsolePanel
 import bpm.client.render.panel.PanelManager
 import bpm.client.render.panel.ProxiesPanel
 import bpm.client.render.panel.VariablesPanel
@@ -25,7 +26,14 @@ import imgui.flag.ImGuiMouseButton
 import imgui.flag.ImGuiMouseCursor
 import imgui.flag.ImGuiStyleVar
 import imgui.type.ImString
+import net.minecraft.client.Minecraft
+import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.resources.ResourceLocation
+import net.minecraft.world.item.ItemStack
+import net.minecraft.world.item.Items
 import org.joml.Vector2f
+import org.joml.Vector3f
 import org.joml.Vector4f
 import org.joml.Vector4i
 import kotlin.math.max
@@ -37,9 +45,14 @@ class CanvasGraphics(
 ) {
 
 
-    val panels = PanelManager()
-    val variablesPanel = VariablesPanel(panels).apply { panels.addPanel(this) }
-    val proxiesPanel = ProxiesPanel(panels).apply { panels.addPanel(this) }
+    private var gfx: GuiGraphics? = null
+
+    val panels = PanelManager(this)
+        .apply {
+            addPanel(VariablesPanel)
+            addPanel(ProxiesPanel)
+            addPanel(ConsolePanel)
+        }
 
     private val headerFamily get() = Fonts.getFamily("Inter")["Bold"]
     private val headerFont get() = headerFamily[window.workspace.settings.fontHeaderSize]
@@ -49,9 +62,15 @@ class CanvasGraphics(
     private val fontAwesome get() = this.fontAwesomeFamily[window.workspace.settings.fontHeaderSize]
 
     private val arrowCount = 5
-    private val execSegmentCount = 10
     private val execSegmentLength = 10f // Length of each segment in the exec link
     private val execGapRatio = 0.5f // Ratio of gap to segment length
+
+    //Minecraft related rendering
+    private val isMacos = System.getProperty("os.name").contains("mac", ignoreCase = true)
+    private val minecraft = Minecraft.getInstance()
+    private val guiScale get() = minecraft.window.guiScale
+    private val retina get() = isMacos && minecraft.window.screenWidth.toFloat() * guiScale > 1500.0f
+    private val renderBufferSource get() = minecraft.renderBuffers().bufferSource()
 
 
     inline fun renderBackground(drawList: ImDrawList, clipBounds: Vector4f, crossinline body: () -> Unit) {
@@ -61,7 +80,12 @@ class CanvasGraphics(
         drawList.popClipRect()
     }
 
-    fun renderPanels(drawList: ImDrawList) = panels.renderPanels(this, drawList)
+
+    fun isAnyPanelHovered(): Boolean = panels.isAnyHovered()
+
+    fun isDraggingOrResizing(): Boolean = panels.isAnyDraggedOrResized()
+
+    fun renderPanels(drawList: ImDrawList) = panels.renderPanels(drawList)
 
 
     fun renderLinks(drawList: ImDrawList, links: Collection<Link>) {
@@ -1045,6 +1069,84 @@ class CanvasGraphics(
             }
         }
     }
+
+    fun renderTooltip(text: String) {
+        //Draws a tooltip of the given text at the mouse position
+        val drawList = ImGui.getForegroundDrawList()
+        val bodyFont = bodyFamily.title
+        bodyFont.use {
+            val size = ImGui.calcTextSize(text)
+            val padding = 4f
+            val pos = ImGui.getMousePos()
+            val windowPos = ImGui.getWindowPos()
+            val windowSize = ImGui.getWindowSize()
+            //Draws the background of the tooltip
+            val pos1 = Vector2f(pos.x, pos.y + 20)
+            val pos2 = Vector2f(pos1.x + size.x + padding * 2, pos1.y + size.y + padding * 2)
+            drawList.addRectFilled(pos1.x, pos1.y, pos2.x, pos2.y, ImColor.rgba(0.1f, 0.1f, 0.1f, 0.9f))
+            //Draws the text of the tooltip
+            drawList.addText(pos1.x + padding, pos1.y + padding, ImColor.rgba(1f, 1f, 1f, 1f), text)
+        }
+    }
+
+
+    fun renderOverlay(gfx: GuiGraphics, bounds: Vector4f) {
+        //Set the mincraft gfx for this frame before rendering the panels
+        this.gfx = gfx
+        panels.renderPanelsPost(gfx, bounds)
+        this.gfx = null //Reset the gfx to null after rendering the panels
+    }
+
+    /**
+     * This is meant to be called from within the renderOverlay method. Meaning in the post render event, which is
+     * when the renderOverlay method is called.
+     */
+    fun renderBlockItem(blockId: String, x: Float, y: Float, scale: Float = 42.0f) {
+        val item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(blockId)) ?: Items.AIR
+        val itemStack = ItemStack(item)
+        renderBlockItem(itemStack, x, y, scale)
+    }
+
+    /**
+     * This is meant to be called from within the renderOverlay method. Meaning in the post render event, which is
+     * when the renderOverlay method is called.
+     */
+    fun renderBlockItem(
+        itemStack: ItemStack,
+        x: Float,
+        y: Float,
+        scale: Float = 42.0f
+    ) = gfx?.let { graphics ->
+        val poseStack = gfx!!.pose()
+
+        val adjustedPos = toScreenSpaceVector(x, y)
+        val adjustedScale = toScreenSpaceVector(scale, scale, scale)
+        poseStack.pushPose()
+        poseStack.translate(adjustedPos.x.toDouble(), adjustedPos.y.toDouble(), 0.0)
+        poseStack.scale(adjustedScale.x / 16f, adjustedScale.y / 16f, adjustedScale.z / 16f)
+        poseStack.translate(0.0, 3.5, 100.0)
+        graphics.renderItem(itemStack, 0, 0)
+
+        poseStack.popPose()
+    }
+
+    /**
+     * Helper method to convert the given x and y values to screen space coordinates
+     */
+    fun toScreenSpaceVector(x: Float, y: Float = x, z: Float = x): Vector3f {
+        var scaledX = x / guiScale.toFloat()
+        var scaledY = y / guiScale.toFloat()
+        var scaledZ = z / guiScale.toFloat()
+        //We need to double the values for retina displays i guess ? this works for mac so we will keep it
+        if (retina) {
+            scaledX *= 2
+            scaledY *= 2
+            scaledZ *= 2
+        }
+        return Vector3f(scaledX, scaledY, scaledZ)
+    }
+
+    fun toScreenSpaceVector(vec: Vector3f): Vector3f = toScreenSpaceVector(vec.x, vec.y, vec.z)
 
 
 }

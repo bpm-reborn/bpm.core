@@ -1,23 +1,9 @@
 package bpm.mc.visual
 
-import bpm.Bpm
-import net.minecraft.client.Minecraft
+import bpm.client.runtime.ClientRuntime
 import net.minecraft.client.gui.GuiGraphics
 import net.minecraft.client.gui.screens.Screen
 import net.minecraft.network.chat.Component
-import bpm.client.runtime.ClientRuntime
-import bpm.common.network.Client
-import bpm.common.workspace.packets.*
-import imgui.ImColor
-import imgui.ImGui
-import imgui.ImVec2
-import imgui.ImVec4
-import imgui.flag.ImGuiCol
-import imgui.flag.ImGuiStyleVar
-import imgui.flag.ImGuiWindowFlags
-import net.minecraft.resources.ResourceLocation
-import net.minecraft.world.item.ItemStack
-import net.minecraft.world.item.Items
 import java.util.*
 
 class NodeEditorGui : Screen(Component.literal("Node Editor")) {
@@ -25,47 +11,37 @@ class NodeEditorGui : Screen(Component.literal("Node Editor")) {
     private var workspaceUuid: UUID? = null
     private var openTime: Long = 0
 
-    override fun init() {
-        super.init()
+    init {
         openTime = System.currentTimeMillis()
-        Overlay2D.skipped = true
+    }
+
+
+    override fun init() {
+        //No op, we use this simply for event handling
+//        minecraft?.options?.hideGui = true
     }
 
     override fun render(pGuiGraphics: GuiGraphics, pMouseX: Int, pMouseY: Int, pPartialTick: Float) {
-        try {
-            super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick)
-            ClientRuntime.newFrame()
-            ClientRuntime.process()
-            ClientRuntime.endFrame()
-        } catch (e: Exception) {
-            Bpm.LOGGER.error("Error rendering NodeEditorGui", e)
-        }
+//        renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick)
+//        this.renderPanorama(pGuiGraphics, pPartialTick)
+
+        renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick)
+        ClientRuntime.newFrame()
+        ClientRuntime.process(pGuiGraphics)
+        ClientRuntime.endFrame()
+
+        Overlay2D.renderPost(pGuiGraphics)
+
+        //No op, we use this simply for event handling
+//        super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick)
     }
 
     override fun onClose() {
         super.onClose()
-        Overlay2D.skipped = false
-        Client {
-            it.send(WorkspaceCompileRequest(workspaceUuid!!))
-            val settings = ClientRuntime.workspace?.settings
-                ?: error("Workspace settings not found. This should not happen")
-            it.send(WorkspaceSettingsStore(workspaceUuid!!, settings))
-        }
-        ClientRuntime.closeCanvas()
-        workspaceUuid = null
+        //Close the workspace, updating the overlay 2d
+        Overlay2D.close()
     }
 
     override fun isPauseScreen(): Boolean = false
 
-    companion object {
-
-        fun open(uuid: UUID) {
-            Client {
-                it.send(NodeLibraryRequest())
-            }
-            val nodeEditorGui = NodeEditorGui()
-            nodeEditorGui.workspaceUuid = uuid
-            Minecraft.getInstance().setScreen(nodeEditorGui)
-        }
-    }
 }

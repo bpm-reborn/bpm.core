@@ -8,7 +8,6 @@ import imgui.glfw.ImGuiImplGlfw
 import net.minecraft.client.Minecraft
 import net.neoforged.api.distmarker.Dist
 import net.neoforged.api.distmarker.OnlyIn
-import bpm.client.font.FontType
 import bpm.client.font.Fonts
 import bpm.client.runtime.windows.CanvasWindow
 import bpm.common.logging.KotlinLogging
@@ -17,13 +16,16 @@ import bpm.common.network.NetUtils
 import bpm.common.network.Network.new
 import bpm.common.packets.Packet
 import bpm.common.packets.internal.ConnectResponsePacket
-import bpm.common.packets.internal.DisconnectPacket
 import bpm.common.utils.FontAwesome
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.packets.*
-import bpm.mc.visual.NodeEditorGui
+import bpm.mc.visual.Overlay2D
+import bpm.pipe.proxy.PacketProxiedStatesResponse
+import bpm.pipe.proxy.ProxyState
 import com.mojang.blaze3d.systems.RenderSystem
+import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.client.player.LocalPlayer
 import org.lwjgl.glfw.GLFW
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -40,9 +42,9 @@ object ClientRuntime : Listener {
     /**
      * The client uid that the runtime should use to connect to the server
      */
-    private val clientUid: UUID by lazy { Minecraft.getInstance().player?.uuid ?: error("Player UUID not available") }
     private val cachedWorkspaces: ConcurrentHashMap<UUID, Workspace> = ConcurrentHashMap()
     private var running = false
+
     //Caches the workspace into memory
     internal var workspace: Workspace? = null
         set(value) {
@@ -60,9 +62,14 @@ object ClientRuntime : Listener {
     var canvasWindow: CanvasWindow? = null
         private set
     internal val logger = KotlinLogging.logger { }
+    private val proxyMap = mutableMapOf<UUID, List<ProxyState>>()
+    val workspaceUUID: UUID get() = workspace?.uid ?: NetUtils.DefaultUUID
+    val proxies: List<ProxyState> get() = proxyMap[workspaceUUID] ?: emptyList()
+    val minecraft: Minecraft get() = Minecraft.getInstance()
+    val player: LocalPlayer get() = minecraft.player!!
+    val level get() = minecraft.level
 
     operator fun get(workspaceUid: UUID): Workspace? {
-
         val cahced = cachedWorkspaces[workspaceUid]
         if (cahced != null) {
             return cahced
@@ -171,11 +178,20 @@ object ClientRuntime : Listener {
     /**
      * Should be called once per frame to process events from the main thread
      */
-    fun process() {
+    fun process(graphics: GuiGraphics) {
         if (!running) return
 
         if (canvasWindow != null) {
-            canvasWindow?.render()
+            canvasWindow?.render(graphics)
+        }
+
+    }
+
+    fun processPost(graphics: GuiGraphics) {
+        if (!running) return
+
+        if (canvasWindow != null) {
+            canvasWindow?.renderPost(graphics)
         }
 
     }
@@ -233,15 +249,16 @@ object ClientRuntime : Listener {
             }
         }
 
-        is DisconnectPacket -> {
-            //TODO: update local client representation of the users in the workspace
+        is PacketProxiedStatesResponse -> {
+            proxyMap[packet.workspace] = packet.proxiedStates
         }
+
 
         is WorkspaceLoad -> {
             this.workspace = packet.workspace
             packet.workspace?.let {
                 // Open the node editor gui, has to be done on the main thread
-                RenderSystem.recordRenderCall { NodeEditorGui.open(it.uid) }
+                RenderSystem.recordRenderCall { Overlay2D.open(it.uid) }
             }
 
             if (canvasWindow == null) {

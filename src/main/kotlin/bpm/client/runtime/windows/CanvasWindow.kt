@@ -17,6 +17,7 @@ import imgui.flag.ImGuiButtonFlags
 import imgui.flag.ImGuiMouseButton
 import imgui.flag.ImGuiPopupFlags
 import imgui.flag.ImGuiWindowFlags
+import net.minecraft.client.gui.GuiGraphics
 import org.joml.Vector2f
 import org.joml.Vector4f
 import java.util.*
@@ -34,10 +35,6 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
     private val buttons: MutableSet<CanvasButton> = HashSet()
     private val graphics get() = context.graphics
-    private val headerFamily get() = Fonts.getFamily("Inter")["Bold"]
-    private val headerFont get() = headerFamily[workspace.settings.fontHeaderSize]
-    private val bodyFamily get() = Fonts.getFamily("Inter")["Regular"]
-    private val bodyFont get() = bodyFamily[workspace.settings.fontSize]
     private val fontAwesomeFamily = Fonts.getFamily("Fa")["Regular"]
     private val fontAwesome get() = fontAwesomeFamily[workspace.settings.fontHeaderSize]
 
@@ -54,15 +51,6 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     private val bounds: Vector4f get() = workspace.settings.bounds
 
     /**
-     * Represents the position of the context menu.
-     *
-     * This vector represents the position of the context menu.
-     *
-     * @return The position of the context menu.
-     */
-    private var contextMenuPosition = Vector2f()
-
-    /**
      * A private constant representing the offset vector.
      *
      * This vector represents the position of the canvas relative to the center of the workspace.
@@ -72,14 +60,13 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     private val position: Vector2f get() = workspace.settings.position
 
     var currentTime = 0f
-
+        private set
     private var hoveredNodeId: UUID? = null
     private var hoveredLinkId: UUID? = null
     val hoveredNode: Node? get() = hoveredNodeId?.let { workspace.getNode(it) }
     val hoveredLink: Link? get() = hoveredLinkId?.let { workspace.getLink(it) }
-
-    private var isPropertyWindowHovered = false
-    private var lastCanvasSize: Vector2f = Vector2f()
+    var shouldCancelActions = false
+        private set
 
     init {
         buttons += CanvasButton(
@@ -122,7 +109,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     /**
      * Manage all the rendering related to the main canvas here.
      */
-    override fun render() {
+    override fun render(gfx: GuiGraphics) {
         val mainViewport = ImGui.getMainViewport()
         ImGui.setNextWindowPos(mainViewport.posX, mainViewport.posY)
         ImGui.setNextWindowSize(mainViewport.sizeX, mainViewport.sizeY)
@@ -134,20 +121,20 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         val drawList = ImGui.getWindowDrawList()
 
         val isActionMenuHovered = CustomActionMenu.isVisible() && CustomActionMenu.isHovered()
-        val isVariablesMenuHovered = false
+
 
         setupCanvas()
 
-        isPropertyWindowHovered = isActionMenuHovered || isVariablesMenuHovered
+        shouldCancelActions = isActionMenuHovered || selectionContextOverlay.isHovered() || graphics.isAnyPanelHovered() || graphics.isDraggingOrResizing()
 
-        if (!selectionContextOverlay.isHovered() && !isPropertyWindowHovered) handleCanvas()
+        if (!selectionContextOverlay.isHovered() && !shouldCancelActions) handleCanvas()
 
         val mousePos = ImGui.getMousePos()
         val displaySize = ImGui.getIO().displaySize
 
         updateAnimationTime()
         context.handleEdgeDragging()
-        context.handleSelection(selectionContextOverlay.isHovered() || isVariablesMenuHovered || graphics.panels.isAnyHovered() || graphics.variablesPanel.draggingNode)
+        context.handleSelection(shouldCancelActions)
         handleHover()
         handleContextMenu()
 
@@ -175,9 +162,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
                 it.render(foreground)
             }
             CustomActionMenu.render(foreground)
-
             graphics.renderMousePosText(drawList, bounds, mousePos.toVec2f)
-//            context.variablesMenu.render(drawList)
             graphics.renderPanels(drawList)
             context.notificationManager.renderNotifications(drawList, displaySize)
         }
@@ -185,6 +170,11 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         // Render the custom action menu
         context.wasDraggingNode = false
         ImGui.end()
+    }
+
+
+    fun renderPost(gfx: GuiGraphics) {
+        graphics.renderOverlay(gfx, bounds)
     }
 
     private val initialOpen get() = System.currentTimeMillis() - openTime < 100
@@ -237,7 +227,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     }
 
     private fun handleHover() {
-        if (isPropertyWindowHovered) {
+        if (shouldCancelActions) {
             hoveredNodeId = null
             hoveredLinkId = null
             return
@@ -303,7 +293,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
      * Used to update the scrolled offset of the canvas
      */
     private fun handleCanvas() {
-        if (isPropertyWindowHovered) {
+        if (shouldCancelActions) {
             return
         }
         val isActive = ImGui.isItemActive() // Held
@@ -335,5 +325,6 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         position.x -= (center.x - position.x) * (context.zoom - zoom) / zoom
         position.y -= (center.y - position.y) * (context.zoom - zoom) / zoom
     }
+
 }
 

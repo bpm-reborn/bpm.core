@@ -34,4 +34,4 @@ edges:
     type: number
 
 source: |
-  return value_a - math.floor(value_a / value_b) * value_b
+  ${OUTPUT.result = value_a - math.floor(value_a / value_b) * value_b}

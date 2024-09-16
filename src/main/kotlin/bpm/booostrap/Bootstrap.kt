@@ -22,7 +22,6 @@ import bpm.common.network.Network
 import bpm.common.network.Server
 import bpm.common.packets.Packet
 import bpm.common.schemas.Schemas
-import bpm.common.serial.Serial
 import bpm.common.serial.Serialize
 import bpm.common.utils.*
 import bpm.mc.visual.CustomBackgroundRenderer
@@ -42,7 +41,6 @@ import org.apache.logging.log4j.Level
 import thedarkcolour.kotlinforforge.neoforge.forge.FORGE_BUS
 import thedarkcolour.kotlinforforge.neoforge.forge.runForDist
 import java.io.IOException
-import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createInstance
@@ -89,7 +87,8 @@ class Bootstrap(
             FORGE_BUS.addListener(::onClientPlayerLogout)
             modBus.addListener(::onClientSetup)
             modBus.addListener(::onRegisterClientReloadListeners)
-            FORGE_BUS.addListener(::renderOverlay2D)
+            FORGE_BUS.addListener(::renderOverlay2DPre)
+            FORGE_BUS.addListener(::renderOverlay2DPost)
             FORGE_BUS.addListener(::renderOverlay3D)
 
             modBus.addListener(::registerShaders)
@@ -137,11 +136,12 @@ class Bootstrap(
     }
 
     @OnlyIn(Dist.CLIENT)
-    private fun renderOverlay2D(event: RenderGuiEvent.Pre) {
-        if (Overlay2D.skipped) return
-        ClientRuntime.newFrame()
-        Overlay2D.render()
-        ClientRuntime.endFrame()
+    private fun renderOverlay2DPre(event: RenderGuiEvent.Pre) {
+        Overlay2D.renderPre(event.guiGraphics)
+    }
+    @OnlyIn(Dist.CLIENT)
+    private fun renderOverlay2DPost(event: RenderGuiEvent.Post) {
+        Overlay2D.renderPost(event.guiGraphics)
     }
 
     @OnlyIn(Dist.CLIENT)
@@ -155,6 +155,7 @@ class Bootstrap(
             event.frustum
         )
         else Unit
+
 
     @OnlyIn(Dist.CLIENT)
     private fun onClientPlayerLogin(event: ClientPlayerNetworkEvent.LoggingIn) {

@@ -1,4 +1,3 @@
-# RandomFloat.node
 description: "Generates a random sentence."
 group: Random
 name: RNG Sentence
@@ -15,7 +14,5 @@ edges:
     direction: output
     type: string
 source: |
-  ${SETUP.{
-      variables.__Random__ = java.import('bpm.common.utils.Random')
-  }}
-  return variables.__Random__:randomSentence()
+  ${OUTPUT.result = java.import('bpm.common.utils.Random'):randomSentence()}
+  
