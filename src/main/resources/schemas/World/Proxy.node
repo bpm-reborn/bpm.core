@@ -1,0 +1,19 @@
+description: "Gets the value of a variable."
+group: World
+name: Proxy
+extends: Base/Node
+
+theme:
+  color: '#1C1C1C'
+  height: 40
+  width: 120
+  icon: 0xf557
+
+edges:
+  proxied:
+    description: 'The retrieved value of the variable.'
+    direction: output
+    type: proxy
+
+source: |
+  ${OUTPUT.proxied} = variables[name]

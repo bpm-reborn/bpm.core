@@ -26,7 +26,7 @@ class PanelManager(private val graphics: CanvasGraphics) {
         arrangePanel(panel)
     }
 
-    private fun arrangePanel(panel: Panel) {
+     fun arrangePanel(panel: Panel) {
         val displaySize = ImGui.getIO().displaySize
         val padding = 5f
         val sideWidth = 0.2f

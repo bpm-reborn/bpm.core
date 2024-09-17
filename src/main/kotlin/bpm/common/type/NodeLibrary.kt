@@ -47,11 +47,6 @@ class NodeLibrary(private val directory: Path? = null) : Iterable<NodeTypeMeta> 
      */
     fun readFrom(path: Path) {
         //Copy from root schemas
-        val rootSchema = Workspace.childPath("schemas")
-        if (!rootSchema.toFile().exists()) {
-            log.info { "Copying schemas from root schemas directory." }
-            rootSchema.toFile().copyRecursively(path.toFile(), false)
-        }
         registerNodes.clear()
         log.info { "Reading node types from directory: $path" }
         parseNodeTypes(performPartialParse(readMetasFrom(path)))

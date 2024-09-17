@@ -238,7 +238,6 @@ object ServerRuntime : Listener {
             val value = input["value"] as? Property.Object ?: error("Value not found")
             val default = value["default"] as? Property.String ?: error("Default not found")
 
-
             //Sets the default to the variable name
             default.set(packet.variableName)
 
@@ -261,7 +260,6 @@ object ServerRuntime : Listener {
             })
 
         }
-
 
 
         else -> Unit
@@ -340,7 +338,6 @@ object ServerRuntime : Listener {
 
 //            server.sendToAll(packet, *usersNotInWorkspace)
     }
-
 
 
     /**

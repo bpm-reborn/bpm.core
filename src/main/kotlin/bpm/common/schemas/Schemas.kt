@@ -23,16 +23,17 @@ class Schemas(private val path: Path, private val side: Endpoint.Side) : Listene
 
     val library: NodeLibrary = NodeLibrary()
     private val logger = KotlinLogging.logger { }
+    //TODO: make this a configuration option
+    private val gitSchemaLoader = GitSchemaLoader("https://github.com/meng-devs/bpm.nodes.git", "main", path)
 
     override fun onInstall() {
         if (side == Endpoint.Side.CLIENT) return
-        //This is still ran on the client, the client has two instances of schemas (one for server and one for client as singleplayer still internally uses a server)
 
-
-        //Load the node library, todo: move this to a config file
-        library.readFrom(path)
+        // Clone or pull the repository and load the node library
+        val schemasPath = gitSchemaLoader.cloneOrPull()
+        library.readFrom(schemasPath)
         val types = library.collect()
-        logger.info { "Loaded ${types.size} types" }
+        logger.info { "Loaded ${types.size} types from Git repository" }
     }
 
     override fun onConnect(uuid: UUID) {
@@ -42,29 +43,33 @@ class Schemas(private val path: Path, private val side: Endpoint.Side) : Listene
     }
 
     override fun onPacket(packet: Packet, from: UUID) {
-        if (packet is NodeLibraryRequest) {
-            //Send the node library to the client
-            val response = NodeLibraryResponse(library.collectToPropertyList())
-            //Send the response to the client
-            server.send(response, from)
-            logger.debug { "Sent node library to client $from with ${library.count()} types" }
-        }
-        if (packet is NodeLibraryResponse) {
-            if (side == Endpoint.Side.CLIENT) {
+        when (packet) {
+            is NodeLibraryRequest -> {
+                val response = NodeLibraryResponse(library.collectToPropertyList())
+                server.send(response, from)
+                logger.debug { "Sent node library to client $from with ${library.count()} types" }
+            }
+
+            is NodeLibraryResponse -> {
+                if (side == Endpoint.Side.CLIENT) {
+                    library.clear()
+                    library.loadFrom(packet.nodeSchemas)
+                    logger.debug { "Received node library from server with ${library.count()} types" }
+                }
+            }
+
+            is NodeLibraryReloadRequest -> {
                 library.clear()
-                library.loadFrom(packet.nodeSchemas)
-                logger.debug { "Received node library from server with ${library.count()} types" }
+                val schemasPath = gitSchemaLoader.cloneOrPull()
+                library.readFrom(schemasPath)
+                val types = library.collect()
+                logger.info { "Reloaded ${types.size} types from Git repository" }
+                server.sendToAll(NodeLibraryResponse(library.collectToPropertyList()))
             }
         }
-        if (packet is NodeLibraryReloadRequest) {
-            library.clear()
-            library.readFrom(path)
-            val types = library.collect()
-            logger.info { "Loaded ${types.size} types" }
-            //send to all in workspace
-            server.sendToAll(NodeLibraryResponse(library.collectToPropertyList()))
-        }
     }
+
+
     //Simulated means that it's not added to graph at all, it's just a temporary node typically used for rendering
     fun createFromType(workspace: Workspace, nodeType: NodeType, position: Vector2f, simulated: Boolean = false): Node {
         val name = nodeType["name"] as? Property.String ?: Property.String(nodeType.meta.name)

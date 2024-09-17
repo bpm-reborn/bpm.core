@@ -175,10 +175,6 @@ class Bootstrap(
         val gameDir = FMLPaths.GAMEDIR.get()
 
         val schemaPath = gameDir.resolve("schemas")
-        if (!schemaPath.toFile().exists()) {
-            schemaPath.toFile().mkdir()
-        }
-
         Client.install(ClientRuntime)
             .install<Schemas>(schemaPath, Endpoint.Side.CLIENT)
             .install<CanvasContext>()
@@ -193,29 +189,29 @@ class Bootstrap(
 
     //Copies the schemas from the jar to the game directory
     private fun copySchemas() {
-        val gameDir = FMLPaths.GAMEDIR.get()
-        val schemaPath = gameDir.resolve("schemas")
-        if (!schemaPath.toFile().exists()) {
-            schemaPath.toFile().mkdir()
-        }
-        val resources = results.getResources("schemas")
-        val mapped = resources.readResourcesToByteArrayMap().map {
-            val path = it.value.resourceInfo.path
-            val bytes = it.value
-            val name = path.toString().substringAfter("schemas/")
-            name to bytes
-        }
-        for ((name, resource) in mapped) {
-            val bytes = resource
-            val file = schemaPath.resolve(name).toFile()
-            //create containing directories if they don't exist from the path to the file
-            file.parentFile.mkdirs()
-
-            //Always write when in dev mode, otherwise only write if the file doesn't exist
-//            if (!file.toFile().exists() || !results.isProduction) {
-            file.writeBytes(bytes.content)
-//            }
-        }
+//        val gameDir = FMLPaths.GAMEDIR.get()
+//        val schemaPath = gameDir.resolve("schemas")
+//        if (!schemaPath.toFile().exists()) {
+//            schemaPath.toFile().mkdir()
+//        }
+//        val resources = results.getResources("schemas")
+//        val mapped = resources.readResourcesToByteArrayMap().map {
+//            val path = it.value.resourceInfo.path
+//            val bytes = it.value
+//            val name = path.toString().substringAfter("schemas/")
+//            name to bytes
+//        }
+//        for ((name, resource) in mapped) {
+//            val bytes = resource
+//            val file = schemaPath.resolve(name).toFile()
+//            //create containing directories if they don't exist from the path to the file
+//            file.parentFile.mkdirs()
+//
+//            //Always write when in dev mode, otherwise only write if the file doesn't exist
+////            if (!file.toFile().exists() || !results.isProduction) {
+//            file.writeBytes(bytes.content)
+////            }
+//        }
         //Collects the schemas from the jar
 
 //            val file = schemaPath.resolve(name)
@@ -254,9 +250,9 @@ class Bootstrap(
         val gameDir = FMLPaths.GAMEDIR.get()
         val schemasPath = gameDir.resolve("schemas")
 //        val schemasPath = Path.of("U:\\Dev\\minecraft\\modding\\mods\\bpm\\src\\main\\resources\\schemas")//gameDir.resolve("schemas")
-        if (!schemasPath.toFile().exists()) {
-            schemasPath.toFile().mkdir()
-        }
+//        if (!schemasPath.toFile().exists()) {
+//            schemasPath.toFile().mkdir()
+//        }
 
         //We initialize this here because it's available on the client too for single player
         Server

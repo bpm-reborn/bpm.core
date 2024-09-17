@@ -39,7 +39,7 @@ abstract class Panel(val title: String, val icon: String) {
         internal set
     protected val buttonColor = ImColor.rgba(58, 58, 60, 255)
     protected val buttonHoverColor = ImColor.rgba(68, 68, 70, 255)
-
+    private val lastSize = Vector2i()
     internal fun setupPanel(graphics: CanvasGraphics, manager: PanelManager) {
         this.manager = manager
         this.graphics = graphics
@@ -52,6 +52,17 @@ abstract class Panel(val title: String, val icon: String) {
         renderTitle(drawList, position, size)
         renderContent(drawList, position, size)
         renderFooter(drawList, position, size)
+
+        checkResizeAndArrange()
+    }
+
+    private fun checkResizeAndArrange() {
+        val windowSize = ImGui.getWindowViewport().size
+        val size = Vector2i(windowSize.x.toInt(), windowSize.y.toInt())
+        if (size != lastSize) {
+            lastSize.set(size)
+            manager.arrangePanel(this)
+        }
     }
 
     private fun renderContent(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
@@ -116,7 +127,7 @@ abstract class Panel(val title: String, val icon: String) {
         )
     }
 
-    protected  fun renderFooter(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
+    protected fun renderFooter(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
         val footerHeight = 50f
         val footerY = ImGui.getCursorScreenPos().y + 5f
 
@@ -133,7 +144,11 @@ abstract class Panel(val title: String, val icon: String) {
         ImGui.setNextWindowPos(position.x, footerY)
         ImGui.setNextWindowSize(sizee.x, sizee.y)
         ImGui.beginChild("##footer_$title", sizee.x, sizee.y, false, ImGuiWindowFlags.NoScrollbar)
-        renderFooterContent(drawList, Vector2f(position.x + 15f, footerY + 5f), Vector2f(size.x - 30f, footerHeight - 10f))
+        renderFooterContent(
+            drawList,
+            Vector2f(position.x + 15f, footerY + 5f),
+            Vector2f(size.x - 30f, footerHeight - 10f)
+        )
         ImGui.endChild()
     }
 
