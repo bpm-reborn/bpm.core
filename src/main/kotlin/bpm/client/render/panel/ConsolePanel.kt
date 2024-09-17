@@ -42,20 +42,9 @@ object ConsolePanel : Panel("Console", FontAwesome.Terminal) {
         renderLogs(drawList, position, size)
     }
 
+
+
     override fun renderFooterContent(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        // Clear button
-
-
-        // Log level buttons
-//        LogLevel.entries.forEachIndexed { index, logLevel ->
-//            val buttonWidth = 80f
-//            val buttonHeight = 20f
-//            val buttonX = size.x - 100f + (index * (buttonWidth + 5f))
-//            val buttonY = 5f
-//            if (ImGui.button(logLevel.name, buttonWidth, buttonHeight)) {
-//                log("Test ${logLevel.name}", logLevel)
-//            }
-//        }
         renderSearchBar(drawList, position, size)
         // Add variable button
         renderClearLogsButton(
@@ -71,9 +60,9 @@ object ConsolePanel : Panel("Console", FontAwesome.Terminal) {
 
         // Search bar background
         drawList.addRectFilled(
-            position.x + 5f,
+            position.x ,
             searchBarY,
-            position.x + size.x - 5f,
+            position.x + size.x ,
             searchBarY + searchBarHeight,
             ImColor.rgba(60, 60, 60, 255),
             5f
@@ -240,9 +229,6 @@ object ConsolePanel : Panel("Console", FontAwesome.Terminal) {
         ImGui.dummy(0f, 20f)
     }
 
-    override fun onResize() {
-        // Handle any resize logic if needed
-    }
 
     init {
         // Initialize any necessary components

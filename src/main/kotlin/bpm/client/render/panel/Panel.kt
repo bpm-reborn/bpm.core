@@ -12,7 +12,9 @@ import bpm.common.network.Endpoint
 import bpm.common.utils.FontAwesome
 import imgui.ImColor
 import imgui.flag.ImGuiCol
+import imgui.flag.ImGuiMouseButton
 import imgui.flag.ImGuiMouseCursor
+import imgui.flag.ImGuiWindowFlags
 import imgui.type.ImString
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphics
@@ -21,29 +23,19 @@ import org.joml.Vector3f
 
 abstract class Panel(val title: String, val icon: String) {
 
-    internal var isDragging: Boolean = false
     protected lateinit var manager: PanelManager
     protected lateinit var graphics: CanvasGraphics
-
+    var isDragging: Boolean = false
+        protected set
     val iconFam = Fonts.getFamily("Fa")["Regular"]
     val boldFam = Fonts.getFamily("Inter")["Bold"]
     val bodyFam = Fonts.getFamily("Inter")["Regular"]
     private val displaySize get() = ImGui.getIO().displaySize
     protected val context = Endpoint.installed<CanvasContext>()
     var position = Vector2f()
-    var lastMaximizedPosition = Vector2f()
-    private val windowSize = Vector2i(Minecraft.getInstance().window.width, Minecraft.getInstance().window.height)
-    internal var isResizing = false
-    private var resizeStartPos = Vector2f()
-    private var resizeStartSize = Vector2f()
-
-    private val minWidth = 250f
-    private val minHeight = 150f
-    private val maxWidthPercent = 0.5f
-    private val maxHeightPercent = 0.8f
-    var panelWidth = 0f
+    var panelWidth = 300f
         internal set
-    var panelHeight = 0f
+    var panelHeight = 200f
         internal set
     protected val buttonColor = ImColor.rgba(58, 58, 60, 255)
     protected val buttonHoverColor = ImColor.rgba(68, 68, 70, 255)
@@ -54,106 +46,42 @@ abstract class Panel(val title: String, val icon: String) {
     }
 
     fun render(drawList: ImDrawList, position: Vector2f, scale: Float) {
-        this.position = position
-        val newWindowSize = Vector2i(Minecraft.getInstance().window.width, Minecraft.getInstance().window.height)
-        if (newWindowSize != windowSize) {
-            updatePanelSize()
-            onResize()
-            windowSize.set(newWindowSize)
-        }
-
         val size = Vector2f(panelWidth * scale, panelHeight * scale)
 
         renderBackground(drawList, position, size)
         renderTitle(drawList, position, size)
         renderContent(drawList, position, size)
         renderFooter(drawList, position, size)
-        renderResizeHandle(drawList, position, size)
-        handleResize(position, size, scale)
     }
 
-    internal open fun onResize() = Unit
-
-    private fun updatePanelSize() {
-        val displayWidth = ImGui.getIO().displaySize.x
-        val displayHeight = ImGui.getIO().displaySize.y
-
-        panelWidth = panelWidth.coerceIn(minWidth, displayWidth * maxWidthPercent)
-        panelHeight = panelHeight.coerceIn(minHeight, displayHeight * maxHeightPercent)
-    }
-
-
-    private fun renderResizeHandle(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        val handleSize = 15
-        val handlePos = Vector2f(position.x + size.x - handleSize, position.y + size.y - handleSize)
-
-        // Draw the resize handle (caret)
-//        drawList.addTriangleFilled(
-//            handlePos.x, handlePos.y, handlePos.x + handleSize, handlePos.y, handlePos.x, handlePos.y + handleSize,
-//            ImGui.colorConvertFloat4ToU32(0.3f, 0.3f, 0.3f, 1f)
-//        )
-        drawList.addTriangleFilled(
-            handlePos.x,
-            handlePos.y + handleSize,
-            handlePos.x + handleSize,
-            handlePos.y + handleSize,
-            handlePos.x + handleSize,
-            handlePos.y,
-            ImGui.colorConvertFloat4ToU32(0.3f, 0.3f, 0.3f, 1f)
+    private fun renderContent(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
+        val contentStart = Vector2f(position.x + 10f, position.y + 40f)
+        val contentSize = Vector2f(size.x - 20f, size.y - 110f)
+        drawList.addRectFilled(
+            contentStart.x,
+            contentStart.y,
+            contentStart.x + contentSize.x,
+            contentStart.y + contentSize.y,
+            ImGui.colorConvertFloat4ToU32(0.1f, 0.1f, 0.1f, 1f),
+            10f
         )
-        //The opposite in white
-//        drawList.addTriangleFilled(
-//            handlePos.x, handlePos.y, handlePos.x + handleSize, handlePos.y, handlePos.x, handlePos.y + handleSize,
-//            ImGui.colorConvertFloat4ToU32(1f, 1f, 1f, 1f)
-//        )
+        ImGui.pushClipRect(
+            contentStart.x, contentStart.y, contentStart.x + contentSize.x, contentStart.y + contentSize.y, true
+        )
+
+        ImGui.setNextWindowPos(contentStart.x, contentStart.y)
+        if (ImGui.beginChild("##content_$title", contentSize.x, contentSize.y, false)) {
+            renderBody(drawList, contentStart, contentSize)
+        }
+        ImGui.endChild()
+        renderAfter(graphics, drawList, Vector2f(position), size)
+        ImGui.popClipRect()
     }
 
-    private fun handleResize(position: Vector2f, size: Vector2f, scale: Float) {
-        val handleSize = 15f
-        val handlePos = Vector2f(position.x + size.x - handleSize, position.y + size.y - handleSize)
-        val mousePos = ImGui.getMousePos()
+    protected abstract fun renderBody(drawList: ImDrawList, position: Vector2f, size: Vector2f)
 
-        if (ImGui.isMouseHoveringRect(handlePos.x, handlePos.y, handlePos.x + handleSize, handlePos.y + handleSize)) {
-            ImGui.setMouseCursor(ImGuiMouseCursor.ResizeNWSE)
-        }
-
-        if (ImGui.isMouseClicked(0) && ImGui.isMouseHoveringRect(
-                handlePos.x,
-                handlePos.y,
-                handlePos.x + handleSize,
-                handlePos.y + handleSize
-            )
-        ) {
-            isResizing = true
-            resizeStartPos.set(mousePos.x, mousePos.y)
-            resizeStartSize.set(size)
-        }
-
-        if (isResizing) {
-            if (ImGui.isMouseDown(0)) {
-                val deltaX = mousePos.x - resizeStartPos.x
-                val deltaY = mousePos.y - resizeStartPos.y
-
-                val newWidth = (resizeStartSize.x + deltaX) / scale
-                val newHeight = (resizeStartSize.y + deltaY) / scale
-
-                val displayWidth = ImGui.getIO().displaySize.x
-                val displayHeight = ImGui.getIO().displaySize.y
-
-                panelWidth = newWidth.coerceIn(minWidth, displayWidth * maxWidthPercent)
-                panelHeight = newHeight.coerceIn(minHeight, displayHeight * maxHeightPercent)
-
-                onResize()
-            } else {
-                isResizing = false
-            }
-        }
-    }
-
-    fun updatePosition(newPosition: Vector2f) {
-        position = newPosition
-        lastMaximizedPosition = newPosition
-    }
+    protected open fun renderAfter(graphics: CanvasGraphics, drawList: ImDrawList, position: Vector2f, size: Vector2f) =
+        Unit
 
     protected open fun renderTitle(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
         val titleHeight = 30f
@@ -176,13 +104,9 @@ abstract class Panel(val title: String, val icon: String) {
                 it, 22f, position.x + 40f, position.y + 7f, ImGui.colorConvertFloat4ToU32(1f, 1f, 1f, 1f), title
             )
         }
-
-        renderMinimizeButton(drawList, Vector2f(position.x + size.x - 30f, position.y + 5f))
     }
 
-    protected open fun renderBackground(
-        drawList: ImDrawList, position: Vector2f, size: Vector2f
-    ) {
+    protected open fun renderBackground(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
         drawList.addRectFilled(
             position.x,
             position.y,
@@ -192,136 +116,42 @@ abstract class Panel(val title: String, val icon: String) {
         )
     }
 
-    protected open fun renderFooter(
-        drawList: ImDrawList, position: Vector2f, size: Vector2f
-    ) {
-        val searchBarHeight = 50f
-        val searchBarWidth = size.x - 20f
-        val searchBarPosition = Vector2f(position.x + 10f, position.y + size.y - searchBarHeight - 10f)
-        val searchBarSize = Vector2f(searchBarWidth, searchBarHeight)
-        ImGui.setCursorScreenPos(searchBarPosition.x, searchBarPosition.y)
-        val pos = ImGui.getCursorScreenPos()
-        ImGui.pushClipRect(
-            searchBarPosition.x,
-            searchBarPosition.y,
-            searchBarPosition.x + searchBarSize.x,
-            searchBarPosition.y + searchBarSize.y,
-            true
-        )
-        ImGui.setNextWindowPos(searchBarPosition.x, searchBarPosition.y)
-//        ImGui.getForegroundDrawList()
-//            .addRect(pos.x, pos.y, pos.x + searchBarSize.x, pos.y + searchBarSize.y, ImColor.rgba(255, 0, 60, 255), 5f)
-        if (ImGui.beginChild("##footer$title", 0f, 0f)) {
-            val startPos = ImGui.getCursorScreenPos()
-            drawList.addRectFilled(
-                startPos.x,
-                startPos.y,
-                startPos.x + searchBarSize.x,
-                startPos.y + searchBarSize.y,
-                ImColor.rgba(33, 32, 35, 255),
-                7f
-            )
-            renderFooterContent(drawList, startPos.toVec2f, searchBarSize)
-        }
-        ImGui.endChild()
-        ImGui.popClipRect()
-    }
-
-    private val searchBuffer = ImString(128)
-    private fun renderSearchInput(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        // Search icon
-        iconFam[32].use {
-            drawList.addText(
-                it, 32f, position.x + 5f, position.y - 2f, ImColor.rgba(150, 150, 150, 255), FontAwesome.MagnifyingGlass
-            )
-        }
-
-        // Search input field
-        bodyFam.header.use {
-            ImGui.setCursorScreenPos(position.x + 25f, position.y)
-            ImGui.pushItemWidth(size.x - 30f)
-            ImGui.pushStyleColor(ImGuiCol.FrameBg, ImColor.rgba(60, 60, 60, 0).toInt())
-            ImGui.pushStyleColor(ImGuiCol.Text, ImColor.rgba(200, 200, 200, 255).toInt())
-            ImGui.pushStyleColor(ImGuiCol.Border, ImColor.rgba(60, 60, 60, 255).toInt())
-            ImGui.inputText("##search", searchBuffer)
-            ImGui.popStyleColor(3)
-            ImGui.popItemWidth()
-        }
-
-    }
-
-    protected open fun renderFooterContent(
-        drawList: ImDrawList, position: Vector2f, size: Vector2f
-    ) = Unit
-
-    private fun renderMinimizeButton(drawList: ImDrawList, position: Vector2f) {
-        val buttonSize = 20f
-        val isHovered = isMouseOver(position, buttonSize, buttonSize)
-        val buttonColor = if (isHovered) ImGui.colorConvertFloat4ToU32(0.4f, 0.4f, 0.4f, 1f)
-        else ImGui.colorConvertFloat4ToU32(0.3f, 0.3f, 0.3f, 1f)
+    protected  fun renderFooter(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
+        val footerHeight = 50f
+        val footerY = ImGui.getCursorScreenPos().y + 5f
 
         drawList.addRectFilled(
-            position.x, position.y, position.x + buttonSize, position.y + buttonSize, buttonColor, 5f
-        )
-
-        iconFam[18].use {
-            drawList.addText(
-                it,
-                18f,
-                position.x + 2f,
-                position.y + 2f,
-                ImGui.colorConvertFloat4ToU32(1f, 1f, 1f, 1f),
-                "\uf078" // Down arrow
-            )
-        }
-
-        if (isHovered && ImGui.isMouseClicked(0)) {
-//            manager.minimizePanel(this)
-            //TODO
-        }
-    }
-
-
-    private fun renderContent(
-        drawList: ImDrawList, position: Vector2f, size: Vector2f
-    ) {
-        val contentStart = Vector2f(position.x + 10f, position.y + 40f)
-        val contentSize = Vector2f(size.x - 20f, size.y - 110f)
-        drawList.addRectFilled(
-            contentStart.x,
-            contentStart.y,
-            contentStart.x + contentSize.x,
-            contentStart.y + contentSize.y,
-            ImGui.colorConvertFloat4ToU32(0.1f, 0.1f, 0.1f, 1f),
+            position.x,
+            footerY,
+            position.x + size.x,
+            position.y + size.y + 5f,
+            ImColor.rgba(30, 30, 30, 255),
             10f
         )
-        ImGui.pushClipRect(
-            contentStart.x, contentStart.y, contentStart.x + contentSize.x, contentStart.y + contentSize.y, true
-        )
-
-
-        ImGui.setNextWindowPos(contentStart.x, contentStart.y)
-        if (ImGui.beginChild("##content_$title", contentSize.x, contentSize.y, false)) {
-            renderBody(drawList, contentStart, contentSize)
-        }
+        //Creats a new window for the footer
+        val sizee = Vector2f(size.x, footerHeight)
+        ImGui.setNextWindowPos(position.x, footerY)
+        ImGui.setNextWindowSize(sizee.x, sizee.y)
+        ImGui.beginChild("##footer_$title", sizee.x, sizee.y, false, ImGuiWindowFlags.NoScrollbar)
+        renderFooterContent(drawList, Vector2f(position.x + 15f, footerY + 5f), Vector2f(size.x - 30f, footerHeight - 10f))
         ImGui.endChild()
-        renderAfter(graphics, drawList, Vector2f(position), size)
-        ImGui.popClipRect()
     }
 
-    protected abstract fun renderBody(
-        drawList: ImDrawList, position: Vector2f, size: Vector2f
-    )
-
-    protected open fun renderAfter(graphics: CanvasGraphics, drawList: ImDrawList, position: Vector2f, size: Vector2f) =
-        Unit
+    protected open fun renderFooterContent(drawList: ImDrawList, position: Vector2f, size: Vector2f) = Unit
+    private fun isMouseOverTitleBar(): Boolean {
+        val titleBarHeight = 30f
+        return isMouseOver(position, panelWidth, titleBarHeight)
+    }
 
     protected fun isMouseOver(pos: Vector2f, width: Float, height: Float): Boolean {
         val mousePos = ImGui.getMousePos()
-        return mousePos.x >= pos.x && mousePos.x <= pos.x + width && mousePos.y >= pos.y && mousePos.y <= pos.y + height
+        return mousePos.x >= pos.x && mousePos.x <= pos.x + width &&
+                mousePos.y >= pos.y && mousePos.y <= pos.y + height
     }
 
     open fun renderPost(gfx: GuiGraphics, scaledPos: Vector3f, scaledSize: Vector3f) = Unit
 
-
+    fun updatePosition(newPosition: Vector2f) {
+        position = newPosition
+    }
 }

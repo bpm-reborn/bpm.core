@@ -32,7 +32,10 @@ import org.joml.Vector4i
 
 object VariablesPanel : Panel("Variables", "\uf1ec") {
 
-
+    init{
+        position.x = 200f
+        position.y = 200f
+    }
     private val canvasContext by lazy { Client.installed<CanvasContext>() }
     private val workspace get() = ClientRuntime.workspace ?: error("Workspace not available")
 
@@ -70,7 +73,7 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
         }
     }
 
-//    override fun renderAfter(graphics: CanvasGraphics, drawList: ImDrawList, position: Vector2f, size: Vector2f) {
+    //    override fun renderAfter(graphics: CanvasGraphics, drawList: ImDrawList, position: Vector2f, size: Vector2f) {
 //        val pos = Vector2f(position.x, position.y + size.y - 60f)
 //        ImGui.setNextWindowPos(pos.x - 10f, pos.y)
 //        val panelWidth = size.x
@@ -88,9 +91,8 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
 //        ImGui.endChild()
 //        ImGui.popClipRect()
 //    }
-
     override fun renderFooterContent(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        renderSearchAndAddBar(drawList, position, Vector2f(panelWidth - 20f, 40f))
+        renderSearchAndAddBar(drawList, position, size)
         handleVariableDragging(graphics, ImGui.getForegroundDrawList())
     }
 

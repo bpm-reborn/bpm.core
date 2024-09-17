@@ -27,7 +27,6 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
     private val recordedDrawCall = mutableListOf<(gfx: GuiGraphics) -> Unit>()
     private val unClippedRecordedDrawCalls = mutableListOf<(gfx: GuiGraphics) -> Unit>()
     private var draggedProxy: ProxyState? = null
-    override fun onResize() = Unit
 
     override fun renderBody(
         drawList: ImDrawList, position: Vector2f, size: Vector2f

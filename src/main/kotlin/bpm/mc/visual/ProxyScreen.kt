@@ -43,13 +43,6 @@ object ProxyScreen : Screen(Component.literal("Block Preview")), Listener {
         if (packet is PacketProxyResponse) {
             val state = packet.proxyState
 
-            //Convert all absolute positions to relative positions
-//            state.proxiedBlocks.forEach { (pos, proxiedState) ->
-//                val newPos = pos.subtract(state.origin)
-//                proxiedState.relativePos = newPos
-//                state[pos] = proxiedState
-//            }
-
             //Update the renderers with the new proxied state
             renderer.updateProxiedState(state)
             logger.debug { "Received proxied state: $state" }
