@@ -47,10 +47,10 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
     ) {
         val screenpos = ImGui.getCursorScreenPos()
         val windowPos = ImGui.getWindowViewport().pos
-        val pos = Vector2f(screenpos.x - windowPos.x + 10f, screenpos.y - windowPos.y + 10f)
+        val pos = Vector2f(screenpos.x - windowPos.x + 15f, screenpos.y - windowPos.y + 10f)
 
         // Render the proxy state
-        renderProxy(drawList, proxyState.origin, pos, Vector2f(size.x - 20f, 60f))
+        renderProxy(drawList, proxyState.origin, pos, Vector2f(size.x - 35, 60f))
         ImGui.dummy(0f, 70f)
         // Check for dragging
         if (ImGui.isMouseClicked(ImGuiMouseButton.Left) && isMouseOver(pos, size.x - 20f, 60f)) {
@@ -108,7 +108,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
                     drawList,
                     blockPos,
                     proxiedState,
-                    Vector2f(pos.x + 50f, ImGui.getCursorScreenPosY() + 10f),
+                    Vector2f(pos.x + 35f, ImGui.getCursorScreenPosY() + 10f),
                     Vector2f(size.x - 70f, 60f)
                 )
                 ImGui.dummy(0f, 60f)

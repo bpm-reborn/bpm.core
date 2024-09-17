@@ -118,7 +118,7 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
         // Add variable button
         renderAddVariableButton(
             drawList,
-            Vector2f(position.x + size.x - 35f, position.y + 10f),
+            Vector2f(position.x + size.x - 35f, position.y + 12.5f),
             Vector2f(30f, 30f)
         )
     }
@@ -163,7 +163,7 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
 
     private fun renderSearchInput(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
         val searchBarHeight = 30f
-        val searchBarY = position.y + 10f
+        val searchBarY = position.y + 12.5f
 
         // Search bar background
         drawList.addRectFilled(
@@ -176,21 +176,21 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
         )
 
         // Search icon
-        iconFam[20].use {
+        iconFam[28].use {
             drawList.addText(
                 it,
-                20f,
-                position.x + 15f,
-                searchBarY + 5f,
+                28f,
+                position.x + 12f,
+                searchBarY ,
                 ImColor.rgba(150, 150, 150, 255),
-                FontAwesome.AlignCenter
+                FontAwesome.MagnifyingGlass
             )
         }
 
         // Search input
         bodyFam[18].use {
-            ImGui.setCursorScreenPos(position.x + 25f, position.y + 12)
-            ImGui.pushItemWidth(size.x - 30f)
+            ImGui.setCursorScreenPos(position.x + 26f, position.y + 15)
+            ImGui.pushItemWidth(size.x - 55f)
             ImGui.pushStyleColor(ImGuiCol.FrameBg, ImColor.rgba(60, 60, 60, 0).toInt())
             ImGui.pushStyleColor(ImGuiCol.Text, ImColor.rgba(200, 200, 200, 255).toInt())
             ImGui.pushStyleColor(ImGuiCol.Border, ImColor.rgba(60, 60, 60, 255).toInt())

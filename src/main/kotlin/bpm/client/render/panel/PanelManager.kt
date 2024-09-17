@@ -29,9 +29,9 @@ class PanelManager(private val graphics: CanvasGraphics) {
     private fun arrangePanel(panel: Panel) {
         val displaySize = ImGui.getIO().displaySize
         val padding = 5f
-        val sideWidth = 0.25f
+        val sideWidth = 0.2f
         val sideHeight = 0.5f
-        val bottomHeight = 0.35f
+        val bottomHeight = 0.3f
         when (panel.title) {
             "Variables" -> {
                 panel.position.set(padding, padding)
@@ -56,7 +56,7 @@ class PanelManager(private val graphics: CanvasGraphics) {
                 if (variablesPanel != null && proxiesPanel != null) {
 
                     panel.panelWidth = (displaySize.x - proxiesPanel.panelWidth) - padding * 3
-                    panel.panelHeight = displaySize.y * 0.35f
+                    panel.panelHeight = displaySize.y * bottomHeight
                     //Set y position so that the console is on the bottom of the screen
                     panel.position.set((displaySize.x * sideWidth + padding * 2 ).toFloat(), displaySize.y - panel.panelHeight - padding)
                 } else {
