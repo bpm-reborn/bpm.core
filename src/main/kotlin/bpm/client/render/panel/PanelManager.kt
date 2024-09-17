@@ -28,18 +28,19 @@ class PanelManager(private val graphics: CanvasGraphics) {
     private var previewRect: Vector4f? = null
     private var lastScreenSize = Vector2f()
 
-    private enum class DockPosition { LEFT_TOP, LEFT_MIDDLE, LEFT_BOTTOM, CENTER_TOP, CENTER_MIDDLE, CENTER_BOTTOM, RIGHT_TOP, RIGHT_MIDDLE, RIGHT_BOTTOM
-    }
+    private enum class DockPosition { LEFT, RIGHT, TOP, BOTTOM, CENTER }
 
-    private enum class ResizeEdge { LEFT, RIGHT, TOP, BOTTOM
-    }
+    private enum class ResizeEdge { LEFT, RIGHT, TOP, BOTTOM }
+
 
     private data class DockSpace(
         var position: Vector2f, var size: Vector2f, val panels: MutableList<Panel> = mutableListOf()
     )
 
     private data class AnimationState(
-        var progress: Float = 0f, var startPosition: Vector2f = Vector2f(), var endPosition: Vector2f = Vector2f()
+        var progress: Float = 0f,
+        var startPosition: Vector2f = Vector2f(),
+        var endPosition: Vector2f = Vector2f()
     )
 
     private val dockSpaces = mutableMapOf<DockPosition, DockSpace>()
@@ -55,75 +56,41 @@ class PanelManager(private val graphics: CanvasGraphics) {
         val thirdWidth = displaySize.x / 3
         val thirdHeight = displaySize.y / 3
 
-        dockSpaces[DockPosition.LEFT_TOP] = DockSpace(Vector2f(0f, 0f), Vector2f(thirdWidth, thirdHeight))
-        dockSpaces[DockPosition.LEFT_MIDDLE] = DockSpace(Vector2f(0f, thirdHeight), Vector2f(thirdWidth, thirdHeight))
-        dockSpaces[DockPosition.LEFT_BOTTOM] = DockSpace(
-            Vector2f(0f, thirdHeight * 2), Vector2f(thirdWidth, thirdHeight)
-        )
-
-        dockSpaces[DockPosition.CENTER_TOP] = DockSpace(Vector2f(thirdWidth, 0f), Vector2f(thirdWidth, thirdHeight))
-        dockSpaces[DockPosition.CENTER_MIDDLE] = DockSpace(
-            Vector2f(thirdWidth, thirdHeight), Vector2f(thirdWidth, thirdHeight)
-        )
-        dockSpaces[DockPosition.CENTER_BOTTOM] = DockSpace(
-            Vector2f(thirdWidth, thirdHeight * 2), Vector2f(thirdWidth, thirdHeight)
-        )
-
-        dockSpaces[DockPosition.RIGHT_TOP] = DockSpace(Vector2f(thirdWidth * 2, 0f), Vector2f(thirdWidth, thirdHeight))
-        dockSpaces[DockPosition.RIGHT_MIDDLE] = DockSpace(
-            Vector2f(thirdWidth * 2, thirdHeight), Vector2f(thirdWidth, thirdHeight)
-        )
-        dockSpaces[DockPosition.RIGHT_BOTTOM] = DockSpace(
-            Vector2f(thirdWidth * 2, thirdHeight * 2), Vector2f(thirdWidth, thirdHeight)
-        )
+        dockSpaces.clear()
+        dockSpaces[DockPosition.LEFT] = DockSpace(Vector2f(0f, 0f), Vector2f(thirdWidth, displaySize.y))
+        dockSpaces[DockPosition.RIGHT] = DockSpace(Vector2f(thirdWidth * 2, 0f), Vector2f(thirdWidth, displaySize.y))
+        dockSpaces[DockPosition.TOP] = DockSpace(Vector2f(0f, 0f), Vector2f(displaySize.x, thirdHeight))
+        dockSpaces[DockPosition.BOTTOM] = DockSpace(Vector2f(0f, thirdHeight * 2), Vector2f(displaySize.x, thirdHeight))
+        dockSpaces[DockPosition.CENTER] = DockSpace(Vector2f(thirdWidth, thirdHeight), Vector2f(thirdWidth, thirdHeight))
     }
+
 
     fun addPanel(panel: Panel) {
         panels[panel.title] = panel
         val initialPosition = calculateInitialPosition(panel)
-        animations[panel.title] = AnimationState(progress = 1f, endPosition = initialPosition)
         panel.position = initialPosition
+        panel.panelWidth = panel.panelWidth.takeIf { it > 0f } ?: 300f // Default width if not set
+        panel.panelHeight = panel.panelHeight.takeIf { it > 0f } ?: 200f // Default height if not set
+        animations[panel.title] = AnimationState(progress = 1f, startPosition = initialPosition, endPosition = initialPosition)
         panel.setupPanel(graphics, this)
         dockPanel(panel, findDockPosition(initialPosition))
     }
 
+
     private fun findDockPosition(position: Vector2f): DockPosition {
-        val displaySize = ImGui.getMainViewport().size
-        val thirdWidth = displaySize.x / 3
-        val thirdHeight = displaySize.y / 3
-
-        val column = when {
-            position.x < thirdWidth -> 0
-            position.x < thirdWidth * 2 -> 1
-            else -> 2
-        }
-
-        val row = when {
-            position.y < thirdHeight -> 0
-            position.y < thirdHeight * 2 -> 1
-            else -> 2
-        }
+        val displaySize = ImGui.getIO().displaySize
+        val centerThreshold = 100f
 
         return when {
-            column == 0 -> when (row) {
-                0 -> DockPosition.LEFT_TOP
-                1 -> DockPosition.LEFT_MIDDLE
-                else -> DockPosition.LEFT_BOTTOM
-            }
-
-            column == 1 -> when (row) {
-                0 -> DockPosition.CENTER_TOP
-                1 -> DockPosition.CENTER_MIDDLE
-                else -> DockPosition.CENTER_BOTTOM
-            }
-
-            else -> when (row) {
-                0 -> DockPosition.RIGHT_TOP
-                1 -> DockPosition.RIGHT_MIDDLE
-                else -> DockPosition.RIGHT_BOTTOM
-            }
+            position.x < centerThreshold -> DockPosition.LEFT
+            position.x > displaySize.x - centerThreshold -> DockPosition.RIGHT
+            position.y < centerThreshold -> DockPosition.TOP
+            position.y > displaySize.y - centerThreshold -> DockPosition.BOTTOM
+            else -> DockPosition.CENTER
         }
     }
+
+
 
     private fun dockPanel(panel: Panel, dockPosition: DockPosition) {
         val dockSpace = dockSpaces[dockPosition] ?: return
@@ -169,6 +136,7 @@ class PanelManager(private val graphics: CanvasGraphics) {
         }
     }
 
+
     fun renderPanels(drawList: ImDrawList) {
         checkScreenResize()
         updateAnimations()
@@ -187,9 +155,10 @@ class PanelManager(private val graphics: CanvasGraphics) {
             }
         }
 
-        renderMinimizedTabs(drawList)
         renderPreview(drawList)
+        renderMinimizedTabs(drawList)
     }
+
 
     private fun handlePanelResizing(panel: Panel, position: Vector2f) {
         val resizeHandleSize = 5f
@@ -290,9 +259,10 @@ class PanelManager(private val graphics: CanvasGraphics) {
         }
 
         if (draggedPanel == panel && ImGui.isMouseDragging(0)) {
-            ImGui.setMouseCursor(ImGuiMouseCursor.None)
+            ImGui.setMouseCursor(ImGuiMouseCursor.ResizeAll)
             val mousePos = ImGui.getMousePos()
             val newPosition = Vector2f(mousePos.x - dragOffset.x, mousePos.y - dragOffset.y)
+            panel.position.set(newPosition)
             updatePreview(panel, newPosition)
         }
 
@@ -304,42 +274,25 @@ class PanelManager(private val graphics: CanvasGraphics) {
     }
 
 
+
     private fun updatePreview(panel: Panel, position: Vector2f) {
         val dockPosition = findDockPosition(position)
-        val dockSpace = dockSpaces[dockPosition] ?: return
-
-        val previewRect = when {
-            dockPosition.toString().startsWith("LEFT") || dockPosition.toString().startsWith("RIGHT") -> {
-                // Fill vertical space
-                Vector4f(
-                    dockSpace.position.x,
-                    0f,
-                    dockSpace.position.x + dockSpace.size.x,
-                    ImGui.getIO().displaySize.y
-                )
-            }
-            dockPosition == DockPosition.CENTER_TOP || dockPosition == DockPosition.CENTER_BOTTOM -> {
-                // Fill horizontal space
-                Vector4f(
-                    0f,
-                    dockSpace.position.y,
-                    ImGui.getIO().displaySize.x,
-                    dockSpace.position.y + dockSpace.size.y
-                )
-            }
-            else -> {
-                // CENTER_MIDDLE or any other case
-                Vector4f(
-                    dockSpace.position.x,
-                    dockSpace.position.y,
-                    dockSpace.position.x + dockSpace.size.x,
-                    dockSpace.position.y + dockSpace.size.y
-                )
-            }
+        val previewRect = when (dockPosition) {
+            DockPosition.LEFT -> Vector4f(0f, 0f, ImGui.getIO().displaySize.x / 2, ImGui.getIO().displaySize.y)
+            DockPosition.RIGHT -> Vector4f(ImGui.getIO().displaySize.x / 2, 0f, ImGui.getIO().displaySize.x, ImGui.getIO().displaySize.y)
+            DockPosition.TOP -> Vector4f(0f, 0f, ImGui.getIO().displaySize.x, ImGui.getIO().displaySize.y / 2)
+            DockPosition.BOTTOM -> Vector4f(0f, ImGui.getIO().displaySize.y / 2, ImGui.getIO().displaySize.x, ImGui.getIO().displaySize.y)
+            DockPosition.CENTER -> Vector4f(
+                ImGui.getIO().displaySize.x / 4,
+                ImGui.getIO().displaySize.y / 4,
+                ImGui.getIO().displaySize.x * 3 / 4,
+                ImGui.getIO().displaySize.y * 3 / 4
+            )
         }
 
         this.previewRect = previewRect
     }
+
 
 
     private fun renderPreview(drawList: ImDrawList) {
@@ -349,42 +302,22 @@ class PanelManager(private val graphics: CanvasGraphics) {
         )
     }
 
-
-    fun snapPanel(panel: Panel) {
+    private fun snapPanel(panel: Panel) {
         val preview = previewRect ?: return
         val newPosition = Vector2f(preview.x, preview.y)
-
-        // Remove panel from its current dock space
-        dockSpaces.values.forEach { it.panels.remove(panel) }
-
-        // Find new dock position and add panel to it
-        val newDockPosition = findDockPosition(newPosition)
-        val dockSpace = dockSpaces[newDockPosition]!!
-
-        // Adjust panel size based on the preview
+        panel.position.set(newPosition)
         panel.panelWidth = preview.z - preview.x
         panel.panelHeight = preview.w - preview.y
 
-        // Add panel to the new dock space
-        dockSpace.panels.add(panel)
-
-        // Update panel position
-        panel.position.set(newPosition)
-
-        // Update animation state
         animations[panel.title]?.apply {
             startPosition.set(panel.position)
             endPosition.set(panel.position)
             progress = 1f
         }
 
-        // Update all dock spaces
-        updateDockSpaces()
-
-        // Reset dragging state
-        draggedPanel = null
-        previewRect = null
+        panel.onResize()
     }
+
 
 
 

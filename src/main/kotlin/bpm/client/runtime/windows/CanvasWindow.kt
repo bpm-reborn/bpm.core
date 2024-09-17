@@ -34,7 +34,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     val context = Endpoint.installed<CanvasContext>()
 
     private val buttons: MutableSet<CanvasButton> = HashSet()
-    private val graphics get() = context.graphics
+    val graphics get() = context.graphics
     private val fontAwesomeFamily = Fonts.getFamily("Fa")["Regular"]
     private val fontAwesome get() = fontAwesomeFamily[workspace.settings.fontHeaderSize]
 
@@ -109,7 +109,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     /**
      * Manage all the rendering related to the main canvas here.
      */
-    override fun render(gfx: GuiGraphics) {
+    override fun render(gfx: CanvasGraphics, guiGfx: GuiGraphics) {
         val mainViewport = ImGui.getMainViewport()
         ImGui.setNextWindowPos(mainViewport.posX, mainViewport.posY)
         ImGui.setNextWindowSize(mainViewport.sizeX, mainViewport.sizeY)

@@ -1,7 +1,6 @@
 package bpm.mc.block
 
-import bpm.pipe.PipeNetManager
-import bpm.server.ServerRuntime
+import bpm.pipe.PipeNetwork
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.world.entity.LivingEntity
@@ -10,7 +9,6 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.context.BlockPlaceContext
 import net.minecraft.world.level.Level
 import net.minecraft.world.level.block.Block
-import net.minecraft.world.level.block.entity.BlockEntity
 import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.level.block.state.StateDefinition
 import net.minecraft.world.level.block.state.properties.BooleanProperty
@@ -160,11 +158,11 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
     }
 
     open fun onPipeAdded(level: Level, pos: BlockPos) {
-        PipeNetManager.onPipeAdded(this, level, pos)
+        PipeNetwork.onPipeAdded(this, level, pos)
     }
 
     open fun onPipeRemoved(level: Level, pos: BlockPos) {
-        PipeNetManager.onPipeRemoved(this, level, pos)
+        PipeNetwork.onPipeRemoved(this, level, pos)
     }
 
     override fun playerWillDestroy(level: Level, pos: BlockPos, state: BlockState, player: Player): BlockState {

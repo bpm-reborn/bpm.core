@@ -4,6 +4,7 @@ import bpm.client.font.Fonts
 import bpm.client.runtime.ClientRuntime
 import bpm.client.utils.use
 import bpm.common.utils.FontAwesome
+import bpm.pipe.PipeNetwork
 import bpm.pipe.proxy.ProxiedState
 import bpm.pipe.proxy.ProxiedType
 import bpm.pipe.proxy.ProxyState
@@ -31,7 +32,8 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
     override fun renderBody(
         drawList: ImDrawList, position: Vector2f, size: Vector2f
     ) {
-        ClientRuntime.proxies.forEach { proxyState ->
+        //Iterate the current workspace proxies
+        PipeNetwork.ProxyManagerClient.getProxies(ClientRuntime.workspaceUUID).forEach { proxyState ->
             renderProxyState(drawList, proxyState, position, size)
             ImGui.dummy(0f, 10f) // Add some space between proxy states
         }

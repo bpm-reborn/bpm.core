@@ -19,7 +19,7 @@ object Overlay3D : Listener {
         camera: Camera,
         frustum: Frustum
     ) {
-
+        //Renders a
     }
 
     override fun onPacket(packet: Packet, from: UUID) {

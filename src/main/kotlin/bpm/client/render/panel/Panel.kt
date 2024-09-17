@@ -21,7 +21,7 @@ import org.joml.Vector3f
 
 abstract class Panel(val title: String, val icon: String) {
 
-    open val isDragging: Boolean = false
+    internal var isDragging: Boolean = false
     protected lateinit var manager: PanelManager
     protected lateinit var graphics: CanvasGraphics
 
@@ -30,22 +30,17 @@ abstract class Panel(val title: String, val icon: String) {
     val bodyFam = Fonts.getFamily("Inter")["Regular"]
     private val displaySize get() = ImGui.getIO().displaySize
     protected val context = Endpoint.installed<CanvasContext>()
-    //    val panelWidth get() = (displaySize.x * 0.33f).coerceAtLeast(350f).coerceAtMost(500f)
-//    val panelHeight get() = (displaySize.y * 0.5f).coerceAtLeast(150f)
     var position = Vector2f()
     var lastMaximizedPosition = Vector2f()
     private val windowSize = Vector2i(Minecraft.getInstance().window.width, Minecraft.getInstance().window.height)
-    private var hasInitialized = false
     internal var isResizing = false
     private var resizeStartPos = Vector2f()
     private var resizeStartSize = Vector2f()
 
-    // Minimum and maximum size constraints
     private val minWidth = 250f
     private val minHeight = 150f
     private val maxWidthPercent = 0.5f
     private val maxHeightPercent = 0.8f
-    // Mutable panel size properties
     var panelWidth = 0f
         internal set
     var panelHeight = 0f
@@ -53,25 +48,12 @@ abstract class Panel(val title: String, val icon: String) {
     protected val buttonColor = ImColor.rgba(58, 58, 60, 255)
     protected val buttonHoverColor = ImColor.rgba(68, 68, 70, 255)
 
-    private fun updatePanelSize() {
-        val displayWidth = ImGui.getIO().displaySize.x
-        val displayHeight = ImGui.getIO().displaySize.y
-
-//        panelWidth = panelWidth.coerceIn(minWidth, displayWidth * maxWidthPercent)
-//        panelHeight = panelHeight.coerceIn(minHeight, displayHeight * maxHeightPercent)
-
-
-//        manager.snapPanel(this)
-    }
-
     internal fun setupPanel(graphics: CanvasGraphics, manager: PanelManager) {
         this.manager = manager
         this.graphics = graphics
     }
 
-
     fun render(drawList: ImDrawList, position: Vector2f, scale: Float) {
-
         this.position = position
         val newWindowSize = Vector2i(Minecraft.getInstance().window.width, Minecraft.getInstance().window.height)
         if (newWindowSize != windowSize) {
@@ -91,6 +73,15 @@ abstract class Panel(val title: String, val icon: String) {
     }
 
     internal open fun onResize() = Unit
+
+    private fun updatePanelSize() {
+        val displayWidth = ImGui.getIO().displaySize.x
+        val displayHeight = ImGui.getIO().displaySize.y
+
+        panelWidth = panelWidth.coerceIn(minWidth, displayWidth * maxWidthPercent)
+        panelHeight = panelHeight.coerceIn(minHeight, displayHeight * maxHeightPercent)
+    }
+
 
     private fun renderResizeHandle(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
         val handleSize = 15
@@ -285,7 +276,8 @@ abstract class Panel(val title: String, val icon: String) {
         }
 
         if (isHovered && ImGui.isMouseClicked(0)) {
-            manager.minimizePanel(this)
+//            manager.minimizePanel(this)
+            //TODO
         }
     }
 

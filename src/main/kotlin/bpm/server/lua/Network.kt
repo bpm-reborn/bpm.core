@@ -1,6 +1,6 @@
 package bpm.server.lua
 
-import bpm.pipe.PipeNetManager
+import bpm.pipe.PipeNetwork
 import bpm.pipe.proxy.ProxiedType
 import net.minecraft.server.level.ServerLevel
 import net.neoforged.neoforge.capabilities.Capabilities
@@ -19,7 +19,7 @@ object Network : LuaBuiltin {
     @JvmStatic
     fun getControllerPosition(uuid: String): BlockPos? {
         val uuid = UUID.fromString(uuid)
-        return PipeNetManager.getControllerPosition(uuid)
+        return PipeNetwork.getControllerPosition(uuid)
     }
 
     @JvmStatic
@@ -49,14 +49,15 @@ object Network : LuaBuiltin {
         return 0
     }
     //TODO figure out why the world from getWorldForController is invalid
-    private val overworld by lazy{
+    private val overworld by lazy {
         ServerLifecycleHooks.getCurrentServer()?.overworld() ?: throw IllegalStateException("Overworld not available")
     }
 
+    private val cachedHandlers = mutableMapOf<String, CombinedItemHandler>()
+
     private fun getHandlers(uuid: String, types: Set<ProxiedType>): CombinedItemHandler? {
         val workspaceUUID = UUID.fromString(uuid)
-        val proxies = PipeNetManager.getProxies(workspaceUUID)
-//        val world = PipeNetManager.getWorldForController(workspaceUUID) ?: return null
+        val proxies = PipeNetwork.ProxyManagerServer.getProxies(workspaceUUID)
 
         val handlers = proxies.flatMap { proxyState ->
             proxyState.proxiedBlocks.mapNotNull { (absolutePos, proxiedState) ->

@@ -14,8 +14,7 @@ import net.neoforged.neoforge.attachment.IAttachmentHolder
 import net.neoforged.neoforge.attachment.IAttachmentSerializer
 import bpm.client.runtime.ClientRuntime
 import bpm.common.workspace.Workspace
-import bpm.mc.registries.ModBlocks
-import bpm.pipe.PipeNetManager
+import bpm.pipe.PipeNetwork
 import bpm.server.ServerRuntime
 import net.minecraft.world.level.block.entity.BlockEntityType
 import java.util.*
@@ -48,7 +47,7 @@ class EnderControllerTileEntity(type: BlockEntityType<*>, pos: BlockPos, state: 
         // Load the UUID directly from the main tag
         if (tag.contains("_Uid")) {
             setUUID(tag.getUUID("_Uid"))
-            PipeNetManager.onControllerPlaced(this)
+            PipeNetwork.onControllerPlaced(this)
         }
         if (tag.contains(AttachmentHolder.ATTACHMENTS_NBT_KEY)) {
             attachmentHolder.deserializeInternal(provider, tag.getCompound(AttachmentHolder.ATTACHMENTS_NBT_KEY))

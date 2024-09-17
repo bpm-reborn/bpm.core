@@ -4,24 +4,19 @@ import bpm.common.logging.KotlinLogging
 import bpm.common.memory.Buffer
 import bpm.common.serial.Serialize
 import bpm.mc.block.BasePipeBlock
+import bpm.pipe.proxy.ProxyState
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
-import net.minecraft.core.registries.Registries
 import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
-import net.minecraft.world.level.block.Block
-import kotlin.reflect.KClass
-import bpm.mc.block.EnderControllerBlock
-import bpm.mc.block.EnderControllerTileEntity
-import bpm.network.level
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import java.util.UUID
 
 
 // A serializable representation of a pipe
 data class TrackedPipe(
     val level: ResourceKey<Level> = Level.OVERWORLD,
-    val world: BlockPos = BlockPos.ZERO,
+    val worldPos: BlockPos = BlockPos.ZERO,
     val relative: BlockPos = BlockPos.ZERO,
     val type: Class<out BasePipeBlock> = BasePipeBlock::class.java
 )
@@ -38,7 +33,7 @@ object TrackedPipeSerializer : Serialize<TrackedPipe>(TrackedPipe::class) {
 
     override fun serialize(buffer: Buffer, value: TrackedPipe) {
         buffer.writeResourceKey(value.level)
-        buffer.writeBlockPos(value.world)
+        buffer.writeBlockPos(value.worldPos)
         buffer.writeBlockPos(value.relative)
         buffer.writeClass(value.type)
     }
@@ -124,3 +119,66 @@ object PipeNetSerializer : Serialize<PipeNet>(PipeNet::class) {
     }
 }
 
+data class PipeNetManagerState(
+    val networks: MutableMap<UUID, PipeNet> = ConcurrentHashMap(),
+    val blockPosToNetwork: MutableMap<BlockPos, UUID> = ConcurrentHashMap(),
+    val controllerToNetwork: MutableMap<UUID, UUID> = ConcurrentHashMap(),
+    val proxies: MutableMap<BlockPos, ProxyState> = ConcurrentHashMap()
+)
+
+object PipeNetManagerStateSerializer : Serialize<PipeNetManagerState>(PipeNetManagerState::class) {
+
+    override fun deserialize(buffer: Buffer): PipeNetManagerState {
+        val networksSize = buffer.readInt()
+        val networks = (0 until networksSize).associate {
+            UUID.fromString(buffer.readString()) to PipeNetSerializer.deserialize(buffer)
+        }
+
+        val blockPosToNetworkSize = buffer.readInt()
+        val blockPosToNetwork = (0 until blockPosToNetworkSize).associate {
+            buffer.readBlockPos() to UUID.fromString(buffer.readString())
+        }
+
+        val controllerToNetworkSize = buffer.readInt()
+        val controllerToNetwork = (0 until controllerToNetworkSize).associate {
+            UUID.fromString(buffer.readString()) to UUID.fromString(buffer.readString())
+        }
+
+        val proxiesSize = buffer.readInt()
+        val proxies = (0 until proxiesSize).associate {
+            buffer.readBlockPos() to ProxyState.ProxyStateSerializer.deserialize(buffer)
+        }
+        return PipeNetManagerState(
+            networks.toMutableMap(),
+            blockPosToNetwork.toMutableMap(),
+            controllerToNetwork.toMutableMap(),
+            proxies.toMutableMap()
+        )
+    }
+
+    override fun serialize(buffer: Buffer, value: PipeNetManagerState) {
+        buffer.writeInt(value.networks.size)
+        value.networks.forEach { (uuid, pipeNet) ->
+            buffer.writeString(uuid.toString())
+            PipeNetSerializer.serialize(buffer, pipeNet)
+        }
+
+        buffer.writeInt(value.blockPosToNetwork.size)
+        value.blockPosToNetwork.forEach { (blockPos, uuid) ->
+            buffer.writeBlockPos(blockPos)
+            buffer.writeString(uuid.toString())
+        }
+
+        buffer.writeInt(value.controllerToNetwork.size)
+        value.controllerToNetwork.forEach { (controllerUuid, networkUuid) ->
+            buffer.writeString(controllerUuid.toString())
+            buffer.writeString(networkUuid.toString())
+        }
+
+        buffer.writeInt(value.proxies.size)
+        value.proxies.forEach { (pos, proxyState) ->
+            buffer.writeBlockPos(pos)
+            ProxyState.ProxyStateSerializer.serialize(buffer, proxyState)
+        }
+    }
+}

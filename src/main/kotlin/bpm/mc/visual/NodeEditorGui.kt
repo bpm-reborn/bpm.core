@@ -30,7 +30,7 @@ class NodeEditorGui : Screen(Component.literal("Node Editor")) {
         ClientRuntime.process(pGuiGraphics)
         ClientRuntime.endFrame()
 
-        Overlay2D.renderPost(pGuiGraphics)
+        ClientGui.renderPost(pGuiGraphics)
 
         //No op, we use this simply for event handling
 //        super.render(pGuiGraphics, pMouseX, pMouseY, pPartialTick)
@@ -39,7 +39,7 @@ class NodeEditorGui : Screen(Component.literal("Node Editor")) {
     override fun onClose() {
         super.onClose()
         //Close the workspace, updating the overlay 2d
-        Overlay2D.close()
+        ClientGui.close()
     }
 
     override fun isPauseScreen(): Boolean = false

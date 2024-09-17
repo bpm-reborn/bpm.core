@@ -47,6 +47,7 @@ class CanvasGraphics(
 
     private var gfx: GuiGraphics? = null
 
+
     val panels = PanelManager(this)
         .apply {
             addPanel(VariablesPanel)
@@ -81,9 +82,12 @@ class CanvasGraphics(
     }
 
 
-    fun isAnyPanelHovered(): Boolean = panels.isAnyHovered()
+    fun isAnyPanelHovered(): Boolean = false
+//    fun isAnyPanelHovered(): Boolean = panels.isAnyHovered()
 
-    fun isDraggingOrResizing(): Boolean = panels.isAnyDraggedOrResized()
+    fun isDraggingOrResizing(): Boolean = false
+//    fun isDraggingOrResizing(): Boolean = panels.isAnyDraggedOrResized()
+
 
     fun renderPanels(drawList: ImDrawList) = panels.renderPanels(drawList)
 

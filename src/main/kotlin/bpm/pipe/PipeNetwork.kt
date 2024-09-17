@@ -1,86 +1,33 @@
 package bpm.pipe
 
 
-import bpm.client.runtime.ClientRuntime
 import bpm.common.logging.KotlinLogging
-import bpm.common.memory.Buffer
+import bpm.common.network.Client
+import bpm.common.network.Listener
+import bpm.common.network.Server
+import bpm.common.packets.Packet
 import bpm.common.serial.Serial
-import bpm.common.serial.Serialize
 import bpm.mc.block.BasePipeBlock
 import bpm.mc.block.EnderControllerBlock
 import bpm.mc.block.EnderControllerTileEntity
 import bpm.mc.block.EnderProxyBlock
 import bpm.network.level
-import bpm.pipe.proxy.ProxiedState
-import bpm.pipe.proxy.ProxiedType
-import bpm.pipe.proxy.ProxyManager
-import bpm.pipe.proxy.ProxyState
+import bpm.pipe.proxy.*
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.core.registries.Registries
 import net.minecraft.resources.ResourceKey
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.Level
+import net.neoforged.api.distmarker.Dist
+import net.neoforged.api.distmarker.OnlyIn
 import net.neoforged.fml.loading.FMLPaths
 import net.neoforged.neoforge.capabilities.Capabilities
 import thedarkcolour.kotlinforforge.neoforge.kotlin.enumMapOf
 import java.nio.file.Path
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
-data class PipeNetManagerState(
-    val networks: MutableMap<UUID, PipeNet> = ConcurrentHashMap(),
-    val blockPosToNetwork: MutableMap<BlockPos, UUID> = ConcurrentHashMap(),
-    val controllerToNetwork: MutableMap<UUID, UUID> = ConcurrentHashMap()
-)
-
-object PipeNetManagerStateSerializer : Serialize<PipeNetManagerState>(PipeNetManagerState::class) {
-
-    override fun deserialize(buffer: Buffer): PipeNetManagerState {
-        val networksSize = buffer.readInt()
-        val networks = (0 until networksSize).associate {
-            UUID.fromString(buffer.readString()) to PipeNetSerializer.deserialize(buffer)
-        }
-
-        val blockPosToNetworkSize = buffer.readInt()
-        val blockPosToNetwork = (0 until blockPosToNetworkSize).associate {
-            buffer.readBlockPos() to UUID.fromString(buffer.readString())
-        }
-
-        val controllerToNetworkSize = buffer.readInt()
-        val controllerToNetwork = (0 until controllerToNetworkSize).associate {
-            UUID.fromString(buffer.readString()) to UUID.fromString(buffer.readString())
-        }
-
-        return PipeNetManagerState(
-            networks.toMutableMap(),
-            blockPosToNetwork.toMutableMap(),
-            controllerToNetwork.toMutableMap()
-        )
-    }
-
-    override fun serialize(buffer: Buffer, value: PipeNetManagerState) {
-        buffer.writeInt(value.networks.size)
-        value.networks.forEach { (uuid, pipeNet) ->
-            buffer.writeString(uuid.toString())
-            PipeNetSerializer.serialize(buffer, pipeNet)
-        }
-
-        buffer.writeInt(value.blockPosToNetwork.size)
-        value.blockPosToNetwork.forEach { (blockPos, uuid) ->
-            buffer.writeBlockPos(blockPos)
-            buffer.writeString(uuid.toString())
-        }
-
-        buffer.writeInt(value.controllerToNetwork.size)
-        value.controllerToNetwork.forEach { (controllerUuid, networkUuid) ->
-            buffer.writeString(controllerUuid.toString())
-            buffer.writeString(networkUuid.toString())
-        }
-    }
-}
-
-object PipeNetManager {
+object PipeNetwork {
 
     private val logger = KotlinLogging.logger {}
     private var state = PipeNetManagerState()
@@ -95,6 +42,7 @@ object PipeNetManager {
             logger.warn { "Pipe network state file not found at $path" }
             return
         }
+        ProxyManagerServer.clear()
         state = Serial.read(path) ?: let {
             logger.warn { "Failed to load PipeNetManagerState from disk, creating new state" }
             PipeNetManagerState()
@@ -132,8 +80,7 @@ object PipeNetManager {
         }
 
 
-        state.blockPosToNetwork[pos] = state.networks.entries.find { it.value.pipes.containsKey(pos) }?.key
-            ?: return
+        state.blockPosToNetwork[pos] = state.networks.entries.find { it.value.pipes.containsKey(pos) }?.key ?: return
 
         if (pipe is EnderControllerBlock) {
             val entity = level.getBlockEntity(pos) as? EnderControllerTileEntity
@@ -143,11 +90,10 @@ object PipeNetManager {
                 logger.warn { "Couldn't add controller at $pos, no tile entity found" }
             }
         } else if (pipe is EnderProxyBlock) {
-            if (!ProxyManager.contains(pos)) {
+            if (!ProxyManagerServer.contains(pos)) {
                 val proxiableBlocks = findProxiableBlocksInRadius(level, pos, 5).map {
                     it to ProxiedState(
-                        relativePos = it.subtract(pos),
-                        proxiedFaces = enumMapOf(
+                        relativePos = it.subtract(pos), proxiedFaces = enumMapOf(
                             Direction.NORTH to ProxiedType.NONE,
                             Direction.EAST to ProxiedType.NONE,
                             Direction.SOUTH to ProxiedType.NONE,
@@ -158,9 +104,8 @@ object PipeNetManager {
                     )
                 }.toMap()
 
-                ProxyManager[pos] = ProxyState(
-                    origin = pos,
-                    proxiedBlocks = proxiableBlocks.toMutableMap()
+                ProxyManagerServer[pos] = ProxyState(
+                    origin = pos, proxiedBlocks = proxiableBlocks.toMutableMap()
                 )
                 logger.debug("Added proxy at $pos")
             }
@@ -173,9 +118,7 @@ object PipeNetManager {
     private fun canProxyBlockConnectTo(level: Level, pos: BlockPos, direction: Direction): Boolean {
         val blockEntity = level.getBlockEntity(pos)
         return blockEntity != null && (hasItemHandlerCapability(level, pos, direction) || hasFluidHandlerCapability(
-            level,
-            pos,
-            direction
+            level, pos, direction
         ))
     }
 
@@ -209,20 +152,24 @@ object PipeNetManager {
 
 
     fun onPipeRemoved(pipe: BasePipeBlock, level: Level, pos: BlockPos) {
+        state.blockPosToNetwork.remove(pos)
         val networkId = state.blockPosToNetwork[pos] ?: return
         val network = state.networks[networkId] ?: return
 
         network.removePipe(level, pos)
-        state.blockPosToNetwork.remove(pos)
         if (network.isEmpty()) {
             state.networks.remove(networkId)
-
-        } else if (pipe is EnderControllerBlock) {
-            val entity = level.getBlockEntity(pos) as? EnderControllerTileEntity
-            if (entity != null) {
-                onControllerRemoved(entity)
-            }
         } else {
+            if (pipe is EnderControllerBlock) {
+                val entity = level.getBlockEntity(pos) as? EnderControllerTileEntity
+                if (entity != null) {
+                    Server.send(PacketProxyRemoveWorkspace(entity.getUUID()))
+                    onControllerRemoved(entity)
+                }
+            } else if (pipe is EnderProxyBlock) {
+                ProxyManagerServer.remove(pos)
+                Server.send(PacketRemoveProxy(pos))
+            }
             val splitNetworks = network.split(level, pos)
             if (splitNetworks.size > 1) {
                 val newNetworks = state.networks
@@ -242,7 +189,7 @@ object PipeNetManager {
     private fun createNetwork(pipe: BasePipeBlock, level: Level, pos: BlockPos): PipeNet {
         val network = PipeNet()
         val networkId = UUID.randomUUID()
-        network.addPipe(pipe.javaClass, level, pos)
+        network.addPipe(pipe::class.java, level, pos)
         state.networks[networkId] = network
         state.blockPosToNetwork[pos] = networkId
         logger.info { "Created new network for pipe at $pos" }
@@ -276,19 +223,17 @@ object PipeNetManager {
         val controllers = mergedNetwork.pipes.values.filter { it.type == EnderControllerBlock::class.java }
         if (controllers.size > 1) {
             controllers.drop(1).forEach { controller ->
-                dropController(level, controller.world)
+                dropController(level, controller.worldPos)
             }
         }
     }
 
     private fun findConnectedNetworks(level: Level, pos: BlockPos): List<PipeNet> {
-        return Direction.entries
-            .mapNotNull { direction -> state.blockPosToNetwork[pos.relative(direction)] }
-            .distinct()
+        return Direction.entries.mapNotNull { direction -> state.blockPosToNetwork[pos.relative(direction)] }.distinct()
             .mapNotNull { state.networks[it] }
     }
 
-     fun onControllerPlaced(entity: EnderControllerTileEntity) {
+    fun onControllerPlaced(entity: EnderControllerTileEntity) {
         val controllerUuid = entity.getUUID()
         val networkId = state.blockPosToNetwork[entity.blockPos] ?: return
         state.controllerToNetwork[controllerUuid] = networkId
@@ -349,20 +294,6 @@ object PipeNetManager {
         return state.networks[networkId]
     }
 
-    fun getProxies(uuid: UUID): List<ProxyState> {
-        val networkId = state.controllerToNetwork[uuid] ?: return let {
-            logger.warn { "No network found for controller $uuid" }
-            emptyList()
-        }
-        val network = state.networks[networkId] ?: return let {
-            logger.warn { "No network found for controller $uuid" }
-            emptyList()
-        }
-
-        val states = network.pipes.values.filter { it.type == EnderProxyBlock::class.java }
-            .mapNotNull { ProxyManager[it.world] }
-        return states
-    }
 
     fun getControllerPositions(): List<BlockPos> {
         return getControllers().mapNotNull { it.blockPos }
@@ -377,6 +308,108 @@ object PipeNetManager {
             path.toFile().mkdirs()
         }
         return path
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    object ProxyManagerClient : Listener {
+
+        private val workspaceToProxies = mutableMapOf<UUID, List<ProxyState>>() //The proxies for the workspace
+        private val proxies = mutableMapOf<BlockPos, ProxyState>() //The proxies for the current workspace
+
+        fun getProxies(): List<ProxyState> = workspaceToProxies.values.flatten()
+        fun getProxies(uuid: UUID): List<ProxyState> = workspaceToProxies[uuid] ?: emptyList()
+        fun getProxy(pos: BlockPos): ProxyState? = proxies[pos]
+        fun getProxiesForWorkspace(uuid: UUID): List<ProxyState> = workspaceToProxies[uuid] ?: emptyList()
+        fun clear() {
+            workspaceToProxies.clear()
+            proxies.clear()
+        }
+
+        fun remove(pos: BlockPos) = proxies.remove(pos)
+
+        fun removeProxiesForWorkspace(uuid: UUID) {
+            workspaceToProxies.remove(uuid)
+        }
+
+
+        fun requestProxies(uuid: UUID) = Client.send(PacketProxiedStatesRequest(uuid))
+
+        override fun onPacket(packet: Packet, from: UUID) {
+            if (packet is PacketProxiedStatesResponse) {
+                workspaceToProxies[packet.workspace] = packet.proxiedStates
+                packet.proxiedStates.forEach { state ->
+                    state.proxiedBlocks.keys.forEach { pos ->
+                        proxies[pos] = state
+                    }
+                }
+            }
+
+            if (packet is PacketProxyRemoveWorkspace) {
+                removeProxiesForWorkspace(packet.workspace)
+            }
+
+            if (packet is PacketRemoveProxy) {
+                remove(packet.proxyOrigin)
+            }
+        }
+    }
+
+    object ProxyManagerServer : Listener {
+
+        private val proxies get() = state.proxies
+        fun remove(pos: BlockPos) = state.proxies.remove(pos)
+        fun clear() = proxies.clear()
+        fun isEmpty(): Boolean = proxies.isEmpty()
+        fun forEach(action: (BlockPos, ProxyState) -> Unit) = proxies.forEach(action)
+        operator fun set(pos: BlockPos, state: ProxyState) = let { proxies[pos] = state }
+        operator fun get(pos: BlockPos): ProxyState? = proxies[pos]
+        operator fun contains(pos: BlockPos): Boolean = proxies.containsKey(pos)
+
+        val keys: Set<BlockPos> get() = proxies.keys.toSet() //Creates a new set to prevent modification
+        val values: List<ProxyState> get() = proxies.values.toList() //Creates a new list to prevent modification
+        val size: Int get() = proxies.size
+
+        /**
+         * Gets the proxies for the given controller on the server
+         */
+        fun getProxies(uuid: UUID): List<ProxyState> {
+            val networkId = state.controllerToNetwork[uuid] ?: return let {
+                logger.warn { "No network found for controller $uuid" }
+                emptyList()
+            }
+            val network = state.networks[networkId] ?: return let {
+                logger.warn { "No network found for controller $uuid" }
+                emptyList()
+            }
+
+            val states = network.pipes.values.filter { it.type == EnderProxyBlock::class.java }
+                .mapNotNull { state.proxies[it.worldPos] }
+            return states
+        }
+
+        override fun onPacket(packet: Packet, from: UUID) {
+            if (packet is PacketProxyUpdate) {
+                val proxy = this[packet.proxyOrigin] ?: return
+                val proxyOrigin = packet.proxyOrigin
+                val absoluteProxiedState = packet.proxiedState
+                absoluteProxiedState.absolutePos = proxyOrigin.offset(absoluteProxiedState.relativePos)
+                //Filter out any pro
+                proxy[absoluteProxiedState.absolutePos] = absoluteProxiedState
+            } else if (packet is PacketProxyRequest) {
+                val proxy = this[packet.proxyOrigin] ?: return
+                //Filter out any that have all none for the proxied type
+                val blocks = proxy.proxiedBlocks.filter { it.key != packet.proxyOrigin }
+                proxy.proxiedBlocks.clear()
+                proxy.proxiedBlocks.putAll(blocks)
+                Server.send(PacketProxyResponse(packet.proxyOrigin, proxy), from)
+            } else if (packet is PacketProxiedStatesRequest) {
+                val uuid = packet.workspaceUid
+                //Find all the proxies states assosiated with the workspace
+                val proxies = getProxies(uuid)
+                //Send the proxies states to the client
+                Server.send(PacketProxiedStatesResponse(uuid, proxies.toMutableList()), from)
+            }
+        }
     }
 
 }

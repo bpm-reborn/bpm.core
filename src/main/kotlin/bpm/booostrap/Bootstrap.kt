@@ -2,7 +2,7 @@ package bpm.booostrap
 
 import bpm.Bpm
 import bpm.Bpm.LOGGER
-import bpm.mc.visual.Overlay2D
+import bpm.mc.visual.ClientGui
 import bpm.mc.visual.Overlay3D
 import bpm.network.MinecraftNetworkAdapter
 import net.minecraft.client.Minecraft
@@ -26,9 +26,8 @@ import bpm.common.serial.Serialize
 import bpm.common.utils.*
 import bpm.mc.visual.CustomBackgroundRenderer
 import bpm.mc.visual.ProxyScreen
-import bpm.pipe.PipeNetManager
+import bpm.pipe.PipeNetwork
 import bpm.server.lua.LuaBuiltin
-import bpm.pipe.proxy.ProxyManager
 import bpm.server.ServerRuntime
 import bpm.server.lua.LuaEventExecutor
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
@@ -137,11 +136,11 @@ class Bootstrap(
 
     @OnlyIn(Dist.CLIENT)
     private fun renderOverlay2DPre(event: RenderGuiEvent.Pre) {
-        Overlay2D.renderPre(event.guiGraphics)
+        ClientGui.renderPre(event.guiGraphics)
     }
     @OnlyIn(Dist.CLIENT)
     private fun renderOverlay2DPost(event: RenderGuiEvent.Post) {
-        Overlay2D.renderPost(event.guiGraphics)
+        ClientGui.renderPost(event.guiGraphics)
     }
 
     @OnlyIn(Dist.CLIENT)
@@ -183,8 +182,9 @@ class Bootstrap(
         Client.install(ClientRuntime)
             .install<Schemas>(schemaPath, Endpoint.Side.CLIENT)
             .install<CanvasContext>()
+            .install<PipeNetwork.ProxyManagerClient>()
             .install<ProxyScreen>()
-            .install<Overlay2D>()
+            .install<ClientGui>()
     }
 
     fun getBuiltIns(): List<LuaBuiltin> {
@@ -262,20 +262,20 @@ class Bootstrap(
         Server
             .install<ServerRuntime>()
             .install<Schemas>(schemasPath, Endpoint.Side.SERVER)
-            .install<ProxyManager>()
+            .install<PipeNetwork.ProxyManagerServer>()
             .start()
     }
 
     private fun onLevelSave(event: net.neoforged.neoforge.event.level.LevelEvent.Save) {
         val level = event.level
         if (level !is ServerLevel) return
-        PipeNetManager.save(level)
+        PipeNetwork.save(level)
     }
 
     private fun onLevelLoad(event: net.neoforged.neoforge.event.level.LevelEvent.Load) {
         val level = event.level
         if (level !is ServerLevel) return
-        PipeNetManager.load(level)
+        PipeNetwork.load(level)
     }
 
 

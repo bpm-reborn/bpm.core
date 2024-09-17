@@ -1,7 +1,7 @@
 package bpm.mc.block
 
 import bpm.pipe.PipeNet
-import bpm.pipe.PipeNetManager
+import bpm.pipe.PipeNetwork
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.world.item.context.BlockPlaceContext
@@ -77,7 +77,7 @@ class EnderPipeBlock(properties: Properties) : BasePipeBlock(properties) {
             val neighborPos = pos.relative(direction)
             val neighborState = level.getBlockState(neighborPos)
             if (neighborState.block is BasePipeBlock) {
-                PipeNetManager.getNetworkForPos(level, neighborPos)
+                PipeNetwork.getNetworkForPos(level, neighborPos)
             } else {
                 null
             }

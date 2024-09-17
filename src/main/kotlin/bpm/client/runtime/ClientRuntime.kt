@@ -20,7 +20,7 @@ import bpm.common.utils.FontAwesome
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.packets.*
-import bpm.mc.visual.Overlay2D
+import bpm.mc.visual.ClientGui
 import bpm.pipe.proxy.PacketProxiedStatesResponse
 import bpm.pipe.proxy.ProxyState
 import com.mojang.blaze3d.systems.RenderSystem
@@ -61,10 +61,10 @@ object ClientRuntime : Listener {
     private val started = AtomicBoolean(false)
     var canvasWindow: CanvasWindow? = null
         private set
-    internal val logger = KotlinLogging.logger { }
-    private val proxyMap = mutableMapOf<UUID, List<ProxyState>>()
+    //    private val proxyMap = mutableMapOf<UUID, List<ProxyState>>()
     val workspaceUUID: UUID get() = workspace?.uid ?: NetUtils.DefaultUUID
-    val proxies: List<ProxyState> get() = proxyMap[workspaceUUID] ?: emptyList()
+    internal val logger = KotlinLogging.logger { }
+    //    val proxies: List<ProxyState> get() = proxyMap[workspaceUUID] ?: emptyList()
     val minecraft: Minecraft get() = Minecraft.getInstance()
     val player: LocalPlayer get() = minecraft.player!!
     val level get() = minecraft.level
@@ -182,7 +182,7 @@ object ClientRuntime : Listener {
         if (!running) return
 
         if (canvasWindow != null) {
-            canvasWindow?.render(graphics)
+            canvasWindow?.render(this.canvasWindow?.graphics!!, graphics)
         }
 
     }
@@ -248,17 +248,16 @@ object ClientRuntime : Listener {
                 }
             }
         }
+//
+//        is PacketProxiedStatesResponse -> {
+//            proxyMap[packet.workspace] = packet.proxiedStates
+//        }
 
-        is PacketProxiedStatesResponse -> {
-            proxyMap[packet.workspace] = packet.proxiedStates
-        }
-
-
+        //TODO This should probably be refactored into some "workspace manager" ? (along with all other workspace related stuff)
         is WorkspaceLoad -> {
             this.workspace = packet.workspace
             packet.workspace?.let {
-                // Open the node editor gui, has to be done on the main thread
-                RenderSystem.recordRenderCall { Overlay2D.open(it.uid) }
+                RenderSystem.recordRenderCall { ClientGui.open(it.uid) }
             }
 
             if (canvasWindow == null) {

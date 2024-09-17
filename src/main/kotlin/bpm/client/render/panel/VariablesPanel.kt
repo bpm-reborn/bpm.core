@@ -32,8 +32,6 @@ import org.joml.Vector4i
 
 object VariablesPanel : Panel("Variables", "\uf1ec") {
 
-    override val isDragging: Boolean
-        get() = draggedVariable != null
 
     private val canvasContext by lazy { Client.installed<CanvasContext>() }
     private val workspace get() = ClientRuntime.workspace ?: error("Workspace not available")
@@ -339,6 +337,7 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
         drawIconButton(drawList, FontAwesome.ArrowRight, getButtonPos, buttonSize)
         if (ImGui.isMouseClicked(ImGuiMouseButton.Left) && isMouseOver(getButtonPos, buttonSize, buttonSize)) {
             draggedVariable = Triple(name, variable, "Get")
+            isDragging = true
         }
 
 
@@ -346,6 +345,7 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
         drawIconButton(drawList, FontAwesome.ArrowLeft, setButtonPos, buttonSize)
         if (ImGui.isMouseClicked(ImGuiMouseButton.Left) && isMouseOver(setButtonPos, buttonSize, buttonSize)) {
             draggedVariable = Triple(name, variable, "Set")
+            isDragging = true
         }
 
         //If the mouse is released and we're still over our button, don't create a node
@@ -356,6 +356,7 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
             ) || isMouseOver(setButtonPos, buttonSize, buttonSize))
         ) {
             draggedVariable = null
+            isDragging = false
         }
     }
 
@@ -489,6 +490,7 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
                 "Set" -> canvasContext.createVariableNode(SetVariable, mousePos, name)
             }
             draggedVariable = null
+            isDragging = false
         }
     }
 

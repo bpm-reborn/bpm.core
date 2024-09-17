@@ -1,7 +1,7 @@
 package bpm.server.lua
 
 import bpm.client.render.panel.ConsolePanel
-import bpm.pipe.PipeNetManager
+import bpm.pipe.PipeNetwork
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.core.particles.ParticleOptions
@@ -35,7 +35,7 @@ object World : LuaBuiltin {
     @JvmStatic
     fun sendChat(workspaceUid: String, message: String) {
         val uuid = UUID.fromString(workspaceUid)
-        val level = PipeNetManager.getWorldForController(uuid) ?: return
+        val level = PipeNetwork.getWorldForController(uuid) ?: return
         level.players().forEach {
             it.sendSystemMessage(
                 Component.literal(
@@ -111,7 +111,7 @@ object World : LuaBuiltin {
     ) {
 
         val uuid = UUID.fromString(controllerUUID)
-        val level = PipeNetManager.getWorldForController(uuid) ?: return
+        val level = PipeNetwork.getWorldForController(uuid) ?: return
         val particle = getParticleByName(particleName)
         //Position, count, velocity, spread
         level.sendParticles(

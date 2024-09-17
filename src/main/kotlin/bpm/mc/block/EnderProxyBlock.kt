@@ -2,7 +2,7 @@ package bpm.mc.block
 
 import bpm.common.logging.KotlinLogging
 import bpm.mc.visual.ProxyScreen
-import bpm.pipe.PipeNetManager
+import bpm.pipe.PipeNetwork
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.world.InteractionHand
@@ -76,7 +76,7 @@ class EnderProxyBlock(properties: Properties) : BasePipeBlock(properties) {
     ): ItemInteractionResult {
         val proxiableBlocks = findProxiableBlocksInRadius(level, pos, 5)
         if (!level.isClientSide) {
-            val network = PipeNetManager.getNetworkForPos(level, pos)
+            val network = PipeNetwork.getNetworkForPos(level, pos)
             proxiableBlocks.forEach { proxiablePos ->
                 logger.debug("Adding proxy at $proxiablePos")
             }

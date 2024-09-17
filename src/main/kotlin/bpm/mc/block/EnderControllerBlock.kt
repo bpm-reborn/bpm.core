@@ -1,8 +1,7 @@
 package bpm.mc.block
 
 import bpm.common.logging.KotlinLogging
-import bpm.mc.visual.NodeEditorGui
-import bpm.pipe.PipeNetManager
+import bpm.pipe.PipeNetwork
 import bpm.server.ServerRuntime
 import net.minecraft.ChatFormatting
 import net.minecraft.core.BlockPos
@@ -18,7 +17,6 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.context.BlockPlaceContext
 import net.minecraft.world.level.BlockGetter
 import net.minecraft.world.level.Level
-import net.minecraft.world.level.LevelAccessor
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.EntityBlock
 import net.minecraft.world.level.block.entity.BlockEntity
@@ -106,7 +104,7 @@ class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), 
     override fun getStateForPlacement(context: BlockPlaceContext): BlockState? {
         val level = context.level
         val pos = context.clickedPos
-        if (level.isClientSide) if (PipeNetManager.hasControllerInNetwork(level, pos)) {
+        if (level.isClientSide) if (PipeNetwork.hasControllerInNetwork(level, pos)) {
             return null
         }
         return super.getStateForPlacement(context)
