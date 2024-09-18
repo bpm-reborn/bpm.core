@@ -4,7 +4,6 @@ import bpm.common.logging.KotlinLogging
 import bpm.common.workspace.Workspace
 import party.iroiro.luajava.*
 import party.iroiro.luajava.luajit.LuaJit
-import party.iroiro.luajava.value.LuaFunction
 import party.iroiro.luajava.value.LuaValue
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -31,21 +30,14 @@ object EvalContext {
     }
 
     private fun initializeLuaState() {
-        lua.openLibraries()
+//        lua.openLibraries()
         lua.setExternalLoader(ClassPathLoader())
     }
 
-
-    private fun resetState() {
-        lua.gc()
-        workspaceFunctionGroups.clear()
-    }
-
-    fun eval(workspace: Workspace): Result = synchronized(lua) {
-        resetState()
+    fun eval(workspace: Workspace): Result = synchronized(lua){
         val functionGroups = workspaceFunctionGroups.computeIfAbsent(workspace.uid) { ConcurrentHashMap() }
+        functionGroups.clear()
         try {
-            lua.gc()
             val compiledSource = ComplexLuaTranspiler.generateLuaScript(workspace)
             logger.debug { "Compiled Lua script: $compiledSource" }
             val result = lua.eval(compiledSource)[0]
@@ -66,6 +58,8 @@ object EvalContext {
                     }
                 }
             }
+            lua.gc()
+
         } catch (e: LuaException) {
             return RuntimeError(e.message ?: "Unknown error", e.stackTrace)
         }

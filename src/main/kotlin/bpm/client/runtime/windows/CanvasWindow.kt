@@ -125,7 +125,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
         setupCanvas()
 
-        shouldCancelActions = isActionMenuHovered || selectionContextOverlay.isHovered() || graphics.isAnyPanelHovered() || graphics.isDraggingOrResizing()
+        shouldCancelActions = isActionMenuHovered || selectionContextOverlay.isHovered() || graphics.panels.isAnyDragged() || graphics.panels.isAnyHovered()
 
         if (!selectionContextOverlay.isHovered() && !shouldCancelActions) handleCanvas()
 

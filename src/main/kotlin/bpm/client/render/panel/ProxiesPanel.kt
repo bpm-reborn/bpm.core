@@ -3,7 +3,9 @@ package bpm.client.render.panel
 import bpm.client.font.Fonts
 import bpm.client.runtime.ClientRuntime
 import bpm.client.utils.use
+import bpm.common.network.Client
 import bpm.common.utils.FontAwesome
+import bpm.common.workspace.packets.ProxyNodeCreateRequest
 import bpm.pipe.PipeNetwork
 import bpm.pipe.proxy.ProxiedState
 import bpm.pipe.proxy.ProxiedType
@@ -26,7 +28,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
     private val bodyFont = Fonts.getFamily("Inter")["Light"]
     private val recordedDrawCall = mutableListOf<(gfx: GuiGraphics) -> Unit>()
     private val unClippedRecordedDrawCalls = mutableListOf<(gfx: GuiGraphics) -> Unit>()
-    private var draggedProxy: ProxyState? = null
+    private var draggedProxy: Pair<BlockPos, ProxiedState>? = null
 
     override fun renderBody(
         drawList: ImDrawList, position: Vector2f, size: Vector2f
@@ -53,9 +55,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
         renderProxy(drawList, proxyState.origin, pos, Vector2f(size.x - 35, 60f))
         ImGui.dummy(0f, 70f)
         // Check for dragging
-        if (ImGui.isMouseClicked(ImGuiMouseButton.Left) && isMouseOver(pos, size.x - 20f, 60f)) {
-            draggedProxy = proxyState
-        }
+
 
         // Render proxied blocks
         ImGui.indent(20f)
@@ -101,7 +101,10 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
                 drawList.addCircle(pos1.x - 20f, pos1.y + 30f, 5f, ImColor.rgba(66, 66, 66, 255), 12, 2f)
 
                 index++
-
+                if (ImGui.isMouseClicked(ImGuiMouseButton.Left) && isMouseOver(pos1, size.x - 75f, 60f)) {
+                    draggedProxy = blockPos to proxiedState
+                    isDragging = true
+                }
 //                drawList.addCircleFilled(originPos.x, originPos.y, 5f, ImColor.rgba(100, 100, 100, 255))
 
                 renderProxiedBlock(
@@ -139,7 +142,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
         val level = ClientRuntime.level ?: return
         val blockState = level.getBlockState(origin)
         val itemStack = ItemStack(blockState.block)
-
+        ImGui.pushClipRect(position.x, position.y, position.x + size.x, position.y + size.y, true)
         // Background
         drawList.addRectFilled(
             position.x, position.y, position.x + size.x, position.y + size.y, ImColor.rgba(60, 60, 60, 255), 5f
@@ -180,7 +183,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
         }
 
         // Block position
-        val positionText = "Origin: ${origin.x}, ${origin.y}, ${origin.z}"
+        val positionText = "${origin.x}, ${origin.y}, ${origin.z}"
         bodyFont.body.use {
             drawList.addText(
                 bodyFont.body,
@@ -191,6 +194,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
                 positionText
             )
         }
+        ImGui.popClipRect()
     }
 
     private fun handleProxyDragging(drawList: ImDrawList) {
@@ -201,7 +205,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
             // Render a preview of the dragged proxy
             renderProxy(
                 ImGui.getForegroundDrawList(),
-                draggedProxyState.origin,
+                draggedProxyState.first,
                 Vector2f(mousePos.x + 20f, mousePos.y),
                 Vector2f(200f, 60f),
                 false
@@ -211,8 +215,14 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
         } else if (draggedProxyState != null && ImGui.isMouseReleased(ImGuiMouseButton.Left)) {
             // Handle the drop action here (e.g., create a node in the canvas)
             val mousePos = ImGui.getMousePos()
-            // TODO: Implement the creation of a proxy node in the canvas
+            Client.send(
+                ProxyNodeCreateRequest(
+                    graphics.toWorldSpaceVector(mousePos.x, mousePos.y),
+                    draggedProxyState.first
+                )
+            )
             draggedProxy = null
+            isDragging = false
         }
     }
 

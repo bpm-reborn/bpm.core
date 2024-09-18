@@ -18,6 +18,7 @@ import kotlin.math.max
 import kotlin.math.min
 
 class PanelManager(private val graphics: CanvasGraphics) {
+
     private val panels = ConcurrentHashMap<String, Panel>()
 
     fun addPanel(panel: Panel) {
@@ -26,7 +27,7 @@ class PanelManager(private val graphics: CanvasGraphics) {
         arrangePanel(panel)
     }
 
-     fun arrangePanel(panel: Panel) {
+    fun arrangePanel(panel: Panel) {
         val displaySize = ImGui.getIO().displaySize
         val padding = 5f
         val sideWidth = 0.2f
@@ -38,6 +39,7 @@ class PanelManager(private val graphics: CanvasGraphics) {
                 panel.panelWidth = displaySize.x * sideWidth
                 panel.panelHeight = displaySize.y * 0.5f
             }
+
             "Proxies" -> {
                 val variablesPanel = panels["Variables"]
                 if (variablesPanel != null) {
@@ -50,6 +52,7 @@ class PanelManager(private val graphics: CanvasGraphics) {
                     panel.panelHeight = displaySize.y * 0.5f - padding * 2
                 }
             }
+
             "Console" -> {
                 val variablesPanel = panels["Variables"]
                 val proxiesPanel = panels["Proxies"]
@@ -58,13 +61,17 @@ class PanelManager(private val graphics: CanvasGraphics) {
                     panel.panelWidth = (displaySize.x - proxiesPanel.panelWidth) - padding * 3
                     panel.panelHeight = displaySize.y * bottomHeight
                     //Set y position so that the console is on the bottom of the screen
-                    panel.position.set((displaySize.x * sideWidth + padding * 2 ).toFloat(), displaySize.y - panel.panelHeight - padding)
+                    panel.position.set(
+                        (displaySize.x * sideWidth + padding * 2).toFloat(),
+                        displaySize.y - panel.panelHeight - padding
+                    )
                 } else {
                     panel.position.set(displaySize.x * 0.3f + padding * 2, displaySize.y * 0.5f + padding)
                     panel.panelWidth = displaySize.x * 0.7f - padding * 3
                     panel.panelHeight = displaySize.y * bottomHeight - padding * 2
                 }
             }
+
             else -> {
                 panel.position.set(displaySize.x * 0.25f, displaySize.y * 0.25f)
                 panel.panelWidth = displaySize.x * 0.5f
@@ -87,6 +94,12 @@ class PanelManager(private val graphics: CanvasGraphics) {
                 panel.position.x + panel.panelWidth,
                 panel.position.y + panel.panelHeight
             )
+        }
+    }
+
+    fun isAnyDragged(): Boolean {
+        return panels.values.any { panel ->
+            panel.isDragging
         }
     }
 

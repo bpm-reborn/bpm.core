@@ -6,19 +6,14 @@ import bpm.common.network.Listener
 import bpm.common.network.Network.new
 import bpm.common.network.listener
 import bpm.common.packets.Packet
-import bpm.common.packets.internal.ConnectRequest
-import bpm.common.packets.internal.DisconnectPacket
 import bpm.common.property.Property
 import bpm.common.property.PropertyMap
-import bpm.common.property.configured
 import bpm.common.schemas.Schemas
-import bpm.common.type.NodeType
 import bpm.common.vm.EvalContext
 import bpm.common.workspace.packets.WorkspaceCreateRequestPacket
 import bpm.common.workspace.packets.WorkspaceCreateResponsePacket
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.WorkspaceSettings
-import bpm.common.workspace.graph.Edge
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.graph.User
 import bpm.common.workspace.packets.*
@@ -26,7 +21,6 @@ import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
 import net.neoforged.neoforge.server.ServerLifecycleHooks
 import org.joml.Vector2f
-import org.joml.Vector4f
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -100,12 +94,12 @@ object ServerRuntime : Listener {
     /**
      * Returns true if the function was executed successfully, false otherwise.
      */
-    fun execute(workspace: Workspace, functionName: String, vararg args: Any?) {
+    fun execute(workspace: Workspace, functionName: String) =synchronized(EvalContext) {
         if (workspace.needsRecompile) {
             logger.warn { "Workspace needs recompilation" }
             return
         }
-        val result = EvalContext.callFunction(workspace, functionName, *args)
+        val result = EvalContext.callFunction(workspace, functionName)
         if (result.isRealFailure) {
             sendError(workspace.uid, result)
             workspace.needsRecompile = true
@@ -262,6 +256,27 @@ object ServerRuntime : Listener {
         }
 
 
+        is ProxyNodeCreateRequest -> {
+            val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                ?: error("Workspace not found")
+            val type = "World/Proxy"
+            val library = listener<Schemas>(Endpoint.Side.SERVER).library
+            val nodeType = library[type] ?: error("Node type not found")
+            val node = listener<Schemas>(Endpoint.Side.SERVER).createFromType(workspace, nodeType, packet.position)
+            node.properties["value"] = Property.Object {
+                "x" to packet.blockPos.x
+                "y" to packet.blockPos.y
+                "z" to packet.blockPos.z
+            }
+            node.properties["override"] = Property.String("\${OUTPUT.proxied = {x = ${packet.blockPos.x}, y = ${packet.blockPos.y}, z = ${packet.blockPos.z}}}".trimIndent())
+            //Set the source to output a block position
+
+            //send the node
+            sendToUsersInWorkspace(workspace.uid, new<NodeCreated> {
+                this.node = node
+            })
+        }
+
         else -> Unit
     }
 
@@ -284,15 +299,20 @@ object ServerRuntime : Listener {
 
 
     private fun compileWorkspace(workspace: Workspace) {
-        workspace.save()
-        workspace.needsRecompile = false
-        val evalResult = EvalContext.eval(workspace)
-        if (evalResult.isRealFailure) {
-            sendError(workspace.uid, evalResult)
-            workspace.needsRecompile = true
-            logger.error(evalResult.message)
-        } else {
+        try {
+            workspace.save()
+            workspace.needsRecompile = false
+            val result = EvalContext.eval(workspace)
+            if (result.isRealFailure) {
+                sendError(workspace.uid, result)
+                workspace.needsRecompile = true
+                return
+            }
             execute(workspace, "Run")
+        } catch (e: Exception) {
+            sendError(workspace.uid, EvalContext.RuntimeError(e.message ?: "Unknown error", e.stackTrace))
+            workspace.needsRecompile = true
+            logger.error(e) { "Error compiling workspace ${workspace.uid}" }
         }
     }
 

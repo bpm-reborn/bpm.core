@@ -5,6 +5,7 @@ import bpm.client.render.panel.ConsolePanel
 import bpm.client.render.panel.PanelManager
 import bpm.client.render.panel.ProxiesPanel
 import bpm.client.render.panel.VariablesPanel
+import bpm.client.runtime.ClientRuntime
 import bpm.client.utils.use
 import bpm.common.network.Client
 import bpm.common.network.Endpoint
@@ -80,13 +81,6 @@ class CanvasGraphics(
         body()
         drawList.popClipRect()
     }
-
-
-    fun isAnyPanelHovered(): Boolean = false
-//    fun isAnyPanelHovered(): Boolean = panels.isAnyHovered()
-
-    fun isDraggingOrResizing(): Boolean = false
-//    fun isDraggingOrResizing(): Boolean = panels.isAnyDraggedOrResized()
 
 
     fun renderPanels(drawList: ImDrawList) = panels.renderPanels(drawList)
@@ -418,7 +412,24 @@ class CanvasGraphics(
         }
 
         val mousePos = ImGui.getMousePos()
-        if (context.isPointOverEdge(Vector2f(mousePos.x, mousePos.y), pos)) {
+
+        val edgeBounds = getBoundsForEdge(edge, pos)
+//        drawList.addRect(
+//            edgeBounds.x,
+//            edgeBounds.y,
+//            edgeBounds.z,
+//            edgeBounds.w,
+//            ImColor.rgba(120, 0, 0, 255),
+//            0f,
+//            0,
+//            1f
+//        )
+        if (isPointOverRect(Vector2f(mousePos.x, mousePos.y), edgeBounds)) {
+            renderTooltip(edge.description)
+        /*}
+        if (context.isPointOverEdge(Vector2f(mousePos.x, mousePos.y), pos)) {*/
+
+
             drawList.addCircle(
                 pos.x,
                 pos.y,
@@ -428,10 +439,28 @@ class CanvasGraphics(
                 1.5f * context.zoom
             )
 
+//            renderTooltip(edge.description)
+
             if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
                 context.startEdgeDrag(node, edge)
             }
         }
+    }
+
+    private fun getBoundsForEdge(edge: Edge, pos: Vector2f): Vector4f {
+        val edgeRadius = 4f * context.zoom
+        val labelWidth = ImGui.calcTextSize(edge.name).x
+        val inputWidth = 60f * context.zoom // Adjust this value as needed
+        val spacing = 5f * context.zoom
+
+        val totalWidth = labelWidth + inputWidth + spacing
+        val startX = pos.x - edgeRadius * 2 - spacing - totalWidth / 2
+        val startY = pos.y - ImGui.getTextLineHeight() / 2
+        val endX = startX + totalWidth
+        val endY = startY + ImGui.getTextLineHeight()
+
+        return Vector4f(startX, startY, endX, endY)
+
     }
 
     private fun renderEdgeInput(drawList: ImDrawList, edge: Edge, x: Float, y: Float, width: Float) {
@@ -1151,6 +1180,12 @@ class CanvasGraphics(
     }
 
     fun toScreenSpaceVector(vec: Vector3f): Vector3f = toScreenSpaceVector(vec.x, vec.y, vec.z)
+    fun toWorldSpaceVector(x: Float, y: Float): Vector2f {
+        return Vector2f(
+            (x - ClientRuntime.workspace!!.settings.position.x) / ClientRuntime.workspace!!.settings.zoom,
+            (y - ClientRuntime.workspace!!.settings.position.y) / ClientRuntime.workspace!!.settings.zoom
+        )
+    }
 
 
 }

@@ -13,6 +13,7 @@ import net.minecraft.core.Direction
 import net.minecraft.world.Container
 import net.neoforged.neoforge.items.wrapper.InvWrapper
 import net.neoforged.neoforge.server.ServerLifecycleHooks
+import java.util.concurrent.ConcurrentHashMap
 
 object Network : LuaBuiltin {
 
@@ -53,7 +54,7 @@ object Network : LuaBuiltin {
         ServerLifecycleHooks.getCurrentServer()?.overworld() ?: throw IllegalStateException("Overworld not available")
     }
 
-    private val cachedHandlers = mutableMapOf<String, CombinedItemHandler>()
+    private val cachedHandlers = mutableMapOf<String, IItemHandler>()
 
     private fun getHandlers(uuid: String, types: Set<ProxiedType>): CombinedItemHandler? {
         val workspaceUUID = UUID.fromString(uuid)
@@ -79,7 +80,8 @@ object Network : LuaBuiltin {
         return if (handlers.isNotEmpty()) CombinedItemHandler(handlers) else null
     }
 
-    private fun getItemHandler(world: ServerLevel, pos: BlockPos, direction: Direction?): IItemHandler? {
+
+     fun getItemHandler(world: ServerLevel, pos: BlockPos, direction: Direction?): IItemHandler? {
         val blockEntity = world.getBlockEntity(pos)
         if (blockEntity != null) {
             //QUARRIS: This is not actually a compile error. Think we found a bug in intellij it's self.
@@ -100,7 +102,6 @@ object Network : LuaBuiltin {
         }
         return null
     }
-
     @JvmStatic
     fun extractItem(handler: IItemHandler, slot: Int, amount: Int, simulate: Boolean): ItemStack {
         return handler.extractItem(slot, amount, simulate)

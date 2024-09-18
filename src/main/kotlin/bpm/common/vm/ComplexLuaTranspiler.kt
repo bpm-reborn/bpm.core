@@ -77,7 +77,10 @@ object ComplexLuaTranspiler {
                 logger.error { "Node template not found for ${node.type}/${node.name}" }
                 return emptyList()
             }
-            val sourceTemplate = nodeTemplate["source"].cast<Property.String>().get()
+
+            val hasOverride = node.properties.contains("override")
+            val sourceTemplate = if (hasOverride) node["override"].cast<Property.String>()
+                .get() else nodeTemplate["source"].cast<Property.String>().get()
             input = sourceTemplate
             position = 0
             val tokens = mutableListOf<Token>()
@@ -220,12 +223,14 @@ object ComplexLuaTranspiler {
                                 function.dependencies.add(referencedFunction)
                             }
                         }
+
                         is IRStatement.ExecReference -> {
                             val referencedFunction = functions.find { it.id == statement.name }
                             if (referencedFunction != null && !function.dependencies.contains(referencedFunction)) {
                                 function.dependencies.add(referencedFunction)
                             }
                         }
+
                         is IRStatement.OutputAssignment -> {
                             val outputEdge = workspace.graph.getEdges(workspace.graph.getNode(UUID.fromString(function.id))!!)
                                 .find { it.name == statement.name && it.direction == "output" }
@@ -314,6 +319,7 @@ object ComplexLuaTranspiler {
                             function.body.add(IRStatement.NodeReference(child.name))
                         }
                     }
+
                     is ASTNode.ExecReference -> function.body.add(IRStatement.ExecReference(child.name))
                     is ASTNode.VarReference -> function.body.add(IRStatement.VarReference(child.name))
                     is ASTNode.LambdaReference -> function.body.add(IRStatement.LambdaReference(child.name))
@@ -326,12 +332,14 @@ object ComplexLuaTranspiler {
                             child.value
                         )
                     )
+
                     else -> {} // Ignore other node types
                 }
             }
 
             return function
         }
+
         private fun getSourceNode(workspace: Workspace, edge: Edge): Node? {
             val connectedLink = workspace.graph.links.find { it.to == edge.uid }
             return if (connectedLink != null) {
@@ -344,6 +352,7 @@ object ComplexLuaTranspiler {
     }
 
     class CodeGenerator(private val workspace: Workspace) {
+
         private val indent = "  "
         private val nodeDependencies = mutableMapOf<String, MutableSet<String>>()
         private val executionOrder = mutableListOf<String>()
@@ -364,6 +373,7 @@ object ComplexLuaTranspiler {
             generateEventHandlers(ir, codeBuilder)
             return codeBuilder.toString()
         }
+
         private fun buildDependencies(ir: IR) {
             ir.functions.forEach { function ->
                 nodeDependencies[function.id] = mutableSetOf()
@@ -412,7 +422,6 @@ object ComplexLuaTranspiler {
             }
             codeBuilder.append("\n")
         }
-
 
 
         private fun generateGlobalOutputsTable(codeBuilder: StringBuilder) {
@@ -491,7 +500,8 @@ object ComplexLuaTranspiler {
 
                     codeBuilder.append("$indent$inputName = globalOutputs['$sourceOutputKey']\n")
                 } else {
-                    val edge = workspace.graph.getEdges(workspace.graph.getNode(UUID.fromString(function.id))!!).find { it.name == inputName }
+                    val edge = workspace.graph.getEdges(workspace.graph.getNode(UUID.fromString(function.id))!!)
+                        .find { it.name == inputName }
                     if (edge != null) {
                         val defaultValue = getDefaultValue(edge)
                         codeBuilder.append("$indent$inputName = $defaultValue\n")
@@ -504,12 +514,19 @@ object ComplexLuaTranspiler {
                 generateStatement(statement, ir, codeBuilder, indent, function)
             }
         }
+
         private fun hasExecInput(function: IRFunction): Boolean {
             return workspace.graph.getEdges(workspace.graph.getNode(UUID.fromString(function.id))!!)
                 .any { it.direction == "input" && it.type == "exec" }
         }
 
-        private fun generateStatement(statement: IRStatement, ir: IR, codeBuilder: StringBuilder, indent: String, currentFunction: IRFunction) {
+        private fun generateStatement(
+            statement: IRStatement,
+            ir: IR,
+            codeBuilder: StringBuilder,
+            indent: String,
+            currentFunction: IRFunction
+        ) {
             when (statement) {
                 is IRStatement.Literal -> codeBuilder.append("$indent${statement.value}\n")
                 is IRStatement.NodeReference -> {
@@ -519,6 +536,7 @@ object ComplexLuaTranspiler {
                         codeBuilder.append("$indent$referencedFunctionName()\n")
                     }
                 }
+
                 is IRStatement.ExecReference -> {
                     val execEdge = currentFunction.outputEdges[statement.name]
                     execEdge?.forEach { (targetNodeId, targetNodeName) ->
@@ -526,9 +544,14 @@ object ComplexLuaTranspiler {
                         codeBuilder.append("$indent$targetFunctionName()\n")
                     }
                 }
+
                 is IRStatement.GenericExpression -> codeBuilder.append("$indent${statement.content}\n")
                 is IRStatement.OutputAssignment -> {
-                    val outputKey = "${sanitizeName("${currentFunction.originalName}_${currentFunction.id}")}_${sanitizeName(statement.name)}"
+                    val outputKey = "${sanitizeName("${currentFunction.originalName}_${currentFunction.id}")}_${
+                        sanitizeName(
+                            statement.name
+                        )
+                    }"
                     codeBuilder.append("${indent}globalOutputs['$outputKey'] = ${statement.value}\n")
                 }
 
@@ -540,7 +563,6 @@ object ComplexLuaTranspiler {
             return workspace.graph.getEdges(workspace.graph.getNode(UUID.fromString(function.id))!!)
                 .find { it.direction == "output" && it.type != "exec" }
         }
-
 
 
         private fun getSourceEdge(workspace: Workspace, targetEdge: Edge): Edge? {
@@ -564,6 +586,7 @@ object ComplexLuaTranspiler {
                 else -> "nil"
             }
         }
+
         private fun getSourceEdgeName(workspace: Workspace, targetNodeId: String, targetEdgeName: String): String {
             val targetNode = workspace.graph.getNode(UUID.fromString(targetNodeId))
             val targetEdge = workspace.graph.getEdges(targetNode!!)
@@ -595,6 +618,7 @@ object ComplexLuaTranspiler {
                 } else null
             } else null
         }
+
         private fun generateEventHandlers(ir: IR, codeBuilder: StringBuilder) {
             codeBuilder.append("-- Event Handlers\n")
             codeBuilder.append("return {\n")
@@ -606,7 +630,13 @@ object ComplexLuaTranspiler {
         }
 
 
-        private fun generateDependentFunctionCalls(functionId: String, codeBuilder: StringBuilder, indent: String, visitedFunctions: MutableSet<String>, ir: IR) {
+        private fun generateDependentFunctionCalls(
+            functionId: String,
+            codeBuilder: StringBuilder,
+            indent: String,
+            visitedFunctions: MutableSet<String>,
+            ir: IR
+        ) {
             if (functionId in visitedFunctions) return
             visitedFunctions.add(functionId)
 

@@ -9,12 +9,15 @@ import net.minecraft.core.particles.ParticleTypes
 import net.minecraft.core.registries.BuiltInRegistries
 import net.minecraft.network.chat.Component
 import net.minecraft.server.MinecraftServer
+import net.minecraft.server.level.ServerLevel
 import net.minecraft.sounds.SoundSource
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.level.Level
 import net.minecraft.world.phys.AABB
+import net.neoforged.neoforge.items.IItemHandler
 import net.neoforged.neoforge.server.ServerLifecycleHooks
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 object World : LuaBuiltin {
 
@@ -65,6 +68,24 @@ object World : LuaBuiltin {
         }
     }
 
+
+    private val cachedProxiedHandlers = ConcurrentHashMap<BlockPos, IItemHandler>()
+
+
+    @JvmStatic
+    fun getItemHandler(workspaceUid: String, x: Int, y: Int, z: Int): IItemHandler? {
+        if (cachedProxiedHandlers.containsKey(BlockPos(x, y, z))) {
+            return cachedProxiedHandlers[BlockPos(x, y, z)]
+        }
+        val pos = BlockPos(x, y, z)
+        val workspaceUUID = UUID.fromString(workspaceUid)
+        //Get the controller for the workspace, so we can use it's level
+        val controller = PipeNetwork.getController(workspaceUUID) ?: return null
+        val level = (controller.level ?: return null) as ServerLevel
+        val handler = Network.getItemHandler(level, pos, null) ?: return null
+        cachedProxiedHandlers[pos] = handler
+        return handler
+    }
     @JvmStatic
     fun playSoundAt(x: Float, y: Float, z: Float, soundName: String, volume: Float, pitch: Float) {
         val sound = getSoundByName(soundName)

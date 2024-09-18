@@ -1,5 +1,7 @@
 package bpm.mc.visual
 
+import bpm.client.render.panel.ConsolePanel
+import bpm.client.render.panel.PanelManager
 import bpm.client.runtime.ClientRuntime
 import imgui.ImGui
 import imgui.flag.ImGuiWindowFlags
@@ -26,9 +28,9 @@ object ClientGui : Listener {
 
     fun renderPre(graphics: GuiGraphics) {
         if (workspaceOpen) return
-        ClientRuntime.newFrame()
-        processOverlay()
-        ClientRuntime.endFrame()
+//        ClientRuntime.newFrame()
+//        processOverlay()
+//        ClientRuntime.endFrame()
     }
 
     fun renderPost(graphics: GuiGraphics) {
@@ -80,6 +82,7 @@ object ClientGui : Listener {
     override fun onPacket(packet: Packet, from: UUID) {
         if (packet is NotifyMessage) {
             notificationManager.addNotification(packet)
+            ConsolePanel.log(packet.message, ConsolePanel.LogLevel.ERROR)
         }
 
     }
