@@ -12,7 +12,6 @@ object EvalContext {
 
     private val logger = KotlinLogging.logger {}
     private lateinit var lua: Lua
-    //    private val functionGroups: ConcurrentHashMap<String, MutableMap<String, LuaValue>> = ConcurrentHashMap()
     private val workspaceFunctionGroups: ConcurrentHashMap<UUID, ConcurrentHashMap<String, MutableMap<String, LuaValue>>> = ConcurrentHashMap()
 
     init {
@@ -24,46 +23,84 @@ object EvalContext {
             lua = LuaJit()
             initializeLuaState()
         } catch (e: Exception) {
-            println("Error loading LuaJit: ${e.message}")
-            e.printStackTrace()
+            logger.error(e) { "Error loading LuaJit" }
+            throw RuntimeException("Failed to initialize LuaJit", e)
         }
     }
 
     private fun initializeLuaState() {
-//        lua.openLibraries()
         lua.setExternalLoader(ClassPathLoader())
     }
 
-    fun eval(workspace: Workspace): Result = synchronized(lua){
+    @Synchronized
+    fun eval(workspace: Workspace): Result {
         val functionGroups = workspaceFunctionGroups.computeIfAbsent(workspace.uid) { ConcurrentHashMap() }
         functionGroups.clear()
-        try {
+
+        return try {
             val compiledSource = ComplexLuaTranspiler.generateLuaScript(workspace)
             logger.debug { "Compiled Lua script: $compiledSource" }
+
             val result = lua.eval(compiledSource)[0]
-            if (result.type() == Lua.LuaType.TABLE) {
-                for (groupKey in result.keys) {
-                    val group = result.get(groupKey)
-                    if (group?.type() == Lua.LuaType.TABLE) {
-                        val groupName = groupKey.toString()
-                        functionGroups[groupName] = mutableMapOf()
-                        for (functionKey in group.keys) {
-                            val function = group.get(functionKey)
-                            if (function?.type() == Lua.LuaType.FUNCTION) {
-                                val functionName = functionKey.toString()
-                                functionGroups[groupName]!![functionName] = function
-                                logger.debug { "Added function `$functionName` to group `$groupName`" }
-                            }
+            processEvalResult(result, functionGroups)
+
+            Success("Workspace evaluated successfully")
+        } catch (e: LuaException) {
+            logger.error(e) { "Error evaluating Lua script" }
+            RuntimeError(e.message ?: "Unknown error", e.stackTrace)
+        } finally {
+            lua.gc()
+        }
+    }
+
+    private fun processEvalResult(result: LuaValue, functionGroups: ConcurrentHashMap<String, MutableMap<String, LuaValue>>) {
+        if (result.type() == Lua.LuaType.TABLE) {
+            for (groupKey in result.keys) {
+                val group = result.get(groupKey)
+                if (group?.type() == Lua.LuaType.TABLE) {
+                    val groupName = groupKey.toString()
+                    functionGroups[groupName] = mutableMapOf()
+                    for (functionKey in group.keys) {
+                        val function = group.get(functionKey)
+                        if (function?.type() == Lua.LuaType.FUNCTION) {
+                            val functionName = functionKey.toString()
+                            functionGroups[groupName]!![functionName] = function
+                            logger.debug { "Added function `$functionName` to group `$groupName`" }
                         }
                     }
                 }
             }
-            lua.gc()
-
-        } catch (e: LuaException) {
-            return RuntimeError(e.message ?: "Unknown error", e.stackTrace)
         }
-        return Success("Workspace evaluated successfully")
+    }
+
+    fun callFunction(workspace: Workspace, groupName: String, vararg args: Any?): Result {
+        val functionGroups = workspaceFunctionGroups[workspace.uid] ?: return InvalidWorkspace(workspace.uid)
+        val group = functionGroups[groupName] ?: return GroupNotFound(groupName)
+
+        val results = group.map { (functionName, function) ->
+            try {
+                Success(function.call(*args), functionName)
+            } catch (e: LuaException) {
+                logger.error(e) { "Error calling function `$functionName` in group `$groupName`" }
+                RuntimeError(e.message ?: "Unknown error", e.stackTrace, functionName)
+            }
+        }
+
+        return GroupResult(groupName, results)
+    }
+
+    fun callAllFunctions(workspace: Workspace, vararg args: Any?): Result {
+        val functionGroups = workspaceFunctionGroups[workspace.uid] ?: return InvalidWorkspace(workspace.uid)
+
+        val results = functionGroups.map { (groupName, _) ->
+            callFunction(workspace, groupName, *args)
+        }
+
+        return GroupResult("All", results)
+    }
+
+    fun close() {
+        lua.close()
     }
 
 
@@ -159,36 +196,36 @@ object EvalContext {
         override fun toString(): String = message
     }
 
-
-    fun callFunction(workspace: Workspace, groupName: String, vararg args: Any?): Result {
-        val functionGroups = workspaceFunctionGroups[workspace.uid] ?: return InvalidWorkspace(
-            workspace.uid
-        )
-        val group = functionGroups[groupName] ?: return GroupNotFound(groupName)
-        val results = mutableSetOf<Result>()
-        for ((functionName, function) in group) {
-            try {
-                val result = function.call(*args)
-                results.add(Success(result, functionName))
-            } catch (e: LuaException) {
-                results.add(RuntimeError(e.message ?: "Unknown error", e.stackTrace, functionName))
-            }
-        }
-        return GroupResult(groupName, results.toList())
-    }
-
-    fun callAllFunctions(workspace: Workspace, vararg args: Any?): Result {
-        val functionGroups = workspaceFunctionGroups[workspace.uid] ?: return InvalidWorkspace(
-            workspace.uid
-        )
-        val results = mutableSetOf<Result>()
-        for ((groupName, group) in functionGroups) {
-            results.add(callFunction(workspace, groupName, *args))
-        }
-        return GroupResult("All", results.toList())
-    }
-
-    fun close() {
-        lua.close()
-    }
+//
+//    fun callFunction(workspace: Workspace, groupName: String, vararg args: Any?): Result {
+//        val functionGroups = workspaceFunctionGroups[workspace.uid] ?: return InvalidWorkspace(
+//            workspace.uid
+//        )
+//        val group = functionGroups[groupName] ?: return GroupNotFound(groupName)
+//        val results = mutableSetOf<Result>()
+//        for ((functionName, function) in group) {
+//            try {
+//                val result = function.call(*args)
+//                results.add(Success(result, functionName))
+//            } catch (e: LuaException) {
+//                results.add(RuntimeError(e.message ?: "Unknown error", e.stackTrace, functionName))
+//            }
+//        }
+//        return GroupResult(groupName, results.toList())
+//    }
+//
+//    fun callAllFunctions(workspace: Workspace, vararg args: Any?): Result {
+//        val functionGroups = workspaceFunctionGroups[workspace.uid] ?: return InvalidWorkspace(
+//            workspace.uid
+//        )
+//        val results = mutableSetOf<Result>()
+//        for ((groupName, group) in functionGroups) {
+//            results.add(callFunction(workspace, groupName, *args))
+//        }
+//        return GroupResult("All", results.toList())
+//    }
+//
+//    fun close() {
+//        lua.close()
+//    }
 }
