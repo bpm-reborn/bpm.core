@@ -31,15 +31,34 @@ class MarkdownRenderer {
     private var lineHeight = 1.5f
     private var lastRenderedElement: Element? = null
     private val codeBlockStates = mutableMapOf<String, CodeBlockState>()
-    private val animationDuration = 0.3f // seconds
+    private var headingAnchors = mutableMapOf<String, Float>()
+    private var scrolledAnchor: String? = null
+    private var reset = false
+
+    fun reset() {
+//        indentLevel = 1
+//        currentColor = ImVec4(1f, 1f, 1f, 1f)
+//        colorStack.clear()
+//        lastRenderedElement = null
+        codeBlockStates.forEach { t, u ->
+            u.animationProgress = 0f
+            u.currentHeight = 0f
+        }
+
+        headingAnchors.clear()
+        reset = true
+    }
 
     private data class CodeBlockState(
         var isMinimized: Boolean = false,
-        var animationProgress: Float = 1f,
+        var animationProgress: Float = 0f,
         var targetHeight: Float = 0f,
         var currentHeight: Float = 0f,
         var codeText: String = "",
-        var language: String = ""
+        var language: String = "",
+        var isHovered: Boolean = false,
+        var isCopied: Boolean = false,
+        var copiedAnimationProgress: Float = 0f
     ) {
 
         val lines: List<String>
@@ -47,9 +66,8 @@ class MarkdownRenderer {
     }
 
     fun render(html: String) {
-        val io = ImGui.getIO()
-        drawList = ImGui.getWindowDrawList()
 
+        drawList = ImGui.getWindowDrawList()
         //Example icon rendering
         MarkdownFont.push()
         font.isIcon = true
@@ -90,18 +108,6 @@ class MarkdownRenderer {
             20f,
         )
 
-//        // If hovered
-//        if (ImGui.isMouseHoveringRect(startPos.x, startPos.y, endPos.x, endPos.y)) {
-//            drawList.addRectFilled(
-//                startPos.x + padding,
-//                startPos.y + padding,
-//                endPos.x - padding * 2,
-//                endPos.y - padding * 2,
-//                ImColor.rgba(33, 33, 33, 255),
-//                20f,
-//            )
-//        }
-
         cursorX = ImGui.getCursorScreenPosX()
         cursorY = ImGui.getCursorScreenPosY()
 
@@ -110,6 +116,10 @@ class MarkdownRenderer {
 
         cursorY += 40f
         ImGui.setCursorScreenPos(cursorX, cursorY)
+        if (reset) {
+            ImGui.setScrollY(0f)
+            reset = false
+        }
     }
 
 
@@ -148,8 +158,14 @@ class MarkdownRenderer {
         }
     }
 
+    fun scrollToAnchor(anchor: String) {
+        scrolledAnchor = anchor
+    }
+
     private fun renderHeading(element: Element) {
         MarkdownFont.push()
+
+
 
 
         if (cursorX > ImGui.getCursorScreenPosX() + padding) {
@@ -190,11 +206,16 @@ class MarkdownRenderer {
 
         var startX = cursorX
         var startY = cursorY
-
-
+        ImGui.setCursorScreenPos(ImGui.getCursorScreenPosX(), cursorY)
         // Render link icon
-
-
+        // Generate an ID for the heading
+        val headingId = element.text().lowercase().replace(" ", "-")
+        //Convert to relative position
+        val screenPos = ImGui.getCursorPos()
+        if (headingId == scrolledAnchor) {
+            ImGui.setScrollY(screenPos.y - 20)
+            scrolledAnchor = null
+        }
         //If the heading is hovered, show the link icon
         if (ImGui.isMouseHoveringRect(cursorX, cursorY, cursorX + textSize.x, cursorY + textSize.y)) {
             ImGui.setMouseCursor(ImGuiMouseCursor.Hand)
@@ -213,8 +234,8 @@ class MarkdownRenderer {
                 100, 100, 100, 255
             )
             // Handle click on the link icon
-            if (isHovered && ImGui.isMouseClicked(0)) {
-                val normalizedTitle = headingText.lowercase().replace(" ", "_")
+            if (ImGui.isMouseClicked(0)) {
+                val normalizedTitle = headingText.lowercase().replace(" ", "-")
                 val encodedTitle = URLEncoder.encode(normalizedTitle, StandardCharsets.UTF_8.toString())
                 onHeadingClicked("#$encodedTitle")
             }
@@ -269,10 +290,14 @@ class MarkdownRenderer {
 
     // Add this property to store the callback function
     private var onHeadingClicked: (String) -> Unit = {}
-
+    private var onLinkClickedCallback: (String) -> Unit = {}
     // Add this method to set the callback function
     fun setOnHeadingClickedCallback(callback: (String) -> Unit) {
         onHeadingClicked = callback
+    }
+
+    fun setOnLinkClickedCallback(callback: (String) -> Unit) {
+        onLinkClickedCallback = callback
     }
 
     private fun renderText(text: String, isFirstLine: Boolean = false, contentStartX: Float = cursorX) {
@@ -322,9 +347,9 @@ class MarkdownRenderer {
     }
 
     private fun renderLink(element: Element) {
-
         val linkColor = ImVec4(0.2f, 0.8f, 1f, 1f)
         val linkText = element.text()
+        val href = element.attr("href")
         val textSize = ImGui.calcTextSize(linkText)
 
         val startX = cursorX
@@ -348,9 +373,10 @@ class MarkdownRenderer {
         )
 
         if (ImGui.isMouseHoveringRect(cursorX - textSize.x, cursorY, cursorX, cursorY + textSize.y)) {
-            ImGui.setTooltip(element.attr("href"))
+            ImGui.setTooltip(href)
+            ImGui.setMouseCursor(ImGuiMouseCursor.Hand)
             if (ImGui.isMouseClicked(0)) {
-                // Handle link click (e.g., open URL in browser)
+                onLinkClickedCallback(href)
             }
         }
     }
@@ -560,7 +586,7 @@ class MarkdownRenderer {
                 language = language
             )
         }
-        font.fontSize = 16
+        font.fontSize = (16 * scale).toInt()
 
         if (cursorX > ImGui.getCursorScreenPosX() + padding) {
             renderNewLine()
@@ -570,64 +596,160 @@ class MarkdownRenderer {
 
         // Calculate the exact height of the code block
         val lineCount = state.lines.size
-        val lineHeight = font.fontSize * 1.2f * scale
+        val lineHeight = font.fontSize * 1.2f
         val topBarHeight = font.fontSize * 1.5f * scale
         val codeBlockPadding = padding * 2 // Add some padding at the top and bottom of the code block
-        state.targetHeight = lineCount * lineHeight + topBarHeight + codeBlockPadding
-
-        // Smoothly animate the code block height
-        state.currentHeight = lerp(state.currentHeight, state.targetHeight, ImGui.getIO().deltaTime * 5f)
+        state.targetHeight = lineCount * lineHeight + codeBlockPadding
 
         val highlightedWidth = ImGui.getWindowContentRegionMaxX() - padding * 2
         val highlightedStartX = ImGui.getCursorScreenPosX() + padding
         val highlightedEndX = highlightedStartX + highlightedWidth
-        val highlightedEndY = cursorY + state.currentHeight
+        var highlightedEndY = (cursorY + state.currentHeight)
         val highlightedColor = ImVec4(0.1f, 0.1f, 0.1f, 1f)
+
+        // Check if the code block is hovered
+        val isHovered = ImGui.isMouseHoveringRect(
+            highlightedStartX + padding,
+            cursorY,
+            highlightedEndX - padding * 2,
+            highlightedEndY
+        )
+
+        // Smoothly animate the hover state
+        val animationSpeed = 5f
+        if (isHovered) {
+            state.animationProgress = lerp(state.animationProgress, 1f, ImGui.getIO().deltaTime * animationSpeed)
+        } else {
+            state.animationProgress = lerp(state.animationProgress, 0f, ImGui.getIO().deltaTime * animationSpeed)
+        }
 
         // Render the code block background
         drawList.addRectFilled(
-            highlightedStartX,
+            highlightedStartX + padding,
             cursorY,
-            highlightedEndX,
+            highlightedEndX - padding * 2,
             highlightedEndY,
             ImColor.rgba(highlightedColor.x, highlightedColor.y, highlightedColor.z, highlightedColor.w),
-            borderRadius
+            20f
         )
 
-        // Render top bar
-        val topBarStartX = ImGui.getCursorScreenPosX() + padding
-        val topBarEndX = ImGui.getWindowContentRegionMaxX() - padding
-        val topBarColor = ImVec4(0.1f, 0.1f, 0.1f, 1f)
+        // Render top bar with animation
+        if (state.animationProgress > 0f) {
+            MarkdownFont.push()
 
-        drawList.addRectFilled(
-            topBarStartX,
-            cursorY,
-            topBarEndX,
-            cursorY + topBarHeight,
-            ImColor.rgba(topBarColor.x, topBarColor.y, topBarColor.z, topBarColor.w),
-            borderRadius
-        )
-        cursorY += topBarHeight
+            font.isMedium = true
+            font.fontSize = (18f * scale).toInt()
 
-        // Render language label
-        if (state.language.isNotEmpty()) {
-            val labelColor = ImVec4(0.7f, 0.7f, 0.7f, 1f)
+            val width = ImGui.calcTextSize(if (state.isCopied) "Copied" else state.language).x * scale
+
+            val topBarWidth = width + padding * 2 + 20f * scale + padding * 2
+
+            val topBarHeight = 30f * scale
+            val topBarColor = ImVec4(0.175f, 0.167f, 0.185f, state.animationProgress)
+            val topBarStartX = highlightedEndX - padding * 4 - topBarWidth
+            val topBarStartY = cursorY + state.currentHeight - topBarHeight - padding * 2
+            val topBarEndX = highlightedEndX - padding * 4
+            val topBarEndY = topBarStartY + topBarHeight
+
+            val isTopBarHovered = ImGui.isMouseHoveringRect(topBarStartX, topBarStartY, topBarEndX, topBarEndY)
+
+            if (isTopBarHovered) {
+                ImGui.setMouseCursor(ImGuiMouseCursor.Hand)
+                if (ImGui.isMouseClicked(0)) {
+                    ImGui.setClipboardText(state.codeText)
+                    state.isCopied = true
+                    state.copiedAnimationProgress = 1f
+                }
+            } else if (!isHovered) {
+                state.isCopied = false
+            }
+
+            // Animate the "Copied" text
+            if (state.isCopied) {
+                state.copiedAnimationProgress = lerp(state.copiedAnimationProgress, 1f, ImGui.getIO().deltaTime * 5f)
+            } else {
+                state.copiedAnimationProgress = lerp(state.copiedAnimationProgress, 0f, ImGui.getIO().deltaTime * 5f)
+            }
+
+            drawList.addRectFilled(
+                topBarStartX,
+                topBarStartY,
+                topBarEndX,
+                topBarEndY,
+                ImColor.rgba(50, 56, 66, (255 * state.animationProgress).toInt()),
+                10f
+            )
+
+            // Render language label or "Copied" text
+            if (state.language.isNotEmpty()) {
+                val labelColor = ImVec4(0.7f, 0.7f, 0.7f, state.animationProgress)
+                font.isMedium = true
+                font.fontSize = 16
+                val displayText = lerp(state.language, "Copied", state.copiedAnimationProgress)
+
+                drawList.addText(
+                    font.font,
+                    font.fontSize * scale,
+                    topBarStartX + padding * state.animationProgress,
+                    topBarStartY + (topBarHeight - font.fontSize * scale) / 2,
+                    ImColor.rgba(labelColor.x, labelColor.y, labelColor.z, labelColor.w * state.animationProgress),
+                    displayText
+                )
+            }
+
+            MarkdownFont.pop()
+
+            // Render copy button
+            val copyButtonSize = (20f * scale) * state.animationProgress
+            val copyButtonX = topBarEndX - copyButtonSize - padding
+            val copyButtonY = topBarStartY + (topBarHeight - copyButtonSize) / 2
+            drawList.addRectFilled(
+                copyButtonX,
+                copyButtonY,
+                copyButtonX + copyButtonSize,
+                copyButtonY + copyButtonSize,
+                ImColor.rgba(100, 100, 100, (255 * state.animationProgress).toInt()),
+                5f
+            )
+            MarkdownFont.push()
+            font.isIcon = true
+            font.fontSize = (24 * state.animationProgress * scale).toInt()
             drawList.addText(
                 font.font,
-                font.fontSize * scale,
-                cursorX + padding / 2,
-                cursorY - topBarHeight + padding / 2,
-                ImColor.rgba(labelColor.x, labelColor.y, labelColor.z, labelColor.w),
-                state.language
+                font.fontSize.toFloat(),
+                copyButtonX + 5 * scale,
+                copyButtonY - 3 * scale,
+                ImColor.rgba(255, 255, 255, (255 * state.animationProgress).toInt()),
+                FontAwesome.Copy
             )
+            MarkdownFont.pop()
+
+            // Handle copy button click
+            if (ImGui.isMouseHoveringRect(
+                    copyButtonX,
+                    copyButtonY,
+                    copyButtonX + copyButtonSize,
+                    copyButtonY + copyButtonSize
+                ) &&
+                ImGui.isMouseClicked(0)
+            ) {
+                ImGui.setClipboardText(state.codeText)
+            }
         }
+
+        // Smoothly animate the code block height
+        state.currentHeight = lerp(state.currentHeight, state.targetHeight, ImGui.getIO().deltaTime * animationSpeed)
+
+        cursorX += padding * 2
+        cursorY += padding
 
         // Highlight and render the code
         highlightCode(drawList, state.codeText, state.language)
+        cursorX -= padding * 2
 
         // Update cursor position after rendering the code block
         cursorX = ImGui.getCursorScreenPosX() + padding
-        cursorY += state.currentHeight - topBarHeight - padding * 2
+        cursorY += state.currentHeight
 
         // Ensure we move to the next line after the code block
         renderNewLine()
@@ -712,6 +834,9 @@ class MarkdownRenderer {
         MarkdownFont.pop()
     }
 
+    private fun lerp(start: String, end: String, t: Float): String {
+        return if (t < 0.25f) start else end
+    }
 
     private fun renderNewLine() {
         cursorY += font.fontSize * lineHeight * scale
@@ -776,80 +901,13 @@ class MarkdownRenderer {
     }
 
 
-    private val YAML_PATTERNS = listOf(
-        Triple("key", "^\\s*(\\w+):\\s*".toRegex(), ImVec4(0.8f, 0.4f, 0.4f, 1f)),
-        Triple("string", "\"([^\"]*)\"|'([^']*)'".toRegex(), ImVec4(0.4f, 0.8f, 0.4f, 1f)),
-        Triple("number", "\\b\\d+(\\.\\d+)?\\b".toRegex(), ImVec4(0.4f, 0.6f, 0.8f, 1f)),
-        Triple("boolean", "\\b(true|false)\\b".toRegex(RegexOption.IGNORE_CASE), ImVec4(0.8f, 0.6f, 0.4f, 1f)),
-        Triple("comment", "#.*$".toRegex(), ImVec4(0.5f, 0.5f, 0.5f, 1f))
-    )
-
-    private val LUA_PATTERNS = listOf(
-        // Comments (multi-line and single-line)
-        Triple("comment", Regex("--.*$|--\\[\\[.*?\\]\\]", RegexOption.DOT_MATCHES_ALL), ImVec4(0.4f, 0.6f, 0.4f, 1f)),
-
-        // Strings (including long strings)
-        Triple(
-            "string",
-            "\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'|\\[\\[.*?\\]\\]".toRegex(RegexOption.DOT_MATCHES_ALL),
-            ImVec4(0.9f, 0.6f, 0.3f, 1f)
-        ),
-
-        // Keywords (moved to higher priority and adjusted regex)
-        Triple(
-            "keyword",
-            "\\b(and|break|do|else|elseif|end|false|for|function|if|in|local|nil|not|or|repeat|return|then|true|until|while)\\b".toRegex(),
-            ImVec4(0.9f, 0.4f, 0.4f, 1f)
-        ),
-
-        // Function definitions
-        Triple(
-            "function",
-            Regex("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()"),
-            ImVec4(0.4f, 0.7f, 0.9f, 1f)
-        ),
-
-        // Built-in functions and libraries
-        Triple(
-            "builtin",
-            Regex("\\b(assert|collectgarbage|dofile|error|getmetatable|ipairs|load|loadfile|next|pairs|pcall|print|rawequal|rawget|rawlen|rawset|require|select|setmetatable|tonumber|tostring|type|xpcall)\\b"),
-            ImVec4(0.5f, 0.8f, 0.8f, 1f)
-        ),
-
-        // Numbers (including hexadecimal)
-        Triple(
-            "number",
-            "\\b(0x[a-fA-F0-9]+|\\d+(\\.\\d*)?([eE][+-]?\\d+)?)\\b".toRegex(),
-            ImVec4(0.6f, 0.6f, 0.9f, 1f)
-        ),
-        // Operators
-        Triple("operator", "[+\\-*/%^#=<>]|==|~=|<=|>=|\\.\\.|\\.\\.\\.".toRegex(), ImVec4(0.8f, 0.8f, 0.4f, 1f)),
-
-        // Punctuation
-        Triple("punctuation", "[(){}\\[\\],;:]".toRegex(), ImVec4(0.7f, 0.7f, 0.7f, 1f)),
-
-
-        )
-
-
-    private val DEFAULT_COLOR = ImVec4(0.9f, 0.9f, 0.9f, 1f)
-
-
-    fun highlightCode(drawList: ImDrawList, code: String, language: String): Float {
-        val patterns = when (language.lowercase()) {
-            "yaml" -> YAML_PATTERNS
-            "lua" -> LUA_PATTERNS
-            else -> emptyList()
+    private fun highlightCode(drawList: ImDrawList, code: String, language: String): Float {
+        val tokenizer = when (language.lowercase()) {
+            "yaml" -> YamlTokenizer()
+            "lua" -> LuaTokenizer()
+            else -> DefaultTokenizer()
         }
-        return highlightCode(drawList, code, patterns)
-    }
 
-
-    private fun highlightCode(
-        drawList: ImDrawList,
-        code: String,
-        patterns: List<Triple<String, Regex, ImVec4>>
-    ): Float {
         MarkdownFont.push()
         font.fontSize = (16 * scale).toInt()
         val font = MarkdownFont.current.font
@@ -862,69 +920,233 @@ class MarkdownRenderer {
 
         code.lines().forEach { line ->
             var currentX = startX
-            var remainingLine = line
+            val tokens = tokenizer.tokenize(line)
 
-            while (remainingLine.isNotEmpty()) {
-                var didPreMatch = false
-                val match = patterns.firstNotNullOfOrNull { (_, regex, color) ->
-                    regex.find(remainingLine)?.let { Triple(it.value, it.range, color) }
-                }
-
-                if (match != null) {
-                    val (text, range, color) = match
-                    // Draw any text before the match
-                    if (range.first > 0) {
-                        //Match all the text before the match
-                        while (remainingLine.isNotEmpty()) {
-                            val text = remainingLine.takeWhile { it != ' ' }
-                            drawList.addText(
-                                font,
-                                fontSize,
-                                currentX,
-                                currentY,
-                                ImColor.rgba(DEFAULT_COLOR),
-                                text
-                            )
-                            currentX += ImGui.calcTextSize(text).x * scale
-                            remainingLine = remainingLine.substring(text.length)
-                            if (remainingLine.isNotEmpty()) {
-                                drawList.addText(
-                                    font,
-                                    fontSize,
-                                    currentX,
-                                    currentY,
-                                    ImColor.rgba(DEFAULT_COLOR),
-                                    " "
-                                )
-                                currentX += ImGui.calcTextSize(" ").x * scale
-                                remainingLine = remainingLine.substring(1)
-                            }
-                        }
-                    }
-                    // Draw the matched text
-                    drawList.addText(font, fontSize, currentX, currentY, ImColor.rgba(color), text)
-                    currentX += ImGui.calcTextSize(text).x * scale
-                    remainingLine = remainingLine.substring(range.last + 1)
-                    height += ImGui.calcTextSize(text).y
-                } else {
-                    // Draw any remaining text
-                    drawList.addText(
-                        font,
-                        fontSize,
-                        currentX,
-                        currentY,
-                        ImColor.rgba(DEFAULT_COLOR),
-                        remainingLine
-                    )
-                    height += ImGui.calcTextSize(remainingLine).y * 1.2f
-                    break
-                }
+            tokens.forEach { token ->
+                val color = getColorForToken(token)
+                drawList.addText(font, fontSize, currentX, currentY, ImColor.rgba(color), token.value)
+                currentX += ImGui.calcTextSize(token.value).x
+                height += ImGui.calcTextSize(token.value).y
             }
+
             currentY += lineHeight
         }
-        MarkdownFont.pop()
 
+        MarkdownFont.pop()
         return height - padding
+    }
+
+
+    private fun getColorForToken(token: Token): ImVec4 {
+        return when (token.type) {
+            TokenType.KEYWORD -> ImVec4(0.9f, 0.4f, 0.4f, 1f)
+            TokenType.STRING -> ImVec4(0.4f, 0.8f, 0.4f, 1f)
+            TokenType.NUMBER -> ImVec4(0.4f, 0.6f, 0.8f, 1f)
+            TokenType.COMMENT -> ImVec4(0.5f, 0.5f, 0.5f, 1f)
+            TokenType.OPERATOR -> ImVec4(0.8f, 0.8f, 0.4f, 1f)
+            TokenType.IDENTIFIER -> ImVec4(0.7f, 0.7f, 0.9f, 1f)
+            TokenType.PUNCTUATION -> ImVec4(0.7f, 0.7f, 0.7f, 1f)
+            TokenType.WHITESPACE -> ImVec4(1f, 1f, 1f, 1f)
+            TokenType.YAML_KEY -> ImVec4(0.9f, 0.6f, 0.3f, 1f)
+            TokenType.YAML_COLON -> ImVec4(0.9f, 0.9f, 0.2f, 1f)
+            TokenType.YAML_LIST_ITEM -> ImVec4(0.5f, 0.8f, 0.9f, 1f)
+            TokenType.YAML_BUILTIN_TYPE -> ImVec4(0.6f, 0.4f, 0.8f, 1f)
+            TokenType.YAML_ANCHOR -> ImVec4(0.8f, 0.4f, 0.6f, 1f)
+            TokenType.YAML_ALIAS -> ImVec4(0.6f, 0.8f, 0.4f, 1f)
+            else -> ImVec4(0.9f, 0.9f, 0.9f, 1f)
+        }
     }
 }
 
+enum class TokenType {
+    KEYWORD, STRING, NUMBER, COMMENT, OPERATOR, IDENTIFIER, PUNCTUATION, WHITESPACE,
+    YAML_KEY, YAML_COLON, YAML_LIST_ITEM, YAML_BUILTIN_TYPE, YAML_ANCHOR, YAML_ALIAS, OTHER
+}
+
+data class Token(val type: TokenType, val value: String)
+
+class YamlTokenizer : Tokenizer {
+
+    private val builtinTypes = setOf("int", "float", "string", "boolean", "null", "date", "time", "timestamp")
+
+    override fun tokenize(line: String): List<Token> {
+        val tokens = mutableListOf<Token>()
+        var remaining = line
+        var indentLevel = 0
+
+        // Handle indentation
+        while (remaining.startsWith(" ")) {
+            indentLevel++
+            tokens.add(Token(TokenType.WHITESPACE, " "))
+            remaining = remaining.substring(1)
+        }
+
+        while (remaining.isNotEmpty()) {
+            when {
+                remaining.startsWith("#") -> {
+                    tokens.add(Token(TokenType.COMMENT, remaining))
+                    remaining = ""
+                }
+
+                remaining.startsWith("- ") -> {
+                    tokens.add(Token(TokenType.YAML_LIST_ITEM, "-"))
+                    tokens.add(Token(TokenType.WHITESPACE, " "))
+                    remaining = remaining.substring(2)
+                }
+
+                remaining.startsWith("&") -> {
+                    val anchor = remaining.takeWhile { !it.isWhitespace() && it != ':' }
+                    tokens.add(Token(TokenType.YAML_ANCHOR, anchor))
+                    remaining = remaining.substring(anchor.length)
+                }
+
+                remaining.startsWith("*") -> {
+                    val alias = remaining.takeWhile { !it.isWhitespace() && it != ':' }
+                    tokens.add(Token(TokenType.YAML_ALIAS, alias))
+                    remaining = remaining.substring(alias.length)
+                }
+
+                remaining.contains(":") -> {
+                    val parts = remaining.split(":", limit = 2)
+                    tokens.add(Token(TokenType.YAML_KEY, parts[0].trim()))
+                    tokens.add(Token(TokenType.YAML_COLON, ":"))
+                    remaining = parts[1]
+                }
+
+                else -> {
+                    val value = remaining.takeWhile { !it.isWhitespace() }
+                    val type = when {
+                        value.startsWith("\"") && value.endsWith("\"") -> TokenType.STRING
+                        value.startsWith("'") && value.endsWith("'") -> TokenType.STRING
+                        value.toDoubleOrNull() != null -> TokenType.NUMBER
+                        value == "true" || value == "false" -> TokenType.KEYWORD
+                        value in builtinTypes -> TokenType.YAML_BUILTIN_TYPE
+                        else -> TokenType.OTHER
+                    }
+                    tokens.add(Token(type, value))
+                    remaining = remaining.substring(value.length)
+                }
+            }
+
+            // Handle any trailing whitespace
+            val space = remaining.takeWhile { it.isWhitespace() }
+            if (space.isNotEmpty()) {
+                tokens.add(Token(TokenType.WHITESPACE, space))
+                remaining = remaining.substring(space.length)
+            }
+        }
+
+        return tokens
+    }
+}
+
+
+interface Tokenizer {
+
+    fun tokenize(line: String): List<Token>
+}
+
+class DefaultTokenizer : Tokenizer {
+
+    override fun tokenize(line: String): List<Token> {
+        return line.split(" ").flatMap { word ->
+            listOf(
+                Token(TokenType.OTHER, word),
+                Token(TokenType.WHITESPACE, " ")
+            )
+        }.dropLast(1) // Remove the last space
+    }
+}
+
+class LuaTokenizer : Tokenizer {
+
+    private val keywords = setOf(
+        "and", "break", "do", "else", "elseif", "end", "false", "for", "function",
+        "if", "in", "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while"
+    )
+    private val operators = setOf(
+        "+",
+        "-",
+        "*",
+        "/",
+        "%",
+        "^",
+        "#",
+        "==",
+        "~=",
+        "<=",
+        ">=",
+        "<",
+        ">",
+        "=",
+        "(",
+        ")",
+        "{",
+        "}",
+        "[",
+        "]",
+        ";",
+        ":",
+        ",",
+        ".",
+        "..",
+        "..."
+    )
+
+    override fun tokenize(line: String): List<Token> {
+        val tokens = mutableListOf<Token>()
+        var remaining = line
+
+        while (remaining.isNotEmpty()) {
+            when {
+                remaining[0].isWhitespace() -> {
+                    val space = remaining.takeWhile { it.isWhitespace() }
+                    tokens.add(Token(TokenType.WHITESPACE, space))
+                    remaining = remaining.substring(space.length)
+                }
+
+                remaining.startsWith("--") -> {
+                    tokens.add(Token(TokenType.COMMENT, remaining))
+                    remaining = ""
+                }
+
+                remaining.startsWith("\"") || remaining.startsWith("'") -> {
+                    val endIndex = remaining.indexOf(remaining[0], 1)
+                    if (endIndex != -1) {
+                        tokens.add(Token(TokenType.STRING, remaining.substring(0, endIndex + 1)))
+                        remaining = remaining.substring(endIndex + 1)
+                    } else {
+                        tokens.add(Token(TokenType.STRING, remaining))
+                        remaining = ""
+                    }
+                }
+
+                remaining[0].isDigit() -> {
+                    val number = remaining.takeWhile { it.isDigit() || it == '.' }
+                    tokens.add(Token(TokenType.NUMBER, number))
+                    remaining = remaining.substring(number.length)
+                }
+
+                remaining[0].isLetter() || remaining[0] == '_' -> {
+                    val identifier = remaining.takeWhile { it.isLetterOrDigit() || it == '_' }
+                    val type = if (identifier in keywords) TokenType.KEYWORD else TokenType.IDENTIFIER
+                    tokens.add(Token(type, identifier))
+                    remaining = remaining.substring(identifier.length)
+                }
+
+                else -> {
+                    val op = operators.find { remaining.startsWith(it) }
+                    if (op != null) {
+                        tokens.add(Token(TokenType.OPERATOR, op))
+                        remaining = remaining.substring(op.length)
+                    } else {
+                        tokens.add(Token(TokenType.OTHER, remaining[0].toString()))
+                        remaining = remaining.substring(1)
+                    }
+                }
+            }
+        }
+
+        return tokens
+    }
+}

@@ -40,7 +40,7 @@ class MarkdownBrowser(private val docs: Docs) {
     private var navInputColor = ImVec4(0.16f, 0.16f, 0.16f, 1f)
     private val minNavInputWidth: Float
         get() {
-            if(bufferString.isEmpty) return 210f
+            if (bufferString.isEmpty) return 210f
 
             val text = bufferString.get()
             val width = ImGui.calcTextSize(text).x
@@ -60,11 +60,27 @@ class MarkdownBrowser(private val docs: Docs) {
     private val minZoom = 0.5f
     private val maxZoom = 2.0f
 
-    private var zoomButtonsAnimation = 0f
+    private var currentAnchor: String? = null
+    private val renderer = MarkdownRenderer()
+
 
     init {
         // Initialize the markdownFiles with the doc tree from Docs
         markdownFiles.putAll(docs.getDocTree())
+        renderer.setOnHeadingClickedCallback { anchor ->
+            currentFile?.let { file ->
+                loadFile("$file#$anchor")
+            }
+        }
+        renderer.setOnLinkClickedCallback { link ->
+            if (link.startsWith("#")) {
+                currentFile?.let { file ->
+                    loadFile("$file$link")
+                }
+            } else {
+                loadFile(link)
+            }
+        }
     }
 
 
@@ -601,7 +617,6 @@ class MarkdownBrowser(private val docs: Docs) {
         ImGui.popStyleVar()
     }
 
-    private val renderer = MarkdownRenderer()
 
     private fun renderContent(width: Float) {
         val height = ImGui.getWindowHeight() - ImGui.getCursorPosY() - 10f
@@ -619,15 +634,16 @@ class MarkdownBrowser(private val docs: Docs) {
         )
 
         currentFile?.let {
-            // Remove the nested child window and set cursor position once
             ImGui.setCursorPos(10f, 10f)
 
             currentHtml?.let { html ->
                 renderer.render(html)
 
-                // Ensure the content area extends to cover all rendered content
-//                val lastItemRect = ImGui.getItemRectMax()
-//                ImGui.dummy(0f, renderer.height)
+                // Scroll to anchor if needed
+                if (currentAnchor != null) {
+                    renderer.scrollToAnchor(currentAnchor!!)
+                    currentAnchor = null // Reset after scrolling
+                }
             }
         }
 
@@ -642,29 +658,41 @@ class MarkdownBrowser(private val docs: Docs) {
     }
 
     private fun loadFile(fileName: String) {
-        if (fileName != currentFile && isValidPath(fileName)) {
-            currentFile = fileName
+        val parts = fileName.split("#", limit = 2)
+        val filePath = parts[0]
+        currentAnchor = if (parts.size > 1) parts[1] else null
+
+        if (filePath != currentFile && isValidPath(filePath)) {
+            currentFile = filePath
             if (currentIndex < history.size - 1) {
                 history.subList(currentIndex + 1, history.size).clear()
             }
             history.add(fileName)
             currentIndex = history.size - 1
 
-            // Reset currentHtml to trigger content update
             currentHtml = null
 
-            val content = getFileContent(fileName)
+            val content = getFileContent(filePath)
             content?.let {
                 currentHtml = content
+                renderer.reset()
             }
 
-            if (isFolder(fileName)) {
-                expandedFolders.add(fileName)
+            if (isFolder(filePath)) {
+                expandedFolders.add(filePath)
             }
 
             bufferString.set(fileName)
         }
+        // Scroll to anchor after rendering
+        if (currentAnchor != null) {
+            //Scroll the anchor into view
+            renderer.scrollToAnchor(currentAnchor!!.removePrefix("#"))
+            currentAnchor = null
+        }
+
     }
+
 
     private fun postProcessHtml(html: String): String {
         var processedHtml = html
