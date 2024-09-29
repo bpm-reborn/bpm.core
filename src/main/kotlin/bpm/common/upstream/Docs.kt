@@ -4,6 +4,8 @@ import bpm.common.logging.KotlinLogging
 import bpm.common.network.Listener
 import bpm.common.packets.Packet
 import bpm.common.upstream.GitLoader
+import org.commonmark.node.Node
+import org.commonmark.renderer.html.HtmlRenderer
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*
@@ -16,11 +18,13 @@ class Docs(private val path: Path) : Listener {
     private val logger = KotlinLogging.logger { }
     private val gitDocLoader = GitLoader("https://github.com/meng-devs/bpm.docs.git", "main", path)
     private val docTree: MutableMap<String, Any> = mutableMapOf()
-
+    private val documentCache: MutableMap<String, Node> = mutableMapOf()
+    private val parser = org.commonmark.parser.Parser.builder().build()
+    private var renderer: HtmlRenderer = HtmlRenderer.builder().build()
     override fun onInstall() {
         // Clone or pull the repository and load the documentation
-//        val docsPath = gitDocLoader.cloneOrPull()
-        loadDocTree(path)
+        val docsPath = gitDocLoader.cloneOrPull()
+        loadDocTree(docsPath)
         logger.info { "Loaded documentation from Git repository" }
     }
 
@@ -37,8 +41,11 @@ class Docs(private val path: Path) : Listener {
                     path.isDirectory() -> {
                         result[path.name] = loadDirectory(path)
                     }
+
                     path.toString().endsWith(".md") -> {
-                        result[path.name] = path.readText()
+                        val document = parser.parse(path.readText())
+                        documentCache[path.name] = document
+                        result[path.name] = renderer.render(document)
                     }
                 }
             }

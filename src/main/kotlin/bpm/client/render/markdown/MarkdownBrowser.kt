@@ -2,25 +2,15 @@ package bpm.client.render.markdown
 
 import bpm.client.docs.Docs
 import bpm.client.font.Fonts
-import bpm.client.utils.use
 import bpm.common.utils.FontAwesome
-import bpm.common.vm.ComplexLuaTranspiler
 import imgui.*
 import imgui.callback.ImGuiInputTextCallback
 import imgui.flag.*
-import imgui.internal.ImRect
 import imgui.type.ImString
-import org.intellij.markdown.ast.ASTNode
-import org.intellij.markdown.flavours.commonmark.CommonMarkFlavourDescriptor
-import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
-import org.intellij.markdown.html.HtmlGenerator
-import org.intellij.markdown.parser.MarkdownParser
 import java.util.*
 
 class MarkdownBrowser(private val docs: Docs) {
 
-    private val flavour = CommonMarkFlavourDescriptor()
-    private val parser = MarkdownParser(flavour)
     private var currentFile: String? = null
     private var currentHtml: String? = null
     private val history = LinkedList<String>()
@@ -44,7 +34,33 @@ class MarkdownBrowser(private val docs: Docs) {
     private var isMouseInWindow = true
     private var autocompleteOptions = listOf<String>()
     private var currentPath = ""
+    private var isNavInputExpanded = false
+    private var navInputWidth = 200f
+    private var navInputHeight = 30f
+    private var navInputColor = ImVec4(0.16f, 0.16f, 0.16f, 1f)
+    private val minNavInputWidth: Float
+        get() {
+            if(bufferString.isEmpty) return 210f
 
+            val text = bufferString.get()
+            val width = ImGui.calcTextSize(text).x
+            return (width + 60f).coerceAtLeast(100f)
+        }
+    private val minNavInputHeight = 30f
+    private val hoveredNavInputHeight = 34f
+    private val focusedNavInputHeight = 38f
+    private val navBarHeight = 50f
+    private val leftButtonsWidth = 120f // Adjust based on your actual left buttons width
+    private val rightButtonsWidth = 120f // Adjust based on your actual right buttons width
+    private var wasNavInputFocused = false
+    private var focusStartTime = 0L
+
+
+    private var zoomLevel = 1.0f
+    private val minZoom = 0.5f
+    private val maxZoom = 2.0f
+
+    private var zoomButtonsAnimation = 0f
 
     init {
         // Initialize the markdownFiles with the doc tree from Docs
@@ -72,9 +88,7 @@ class MarkdownBrowser(private val docs: Docs) {
 
 
     fun render() {
-        val windowFlags = ImGuiWindowFlags.NoDecoration or
-                ImGuiWindowFlags.NoMove or
-                ImGuiWindowFlags.NoResize
+        val windowFlags = ImGuiWindowFlags.NoDecoration or ImGuiWindowFlags.NoMove or ImGuiWindowFlags.NoResize
 
         ImGui.setNextWindowPos(0f, 0f)
         ImGui.setNextWindowSize(ImGui.getIO().displaySizeX, ImGui.getIO().displaySizeY)
@@ -101,12 +115,12 @@ class MarkdownBrowser(private val docs: Docs) {
             startPos.x,
             startPos.y,
             startPos.x + ImGui.getWindowWidth(),
-            startPos.y + 50f,
+            startPos.y + navBarHeight,
             ImColor.rgb(30, 30, 30),
             10f
         )
 
-        ImGui.setCursorScreenPos(startPos.x + 10f, startPos.y + 10f)
+        ImGui.setCursorScreenPos(startPos.x + 20f, startPos.y + 10f)
         renderHamburgerButton()
         ImGui.sameLine()
         renderNavButton(FontAwesome.LeftLong, canGoBack()) { goBack() }
@@ -114,11 +128,38 @@ class MarkdownBrowser(private val docs: Docs) {
         renderNavButton(FontAwesome.RightLong, canGoForward()) { goForward() }
         ImGui.sameLine()
 
-        val maxNavInputWidth = ImGui.getContentRegionAvailX() - 20f // Leave some padding
-        renderExpandingNavInput("File Name", currentFile ?: "", maxNavInputWidth, this::handleNavInput)
+        val navBarWidth = ImGui.getWindowWidth() - 20f // 10f padding on each side
+        val availableWidth = navBarWidth - leftButtonsWidth - rightButtonsWidth
+        val maxNavInputWidth = availableWidth - 60f // Leave some padding
+
+        renderExpandingNavInput("File Name", currentFile ?: "", startPos, availableWidth, maxNavInputWidth)
+
+        renderZoomButtons(startPos, navBarWidth)
 
         ImGui.popStyleVar()
         ImGui.dummy(0f, 60f) // Add some space after the navbar
+    }
+
+    private fun renderZoomButtons(startPos: ImVec2, navBarWidth: Float) {
+        val zoomButtonsStartX = startPos.x + navBarWidth - rightButtonsWidth - 10f
+        val zoomButtonsStartY = startPos.y + 10f
+        val drawList = ImGui.getWindowDrawList()
+        // Render background for zoom buttons
+        drawList.addRectFilled(
+            zoomButtonsStartX,
+            zoomButtonsStartY,
+            zoomButtonsStartX + rightButtonsWidth,
+            zoomButtonsStartY + 30f,
+            ImColor.rgb(50, 50, 50),
+            5f
+        )
+
+        ImGui.setCursorScreenPos(zoomButtonsStartX + 5f, zoomButtonsStartY)
+        renderNavButton(FontAwesome.MagnifyingGlassMinus, zoomLevel > minZoom) { zoomOut() }
+        ImGui.sameLine()
+        renderNavButton(FontAwesome.MagnifyingGlassPlus, zoomLevel < maxZoom) { zoomIn() }
+        ImGui.sameLine()
+        renderNavButton(FontAwesome.RotateRight, true) { resetZoom() }
     }
 
 
@@ -141,77 +182,157 @@ class MarkdownBrowser(private val docs: Docs) {
         }
     }
 
+    private fun zoomOut() {
+        zoomLevel = (zoomLevel - 0.1f).coerceAtLeast(minZoom)
+        updateZoom()
+    }
+
+    private fun zoomIn() {
+        zoomLevel = (zoomLevel + 0.1f).coerceAtMost(maxZoom)
+        updateZoom()
+    }
+
+    private fun resetZoom() {
+        zoomLevel = 1.0f
+        updateZoom()
+    }
+
+    private fun updateZoom() {
+        // Update the zoom level in your MarkdownRenderer
+        renderer.scale = zoomLevel
+    }
+
     private fun lerp(a: Float, b: Float, t: Float): Float {
         return a + (b - a) * t.coerceIn(0f, 1f)
     }
 
-    private fun renderExpandingNavInput(label: String, value: String, maxWidth: Float, onChange: (String) -> Unit) {
+    private fun lerpColor(a: ImVec4, b: ImVec4, t: Float): ImVec4 {
+        return ImVec4(
+            lerp(a.x, b.x, t), lerp(a.y, b.y, t), lerp(a.z, b.z, t), lerp(a.w, b.w, t)
+        )
+    }
+
+
+    private fun renderExpandingNavInput(
+        label: String, value: String, startPos: ImVec2, availableWidth: Float, maxWidth: Float
+    ) {
         val drawList = ImGui.getWindowDrawList()
-        val pos = ImGui.getCursorScreenPos()
+
+        // Handle focus state changes
+        if (isNavInputFocused && !wasNavInputFocused) {
+            focusStartTime = System.currentTimeMillis()
+            isNavInputExpanded = true
+        }
+        wasNavInputFocused = isNavInputFocused
+
+
+        //Only click if not hovering our search input, we unexpand it
+        if (ImGui.isMouseClicked(0) && !isNavInputHovered) {
+            isNavInputExpanded = false
+        }
 
         // Calculate animation progress
+        val focusAnimationDuration = 200 // milliseconds
+        val timeSinceFocus = System.currentTimeMillis() - focusStartTime
+        val focusProgress = (timeSinceFocus.toFloat() / focusAnimationDuration).coerceIn(0f, 1f)
+
         val targetAnimation = when {
-            isNavInputFocused -> 1f
+            isNavInputFocused -> focusProgress
             isNavInputHovered -> 0.5f
             else -> 0f
         }
         navInputAnimation = lerp(navInputAnimation, targetAnimation, ImGui.getIO().deltaTime * 4f)
 
-        val minWidth = 200f
-        val animatedWidth = lerp(minWidth, maxWidth, navInputAnimation)
+        // Animate width and height
+        val targetWidth = when {
+            isNavInputExpanded -> maxWidth
+            isNavInputHovered -> maxWidth / 2
+            else -> minNavInputWidth
+        }
+        navInputWidth = lerp(navInputWidth, targetWidth, ImGui.getIO().deltaTime * 4f)
+
+        navInputHeight = when {
+            isNavInputFocused -> lerp(hoveredNavInputHeight, focusedNavInputHeight, focusProgress)
+            isNavInputHovered -> hoveredNavInputHeight
+            else -> minNavInputHeight
+        }
+
+        // Animate color
+        val targetColor = when {
+            isNavInputFocused -> ImVec4(0.24f, 0.24f, 0.24f, 1f)
+            isNavInputHovered -> ImVec4(0.20f, 0.20f, 0.20f, 1f)
+            else -> ImVec4(0.16f, 0.16f, 0.16f, 1f)
+        }
+        navInputColor = lerpColor(navInputColor, targetColor, ImGui.getIO().deltaTime * 4f)
+
+        val startX = startPos.x + leftButtonsWidth + (availableWidth - navInputWidth) / 2
+        val startY = startPos.y + (navBarHeight - navInputHeight) / 2
 
         // Render the custom rounded rect
-        val rectColor = when {
-            isNavInputFocused -> ImColor.rgb(60, 60, 60)
-            isNavInputHovered -> ImColor.rgb(50, 50, 50)
-            else -> ImColor.rgb(40, 40, 40)
-        }
         drawList.addRectFilled(
-            pos.x,
-            pos.y,
-            pos.x + animatedWidth,
-            pos.y + 30f,
-            rectColor,
-            5f
+            startX, startY, startX + navInputWidth, startY + navInputHeight, ImColor.rgba(
+                (navInputColor.x * 255).toInt(),
+                (navInputColor.y * 255).toInt(),
+                (navInputColor.z * 255).toInt(),
+                (navInputColor.w * 255).toInt()
+            ), 5f
         )
 
         // Render the search icon
-        drawList.addText(iconFont, 18f, pos.x + 8, pos.y + 6, ImColor.rgb(150, 150, 150), FontAwesome.MagnifyingGlass)
+        drawList.addText(
+            iconFont,
+            18f,
+            startX + 8,
+            startY + (navInputHeight - 18f) / 2,
+            ImColor.rgb(150, 150, 150),
+            FontAwesome.MagnifyingGlass
+        )
 
         // Render the file name or input
         bufferString.set(value)
-        ImGui.setNextItemWidth(animatedWidth - 40f)
-        ImGui.setCursorScreenPos(pos.x + 20f, pos.y - 2.5f)
+        ImGui.setNextItemWidth(navInputWidth - 40f)
 
-        ImGui.pushStyleColor(ImGuiCol.FrameBg, 0)
-        ImGui.pushStyleColor(ImGuiCol.Text, ImColor.rgb(200, 200, 200))
+        if (isNavInputExpanded && !isNavInputFocused) {
+            // Render centered text when expanded but not focused
+            val textSize = ImGui.calcTextSize(value)
+            val textX = startX + (navInputWidth - textSize.x) / 2
+            val textY = startY + (navInputHeight - textSize.y) / 2
+            drawList.addText(textX, textY, ImColor.rgb(200, 200, 200), value)
+        } else {
+            ImGui.setCursorScreenPos(startX + 30f, startY + (navInputHeight) / 2 - 18f)
+            ImGui.pushStyleColor(ImGuiCol.FrameBg, 0)
+            ImGui.pushStyleColor(ImGuiCol.Text, ImColor.rgb(200, 200, 200))
 
-        val inputFlags = ImGuiInputTextFlags.AutoSelectAll or ImGuiInputTextFlags.CallbackCompletion or ImGuiInputTextFlags.CallbackEdit
-        if (ImGui.inputText("##$label-nav", bufferString, inputFlags, inputTextCallback)) {
-            onChange(bufferString.get())
+            val inputFlags = ImGuiInputTextFlags.AutoSelectAll or ImGuiInputTextFlags.CallbackCompletion or
+                    ImGuiInputTextFlags.CallbackEdit or ImGuiInputTextFlags.CallbackAlways
+            ImGui.inputText("##$label-nav", bufferString, inputFlags, inputTextCallback)
+
+            ImGui.popStyleColor(2)
         }
-
-        ImGui.popStyleColor(2)
 
         // Check if the input is focused or hovered
         isNavInputFocused = ImGui.isItemActive() || ImGui.isItemFocused()
         isNavInputHovered = ImGui.isItemHovered()
 
+        // Handle unfocusing logic
+        if (!isNavInputFocused && !isNavInputHovered && ImGui.isMouseClicked(0)) {
+            isNavInputExpanded = false
+        }
+
         // Render autocomplete text
         if (isNavInputFocused && autocompleteText.isNotEmpty()) {
             val fullText = bufferString.get() + autocompleteText
             val autoCompletePos = ImVec2(
-                pos.x + ImGui.calcTextSize(bufferString.get()).x + 32f,
-                pos.y + 7.5f
+                startX + ImGui.calcTextSize(bufferString.get()).x + 41f, startY + (navInputHeight - 16f) / 2
             )
             drawList.addText(autoCompletePos.x, autoCompletePos.y, ImColor.rgb(100, 100, 100), autocompleteText)
         }
 
         // Render placeholder text when not focused and empty
-        if (!isNavInputFocused && bufferString.get().isEmpty()) {
+        if (!isNavInputFocused && !isNavInputExpanded && bufferString.get().isEmpty()) {
             drawList.addText(
-                pos.x + 40f,
-                pos.y + 5f,
+                startX + 40f,
+                startY + (navInputHeight - 18f) / 2,
                 ImColor.rgb(100, 100, 100),
                 "Search or enter file name"
             )
@@ -221,9 +342,8 @@ class MarkdownBrowser(private val docs: Docs) {
         if (isNavInputHovered) {
             ImGui.setMouseCursor(ImGuiMouseCursor.TextInput)
         }
-
-        ImGui.setCursorScreenPos(pos.x, pos.y - 10f)
     }
+
 
     private val inputTextCallback = object : ImGuiInputTextCallback() {
         override fun accept(data: ImGuiInputTextCallbackData) {
@@ -234,12 +354,23 @@ class MarkdownBrowser(private val docs: Docs) {
                         currentPath = data.buf.toString()
                         autocompleteText = ""
                         updateAutocomplete()
+                        handleNavInput(currentPath)
                     }
                 }
 
                 ImGuiInputTextFlags.CallbackEdit -> {
                     currentPath = data.buf.toString()
                     updateAutocomplete()
+                    handleNavInput(currentPath)
+                }
+
+                ImGuiInputTextFlags.CallbackAlways -> {
+                    if (ImGui.isKeyPressed(ImGui.getKeyIndex(ImGuiKey.Enter))) {
+                        isNavInputFocused = false
+                        isNavInputExpanded = false
+                        //Unfocus the input
+                        ImGui.setKeyboardFocusHere(1)
+                    }
                 }
             }
         }
@@ -259,9 +390,7 @@ class MarkdownBrowser(private val docs: Docs) {
         }
 
         val lastPart = parts.last()
-        autocompleteOptions = current.keys
-            .filter { it.lowercase().startsWith(lastPart) }
-            .map { currentPathPrefix + it }
+        autocompleteOptions = current.keys.filter { it.lowercase().startsWith(lastPart) }.map { currentPathPrefix + it }
 
         autocompleteText = if (autocompleteOptions.isNotEmpty()) {
             autocompleteOptions.first().substring(input.length)
@@ -287,11 +416,7 @@ class MarkdownBrowser(private val docs: Docs) {
         for (i in 0..2) {
             val lineY = pos.y + (size - 3 * lineHeight - 2 * lineSpacing) / 2 + i * (lineHeight + lineSpacing)
             drawList.addRectFilled(
-                pos.x + (size - lineWidth) / 2,
-                lineY,
-                pos.x + (size + lineWidth) / 2,
-                lineY + lineHeight,
-                lineColor
+                pos.x + (size - lineWidth) / 2, lineY, pos.x + (size + lineWidth) / 2, lineY + lineHeight, lineColor
             )
         }
 
@@ -348,11 +473,7 @@ class MarkdownBrowser(private val docs: Docs) {
 
         val separatorColor = ImColor.rgb(60, 60, 60)
         drawList.addLine(
-            pos.x + 20f,
-            ImGui.getCursorScreenPosY(),
-            pos.x + width - 20f,
-            ImGui.getCursorScreenPosY(),
-            separatorColor
+            pos.x + 20f, ImGui.getCursorScreenPosY(), pos.x + width - 20f, ImGui.getCursorScreenPosY(), separatorColor
         )
 
         ImGui.dummy(0f, 20f) // Add padding after separator
@@ -366,12 +487,7 @@ class MarkdownBrowser(private val docs: Docs) {
 
 
     private fun renderFileTree(
-        files: Map<String, Any>,
-        path: String,
-        drawList: ImDrawList,
-        startX: Float,
-        width: Float,
-        depth: Int = 0
+        files: Map<String, Any>, path: String, drawList: ImDrawList, startX: Float, width: Float, depth: Int = 0
     ) {
         for ((name, content) in files) {
             val fullPath = if (path.isEmpty()) name else "$path/$name"
@@ -395,10 +511,7 @@ class MarkdownBrowser(private val docs: Docs) {
 
             // Render hover and focus effect
             val isHovered = ImGui.isMouseHoveringRect(
-                itemStartX - padding,
-                itemStartY,
-                itemStartX + itemWidth,
-                itemStartY + itemHeight
+                itemStartX - padding, itemStartY, itemStartX + itemWidth, itemStartY + itemHeight
             )
             val isFocused = fullPath == currentFile
 
@@ -417,17 +530,10 @@ class MarkdownBrowser(private val docs: Docs) {
 
             val hoverAlpha = hoverAnimation[fullPath] ?: 0f
             if (hoverAlpha > 0f || isFocused) {
-                val color = if (isFocused)
-                    ImColor.rgba(100, 100, 100, (255 * 0.5f).toInt())
-                else
-                    ImColor.rgba(80, 80, 80, (255 * 0.3f * hoverAlpha).toInt())
+                val color = if (isFocused) ImColor.rgba(100, 100, 100, (255 * 0.5f).toInt())
+                else ImColor.rgba(80, 80, 80, (255 * 0.3f * hoverAlpha).toInt())
                 drawList.addRectFilled(
-                    itemStartX - padding,
-                    itemStartY,
-                    itemStartX + itemWidth,
-                    itemStartY + itemHeight,
-                    color,
-                    5f
+                    itemStartX - padding, itemStartY, itemStartX + itemWidth, itemStartY + itemHeight, color, 5f
                 )
             }
 
@@ -450,12 +556,7 @@ class MarkdownBrowser(private val docs: Docs) {
                 )
 
                 drawList.addText(
-                    regularFont,
-                    16f,
-                    textStartX,
-                    itemStartY + 7f,
-                    ImColor.rgb(220, 220, 220),
-                    name
+                    regularFont, 16f, textStartX, itemStartY + 7f, ImColor.rgb(220, 220, 220), name
                 )
 
                 if (ImGui.invisibleButton("##$fullPath", itemWidth, itemHeight)) {
@@ -473,12 +574,7 @@ class MarkdownBrowser(private val docs: Docs) {
             } else {
                 val font = if (isFocused) boldFont else regularFont
                 drawList.addText(
-                    font,
-                    16f,
-                    textStartX,
-                    itemStartY + 7f,
-                    ImColor.rgb(220, 220, 220),
-                    name
+                    font, 16f, textStartX, itemStartY + 7f, ImColor.rgb(220, 220, 220), name
                 )
                 if (ImGui.invisibleButton("##$fullPath", itemWidth, itemHeight)) {
                     loadFile(fullPath)
@@ -494,61 +590,8 @@ class MarkdownBrowser(private val docs: Docs) {
     }
 
 
-    class CodeFenceTagRenderer : HtmlGenerator.TagRenderer {
-
-        private var inCodeFence = false
-        private var codeLanguage: String? = null
-
-        override fun closeTag(tagName: CharSequence): CharSequence {
-            return when {
-                inCodeFence && tagName == "pre" -> {
-                    inCodeFence = false
-                    codeLanguage = null
-                    "</code></pre>"
-                }
-
-                else -> "</$tagName>"
-            }
-        }
-
-        override fun openTag(
-            node: ASTNode,
-            tagName: CharSequence,
-            vararg attributes: CharSequence?,
-            autoClose: Boolean
-        ): CharSequence {
-            return when {
-                tagName == "pre" && attributes.any { it?.startsWith("class=\"language-") == true } -> {
-                    inCodeFence = true
-                    codeLanguage = attributes.firstOrNull { it?.startsWith("class=\"language-") == true }
-                        ?.removePrefix("class=\"language-")?.removeSuffix("\"").toString()
-                    "<pre><code${codeLanguage?.let { " class=\"language-$it\"" } ?: ""}>"
-                }
-
-                else -> buildString {
-                    append("<$tagName")
-                    attributes.filterNotNull().forEach { append(" $it") }
-                    if (autoClose) append(" />") else append(">")
-                }
-            }
-        }
-
-        override fun printHtml(html: CharSequence): CharSequence {
-            return if (inCodeFence) {
-                html.toString().replace("```", "")
-            } else {
-                html
-            }
-        }
-    }
-
     private fun renderFolderContents(
-        folder: Map<String, Any>,
-        path: String,
-        drawList: ImDrawList,
-        startX: Float,
-        width: Float,
-        depth: Int
+        folder: Map<String, Any>, path: String, drawList: ImDrawList, startX: Float, width: Float, depth: Int
     ) {
         val animation = folderAnimations.getOrPut(path) { 1f }
         folderAnimations[path] = (animation + ImGui.getIO().deltaTime * 4f).coerceAtMost(1f)
@@ -558,7 +601,7 @@ class MarkdownBrowser(private val docs: Docs) {
         ImGui.popStyleVar()
     }
 
-    private val renderer = HtmlRenderer()
+    private val renderer = MarkdownRenderer()
 
     private fun renderContent(width: Float) {
         val height = ImGui.getWindowHeight() - ImGui.getCursorPosY() - 10f
@@ -583,8 +626,8 @@ class MarkdownBrowser(private val docs: Docs) {
                 renderer.render(html)
 
                 // Ensure the content area extends to cover all rendered content
-                val lastItemRect = ImGui.getItemRectMax()
-                ImGui.dummy(0f, ImGui.getScrollMaxY() - lastItemRect.y + 20f)
+//                val lastItemRect = ImGui.getItemRectMax()
+//                ImGui.dummy(0f, renderer.height)
             }
         }
 
@@ -612,13 +655,7 @@ class MarkdownBrowser(private val docs: Docs) {
 
             val content = getFileContent(fileName)
             content?.let {
-                val parsedTree = parser.buildMarkdownTreeFromString(it)
-                var generatedHtml = HtmlGenerator(it, parsedTree, flavour).generateHtml()
-
-                // Post-process the generated HTML
-                generatedHtml = postProcessHtml(generatedHtml)
-
-                currentHtml = generatedHtml
+                currentHtml = content
             }
 
             if (isFolder(fileName)) {

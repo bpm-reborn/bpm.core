@@ -147,8 +147,8 @@ dependencies {
     libraries('io.github.classgraph:classgraph:4.8.165')
     jarJar('io.github.classgraph:classgraph:4.8.165')
     jarJar("org.snakeyaml:snakeyaml-engine:2.7")
-    libraries('org.jetbrains:markdown:0.7.3')
-    jarJar("org.jetbrains:markdown:0.7.3")
+    libraries("org.commonmark:commonmark:0.23.0")
+    jarJar("org.commonmark:commonmark:0.23.0")
     libraries('org.jsoup:jsoup:1.18.1')
     jarJar("org.jsoup:jsoup:1.18.1")
 
@@ -158,11 +158,6 @@ dependencies {
     jarJar('party.iroiro.luajava:luajava:4.0.2')
     libraries('org.eclipse.jgit:org.eclipse.jgit:7.0.0.202409031743-r')
     jarJar('org.eclipse.jgit:org.eclipse.jgit:7.0.0.202409031743-r')
-
-    // Yoga is a layout engine that is used by React Native to layout views.
-    // It is written in C and has a Java binding.
-    implementation("org.lwjgl:lwjgl-yoga:3.3.4")
-    jarJar("org.lwjgl:lwjgl-yoga:3.3.4")
 
 
 }

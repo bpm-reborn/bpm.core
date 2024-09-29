@@ -1,48 +1,27 @@
 package bpm.client.render.markdown
 
-import bpm.client.font.Fonts
+import bpm.common.utils.FontAwesome
 import imgui.*
-import imgui.flag.ImGuiCond
-import imgui.flag.ImGuiHoveredFlags
-import imgui.flag.ImGuiWindowFlags
-import imgui.internal.ImRect
-import imgui.type.ImBoolean
-import kotlin.math.max
-import kotlin.math.min
+import imgui.flag.ImGuiMouseCursor
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
+import org.jsoup.nodes.TextNode
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
-class MarkdownRenderer() {
+class MarkdownRenderer {
 
-    data class MarkdownFont(var isBold: Boolean, var isItalic: Boolean, var fontSize: Int) {
-
-        private val family = Fonts.getFamily("Inter")
-
-        val font: ImFont
-            get() {
-                val type = when {
-                    isBold && isItalic -> "BoldItalic"
-                    isBold -> "Bold"
-                    isItalic -> "Italic"
-                    else -> "Regular"
-                }
-                return family[type][fontSize]
-            }
-    }
 
     private var cursorX = 0f
     private var cursorY = 0f
-    private var indentLevel = 0
+    private var indentLevel = 1
     private var currentColor = ImVec4(1f, 1f, 1f, 1f)
     private val colorStack = mutableListOf<ImVec4>()
     private lateinit var drawList: ImDrawList
-    private val font = MarkdownFont(false, false, 16)
+    private val font get() = MarkdownFont.current
 
-    private val open = ImBoolean(true)
-    private val BREAKPOINT_LARGE = 2561
-    private val BREAKPOINT_MEDIUM = 1921
-    private val BREAKPOINT_SMALL = 1281
-
-    private var scale = 1f
-    private var baseFontSize = 16f
+    var scale = 1.0f
+    private var baseFontSize = 24f
     private var baseLineHeight = 1.5f
     private var baseSpacing = 5f
     private var indentWidth = 20f
@@ -50,15 +29,42 @@ class MarkdownRenderer() {
     private var cornerRadius = 5f
     private var shadowOffset = 5f
     private var lineHeight = 1.5f
-    private var lastRenderedNode: MarkdownNode? = null
+    private var lastRenderedElement: Element? = null
+    private val codeBlockStates = mutableMapOf<String, CodeBlockState>()
+    private val animationDuration = 0.3f // seconds
 
-    fun render(node: MarkdownNode) {
+    private data class CodeBlockState(
+        var isMinimized: Boolean = false,
+        var animationProgress: Float = 1f,
+        var targetHeight: Float = 0f,
+        var currentHeight: Float = 0f,
+        var codeText: String = "",
+        var language: String = ""
+    ) {
+
+        val lines: List<String>
+            get() = codeText.lines()
+    }
+
+    fun render(html: String) {
         val io = ImGui.getIO()
-        val screenWidth = io.displaySize.x
-        val screenHeight = io.displaySize.y
+        drawList = ImGui.getWindowDrawList()
+
+        //Example icon rendering
+        MarkdownFont.push()
+        font.isIcon = true
+        font.fontSize = 24
+        drawList.addText(
+            font.font,
+            font.fontSize.toFloat(),
+            cursorX,
+            cursorY,
+            ImColor.rgba(255, 255, 255, 255),
+            FontAwesome.MagnifyingGlass
+        )
+        MarkdownFont.pop()
 
         // Calculate scale based on screen width
-        scale = 1.0f
         baseFontSize = 16f * scale
         baseLineHeight = 1.5f * scale
         baseSpacing = 5f * scale
@@ -70,18 +76,6 @@ class MarkdownRenderer() {
         shadowOffset = 5f * scale
 
 
-//        ImGui.setNextWindowPos(windowPosX, windowPosY + padding, ImGuiCond.Always)
-//        ImGui.setNextWindowSize(windowWidth + padding, windowHeight - padding * 2, ImGuiCond.Always)
-
-//        if (ImGui.begin(
-//                "Markdown", open,
-//                ImGuiWindowFlags.NoTitleBar or
-//                        ImGuiWindowFlags.NoResize or
-//                        ImGuiWindowFlags.NoMove or ImGuiWindowFlags.NoBackground or ImGuiWindowFlags.NoScrollbar
-//            )
-//        ) {
-        drawList = ImGui.getWindowDrawList()
-
         // Draw background and shadow
         val startPos = ImVec2(ImGui.getCursorScreenPosX() - padding, ImGui.getCursorScreenPosY() - padding)
         val endPos = ImVec2(startPos.x + ImGui.getWindowContentRegionMaxX() + padding * 2, cursorY + padding)
@@ -92,154 +86,167 @@ class MarkdownRenderer() {
             startPos.y + padding,
             endPos.x - padding * 2,
             endPos.y - padding * 2,
-            ImColor.rgba(33, 33, 33, 255),
+            ImColor.rgba(31, 39, 44, 255),
             20f,
         )
 
-
-        //if hovered
-        if (ImGui.isMouseHoveringRect(startPos.x, startPos.y, endPos.x, endPos.y)) {
-            drawList.addRectFilled(
-                startPos.x + padding,
-                startPos.y + padding,
-                endPos.x - padding * 2,
-                endPos.y - padding * 2,
-                ImColor.rgba(33, 33, 33, 255),
-                20f,
-            )
-        }
-
-
-        // Begin a child window for scrolling
+//        // If hovered
+//        if (ImGui.isMouseHoveringRect(startPos.x, startPos.y, endPos.x, endPos.y)) {
+//            drawList.addRectFilled(
+//                startPos.x + padding,
+//                startPos.y + padding,
+//                endPos.x - padding * 2,
+//                endPos.y - padding * 2,
+//                ImColor.rgba(33, 33, 33, 255),
+//                20f,
+//            )
+//        }
 
         cursorX = ImGui.getCursorScreenPosX()
         cursorY = ImGui.getCursorScreenPosY()
 
-        renderNode(node)
+        val doc = Jsoup.parse(html)
+        renderElement(doc.body())
+
+        cursorY += 40f
         ImGui.setCursorScreenPos(cursorX, cursorY)
-
-//        }
-
-//        ImGui.end()
-
     }
 
-    private fun calculateImageStartX(windowWidth: Float, imageWidth: Float, alt: String): Float {
-        val alignment = when {
-            alt.contains("left", ignoreCase = true) -> ImageAlignment.LEFT
-            alt.contains("right", ignoreCase = true) -> ImageAlignment.RIGHT
-            else -> ImageAlignment.CENTER
-        }
 
-        return when (alignment) {
-            ImageAlignment.LEFT -> ImGui.getCursorScreenPosX() + padding
-            ImageAlignment.RIGHT -> ImGui.getCursorScreenPosX() + windowWidth - imageWidth - padding * 3
-            ImageAlignment.CENTER -> ImGui.getCursorScreenPosX() + (windowWidth - imageWidth) / 2 - padding * 2
+    private fun renderChildren(element: Element) {
+        element.childNodes().forEach { node ->
+            when (node) {
+                is Element -> renderElement(node)
+                is TextNode -> renderText(node.text(), isFirstLine = true, contentStartX = cursorX)
+            }
         }
     }
 
-    private enum class ImageAlignment {
-        LEFT, CENTER, RIGHT
-    }
-
-    private fun renderNode(node: MarkdownNode) {
-        when (node) {
-            is MarkdownNode.Document -> renderDocument(node)
-            is MarkdownNode.Paragraph -> renderParagraph(node)
-            is MarkdownNode.Heading -> renderHeading(node)
-            is MarkdownNode.Text -> renderText(node)
-            is MarkdownNode.Bold -> renderBold(node)
-            is MarkdownNode.Italic -> renderItalic(node)
-            is MarkdownNode.Link -> renderLink(node)
-            is MarkdownNode.Image -> renderImage(node)
-            is MarkdownNode.List -> renderList(node)
-            is MarkdownNode.ListItem -> renderListItem(node)
-            is MarkdownNode.CodeBlock -> renderCodeBlock(node)
-            is MarkdownNode.InlineCode -> renderInlineCode(node)
-            is MarkdownNode.NewLine -> renderNewLine()
-            is MarkdownNode.HorizontalRule -> renderHorizontalRule()
-            is MarkdownNode.CustomColor -> renderCustomColor(node)
+    private fun renderParagraph(element: Element) {
+        if (lastRenderedElement?.tagName()?.startsWith("h") == true) {
+            cursorY -= 10f * scale
         }
-    }
 
-    private fun renderAST(node: MarkdownNode) {
-        if (ImGui.begin("Markdown AST", open, ImGuiWindowFlags.NoTitleBar or ImGuiWindowFlags.NoResize)) {
-            drawList = ImGui.getWindowDrawList()
-            cursorX = ImGui.getCursorScreenPosX() + padding
-            cursorY = ImGui.getCursorScreenPosY() + padding
-            ImGui.text(node.toString())
-        }
-        ImGui.end()
-    }
-
-    private fun renderDocument(document: MarkdownNode.Document) {
-        document.children.forEach { renderNode(it) }
-    }
-
-    private fun renderParagraph(paragraph: MarkdownNode.Paragraph) {
         val currentColor = ImVec4(currentColor.x, currentColor.y, currentColor.z, currentColor.w)
         this.currentColor = ImVec4(135f / 255f, 135f / 255f, 135f / 255f, 1f)
         if (cursorX > ImGui.getCursorScreenPosX() + padding) {
             renderNewLine()
         }
-        cursorY -= padding
-        paragraph.children.forEach { renderNode(it) }
+        MarkdownFont.push()
+        font.isMedium = true
+        font.fontSize = 18
+        cursorX += 5f * scale
+        renderChildren(element)
+        MarkdownFont.pop()
         this.currentColor = currentColor
-        renderNewLine()
-        cursorY += padding
+//        renderNewLine()
+        // Add extra space after paragraphs
+        cursorY += baseSpacing
+
+        if (lastRenderedElement?.tagName()?.startsWith("h") == true) {
+            cursorY += 15f * scale
+        }
     }
 
+    private fun renderHeading(element: Element) {
+        MarkdownFont.push()
 
-    private fun renderHeading(heading: MarkdownNode.Heading) {
+
         if (cursorX > ImGui.getCursorScreenPosX() + padding) {
             renderNewLine()
         }
+        cursorX += 5f * scale
 
-        val fontSize = when (heading.level) {
-            1 -> baseFontSize * 2f
-            2 -> baseFontSize * 1.5f
-            3 -> baseFontSize * 1.25f
-            else -> baseFontSize * 1.1f
+        val level = element.tagName().substring(1).toInt()
+        val fontSize = when (level) {
+            1 -> {
+                font.isExtraBold = true
+                baseFontSize * 2f
+            }
+
+            2 -> {
+                font.isBold = true
+                baseFontSize * 1.5f
+            }
+
+            3 -> {
+                font.isSemiBold = true
+                baseFontSize * 1.25f
+            }
+
+            else -> {
+                font.isMedium = true
+                baseFontSize * 1.1f
+            }
         }
+
         font.fontSize = fontSize.toInt()
 
         ImGui.pushFont(font.font)
-        val headingText = heading.children.filterIsInstance<MarkdownNode.Text>().joinToString("") { it.content }
+        val headingText = element.text()
         val textSize = ImGui.calcTextSize(headingText)
         ImGui.popFont()
+
 
         var startX = cursorX
         var startY = cursorY
 
+
+        // Render link icon
+
+
+        //If the heading is hovered, show the link icon
+        if (ImGui.isMouseHoveringRect(cursorX, cursorY, cursorX + textSize.x, cursorY + textSize.y)) {
+            ImGui.setMouseCursor(ImGuiMouseCursor.Hand)
+            startX += 25f * scale
+
+            MarkdownFont.push()
+            font.isIcon = true
+
+
+            val iconSize = fontSize * 1.2f
+            val iconX = startX - iconSize
+            val iconY = startY + (textSize.y - iconSize) / 2
+
+            val isHovered = ImGui.isMouseHoveringRect(iconX, iconY, iconX + iconSize, iconY + iconSize)
+            val iconColor = if (ImGui.isMouseDown(0)) ImColor.rgba(100, 149, 237, 255) else ImColor.rgba(
+                100, 100, 100, 255
+            )
+            // Handle click on the link icon
+            if (isHovered && ImGui.isMouseClicked(0)) {
+                val normalizedTitle = headingText.lowercase().replace(" ", "_")
+                val encodedTitle = URLEncoder.encode(normalizedTitle, StandardCharsets.UTF_8.toString())
+                onHeadingClicked("#$encodedTitle")
+            }
+
+
+
+            drawList.addText(
+                font.font, iconSize, iconX, iconY, iconColor, FontAwesome.Link
+            )
+
+
+
+            MarkdownFont.pop()
+        }
         cursorY += textSize.y
 
 
-        //If it's a heading 1, draw a nice line under it that extends to the end of the line window
-        if (heading.level == 1) {
-            val windowWidth = ImGui.getWindowWidth()
-            drawList.addLine(
-                startX,
-                startY + textSize.y + 5f * scale,
-                startX + windowWidth - padding * 4,
-                startY + textSize.y + 5f * scale,
-                ImColor.rgba(currentColor.x, currentColor.y, currentColor.z, currentColor.w),
-                1f * scale
-            )
-        }
+
 
         cursorY = startY
         drawList.addText(
             font.font,
-            fontSize.toFloat(),
-            startX + shadowOffset,
-            cursorY + shadowOffset,
-            ImColor.rgba(20, 20, 20, 80),
+            fontSize,
+            startX + 5f,
+            cursorY + 5f,
+            ImColor.rgba(20, 20, 20, 255),
             headingText
         )
 
         drawList.addText(
             font.font,
-            fontSize.toFloat(),
+            fontSize,
             startX,
             cursorY,
             ImColor.rgba(currentColor.x, currentColor.y, currentColor.z, currentColor.w),
@@ -250,14 +257,121 @@ class MarkdownRenderer() {
         cursorX = ImGui.getCursorScreenPosX() + padding
 
         font.fontSize = (16 * scale).toInt() // Reset font size
-        lastRenderedNode = heading
+        lastRenderedElement = element
+
+
+        MarkdownFont.pop()
+
+        // Add extra space after headings
+        cursorY += baseSpacing
+        //Restore starting font
     }
 
-    private fun renderGif(image: MarkdownNode.Image) {
-        val windowWidth = ImGui.getWindowWidth()
-        val gifData = MarkdownImages.getImage(image.url) as? MarkdownGif.GifData ?: return
+    // Add this property to store the callback function
+    private var onHeadingClicked: (String) -> Unit = {}
 
+    // Add this method to set the callback function
+    fun setOnHeadingClickedCallback(callback: (String) -> Unit) {
+        onHeadingClicked = callback
+    }
+
+    private fun renderText(text: String, isFirstLine: Boolean = false, contentStartX: Float = cursorX) {
+        ImGui.pushFont(font.font)
+        val words = text.split(" ")
+        var spaceLeft = ImGui.getWindowWidth() - (cursorX - ImGui.getCursorScreenPosX()) - padding * 2
+
+        words.forEach { word ->
+            val wordSize = ImGui.calcTextSize(word)
+            val wordWidth = wordSize.x * scale
+            val spaceSize = ImGui.calcTextSize(" ").x * scale
+            if (wordWidth > spaceLeft) {
+                cursorY += font.fontSize * lineHeight
+                cursorX = if (isFirstLine) contentStartX else ImGui.getCursorScreenPosX() + padding
+                spaceLeft = ImGui.getWindowWidth() - padding * 2 - indentLevel * indentWidth
+            }
+
+            drawList.addText(
+                font.font,
+                font.fontSize * scale,
+                cursorX,
+                cursorY,
+                ImColor.rgba(currentColor.x, currentColor.y, currentColor.z, currentColor.w),
+                word
+            )
+
+            cursorX += wordWidth + spaceSize * scale
+            spaceLeft -= wordWidth + spaceSize * scale
+        }
+        ImGui.popFont()
+    }
+
+    private fun renderBold(element: Element) {
+        font.isBold = true
+        cursorX -= 3.5f * scale
+        renderChildren(element)
+        cursorX += 2f * scale
+        font.isBold = false
+    }
+
+    private fun renderItalic(element: Element) {
+        font.isItalic = true
+        cursorX -= 3.5f * scale
+        renderChildren(element)
+        cursorX += 2f * scale
+        font.isItalic = false
+    }
+
+    private fun renderLink(element: Element) {
+
+        val linkColor = ImVec4(0.2f, 0.8f, 1f, 1f)
+        val linkText = element.text()
+        val textSize = ImGui.calcTextSize(linkText)
+
+        val startX = cursorX
+
+        withColor(linkColor) {
+            renderChildren(element)
+        }
+
+        val endX = cursorX
+
+        val textWidth = endX - startX
+        val textHeight = font.fontSize * scale
+
+        drawList.addLine(
+            cursorX - textWidth,
+            cursorY + textHeight,
+            cursorX,
+            cursorY + textHeight,
+            ImColor.rgba(linkColor.x, linkColor.y, linkColor.z, linkColor.w),
+            1f * scale
+        )
+
+        if (ImGui.isMouseHoveringRect(cursorX - textSize.x, cursorY, cursorX, cursorY + textSize.y)) {
+            ImGui.setTooltip(element.attr("href"))
+            if (ImGui.isMouseClicked(0)) {
+                // Handle link click (e.g., open URL in browser)
+            }
+        }
+    }
+
+    private fun renderImage(element: Element) {
+        val src = element.attr("src")
+        val alt = element.attr("alt")
+        val windowWidth = ImGui.getWindowWidth()
+
+        if (MarkdownGif.isGif(src)) {
+            renderGif(src, alt)
+        } else {
+            renderStaticImage(src, alt)
+        }
+    }
+
+    private fun renderGif(src: String, alt: String) {
+        val gifData = MarkdownGif.loadGif(src) ?: return
         val imageSize = ImVec2(gifData.width * scale, gifData.height * scale)
+        val windowWidth = ImGui.getWindowWidth()
+
         val scaleRatio = if (imageSize.x > windowWidth - padding * 2) {
             (windowWidth - padding * 2) / imageSize.x - 0.1f
         } else {
@@ -267,20 +381,20 @@ class MarkdownRenderer() {
         imageSize.x *= scaleRatio
         imageSize.y *= scaleRatio
 
-        val startX = calculateImageStartX(windowWidth, imageSize.x, image.alt)
+        val startX = calculateImageStartX(windowWidth, imageSize.x, alt)
         val startY = cursorY + padding * 2
         if (cursorX > ImGui.getCursorScreenPosX() + padding) {
             renderNewLine()
         }
 
-        MarkdownGif.renderGif(image.url, drawList, startX, startY, scaleRatio * scale)
+        MarkdownGif.renderGif(src, drawList, startX, startY, scaleRatio * scale)
 
         cursorY += imageSize.y + padding
         cursorX = ImGui.getCursorScreenPosX() + padding
     }
 
-    private fun renderStaticImage(image: MarkdownNode.Image) {
-        val img = MarkdownImages.getImage(image.url) as? MarkdownImages.ImageData ?: return
+    private fun renderStaticImage(src: String, alt: String) {
+        val img = MarkdownImages.getImage(src) as? MarkdownImages.ImageData ?: return
         val imageSize = ImVec2(img.width * scale, img.height * scale)
         val windowWidth = ImGui.getWindowWidth()
 
@@ -293,7 +407,7 @@ class MarkdownRenderer() {
         imageSize.x *= scaleRatio
         imageSize.y *= scaleRatio
 
-        val startX = calculateImageStartX(windowWidth, imageSize.x, image.alt)
+        val startX = calculateImageStartX(windowWidth, imageSize.x, alt)
         val startY = cursorY + padding * 2
         if (cursorX > ImGui.getCursorScreenPosX() + padding) {
             renderNewLine()
@@ -328,116 +442,45 @@ class MarkdownRenderer() {
         cursorY += imageSize.y + padding
         cursorX = ImGui.getCursorScreenPosX() + padding
     }
-    private fun renderText(text: MarkdownNode.Text) {
-        ImGui.pushFont(font.font)
-        val words = text.content.split(" ")
-        var spaceLeft = ImGui.getWindowWidth() - (cursorX - ImGui.getCursorScreenPosX()) - padding * 2
 
-        words.forEach { word ->
-            val wordSize = ImGui.calcTextSize(word)
-            val spaceSize = ImGui.calcTextSize(" ").x * scale
-            if (wordSize.x > spaceLeft) {
-                // Move to the next line
-                cursorY += baseFontSize * lineHeight
-                cursorX = ImGui.getCursorScreenPosX() + padding + indentLevel * indentWidth
-                spaceLeft = ImGui.getWindowWidth() - padding * 2 - indentLevel * indentWidth
-            }
+    private val listIndentation = 20f * scale
+    private val listItemSpacing = 5f * scale
 
-            // Draw the word
-            drawList.addText(
-                font.font,
-                baseFontSize,
-                cursorX,
-                cursorY,
-                ImColor.rgba(currentColor.x, currentColor.y, currentColor.z, currentColor.w),
-                word
-            )
-
-            cursorX += wordSize.x + spaceSize
-            spaceLeft -= wordSize.x + spaceSize
-
-        }
-        ImGui.popFont()
-    }
-
-    private fun renderBold(bold: MarkdownNode.Bold) {
-        font.isBold = true
-        cursorX -= 3.5f * scale
-        bold.children.forEach { renderNode(it) }
-        cursorX += 2f * scale
-        font.isBold = false
-    }
-
-    private fun renderItalic(italic: MarkdownNode.Italic) {
-        font.isItalic = true
-        cursorX -= 3.5f * scale
-        italic.children.forEach { renderNode(it) }
-        cursorX += 2f * scale
-        font.isItalic = false
-    }
-
-    private fun renderLink(link: MarkdownNode.Link) {
-        val linkColor = ImVec4(0.2f, 0.8f, 1f, 1f)
-        cursorX -= 3f * scale
-
-        withColor(linkColor) {
-            link.children.forEach { renderNode(it) }
+    private fun renderList(element: Element) {
+        //If the last element was a heading, subtract some space
+        if (lastRenderedElement?.tagName()?.startsWith("h") == true) {
+            cursorY -= 15f * scale
         }
 
-        ImGui.pushFont(font.font)
-        val linkText = link.children.filterIsInstance<MarkdownNode.Text>().joinToString("") { it.content }
-        val textSize = ImGui.calcTextSize(linkText)
-        ImGui.popFont()
-        cursorX -= 4f * scale
-
-        drawList.addLine(
-            cursorX - textSize.x,
-            cursorY + textSize.y,
-            cursorX,
-            cursorY + textSize.y,
-            ImColor.rgba(linkColor.x, linkColor.y, linkColor.z, linkColor.w),
-            1f * scale
-        )
-
-        if (ImGui.isMouseHoveringRect(cursorX - textSize.x, cursorY, cursorX, cursorY + textSize.y)) {
-            ImGui.setTooltip(link.url)
-            if (ImGui.isMouseClicked(0)) {
-                // Handle link click (e.g., open URL in browser)
-            }
-        }
-    }
-
-
-    private fun renderImage(image: MarkdownNode.Image) {
-        if (MarkdownGif.isGif(image.url)) {
-            renderGif(image)
-        } else {
-            renderStaticImage(image)
-        }
-    }
-
-    private var ordered = false
-    private var listIndex = 1
-
-    private fun renderList(list: MarkdownNode.List) {
         if (cursorX > ImGui.getCursorScreenPosX() + padding) {
             renderNewLine()
         }
         indentLevel++
-        ordered = list.ordered
-        list.items.forEachIndexed() { index, item ->
-            listIndex = index
-            renderNode(item)
+        cursorX += listIndentation
+        cursorY -= 15f
+        element.children().forEach { child ->
+            if (child.tagName() == "li") {
+                renderListItem(child)
+            }
         }
+        cursorY += 10f
         indentLevel--
+        cursorX -= listIndentation
+        // Add extra space after lists
+        cursorY += baseSpacing
     }
 
-    private fun renderListItem(item: MarkdownNode.ListItem) {
+    private fun renderListItem(element: Element, isSubList: Boolean = false) {
         if (cursorX > ImGui.getCursorScreenPosX() + padding) {
             renderNewLine()
         }
-        cursorX += indentLevel * indentWidth
-        if (!ordered) {
+        val startX = ImGui.getCursorScreenPosX() + padding + indentLevel * indentWidth
+        cursorX = startX
+        val listItemStartY = cursorY
+
+        // Render bullet point or number
+        val bulletOffset = 20f * scale
+        if (element.parent()?.tagName() != "ol") {
             drawList.addCircleFilled(
                 cursorX - 10f * scale,
                 cursorY + font.fontSize * 0.5f * scale,
@@ -445,121 +488,236 @@ class MarkdownRenderer() {
                 ImColor.rgba(currentColor.x, currentColor.y, currentColor.z, currentColor.w)
             )
         } else {
+            val index = element.elementSiblingIndex() + 1
             drawList.addText(
                 font.font,
                 font.fontSize * scale,
-                cursorX,
+                cursorX - 20f * scale,
                 cursorY,
                 ImColor.rgba(currentColor.x, currentColor.y, currentColor.z, currentColor.w),
-                "${listIndex + 1}."
+                "$index."
             )
-            cursorX += 20f * scale
         }
 
-        item.children.forEach { renderNode(it) }
-        cursorX = ImGui.getCursorScreenPosX() + padding
-        renderNewLine()
+        // Render list item content
+        cursorX += bulletOffset - 15f * scale
+        val contentStartX = cursorX
+        var maxY = cursorY
+        var isFirstLine = true
+
+        element.childNodes().forEach { node ->
+            when (node) {
+                is Element -> {
+                    when (node.tagName()) {
+                        "ul", "ol" -> {
+                            renderList(node)
+                            maxY = maxOf(maxY, cursorY)
+                        }
+
+                        else -> {
+                            if (node.tagName() == "p") {
+                                cursorX -= 5f * scale
+                                renderChildren(node)
+                                cursorY += font.fontSize
+                            } else {
+                                renderElement(node)
+                            }
+                            maxY = maxOf(maxY, cursorY)
+                        }
+                    }
+                }
+
+                is TextNode -> {
+                    renderText(node.text(), isFirstLine, contentStartX)
+                    maxY = maxOf(maxY, cursorY)
+                    isFirstLine = false
+                }
+            }
+        }
+
+        // Ensure we move to the next line after the list item
+        if (!isSubList) {
+            cursorY = (maxY + font.fontSize * (lineHeight - 1) * scale) - 2.5f
+            cursorX = startX
+        }
     }
 
-    private fun renderCodeBlock(codeBlock: MarkdownNode.CodeBlock) {
+    // Helper function for smooth interpolation
+    private fun lerp(start: Float, end: Float, t: Float): Float {
+        return start + t * (end - start)
+    }
+
+    private var borderRadius = 0f
+
+    private fun renderCodeBlock(element: Element) {
+        MarkdownFont.push()
+        val state = codeBlockStates.getOrPut(element.text()) {
+            val codeElement = element.selectFirst("code")
+            val codeText = codeElement?.html() ?: element.html()
+            val language = codeElement?.className()?.replace("language-", "") ?: ""
+            CodeBlockState(
+                codeText = codeText,
+                language = language
+            )
+        }
+        font.fontSize = 16
+
         if (cursorX > ImGui.getCursorScreenPosX() + padding) {
             renderNewLine()
         }
 
         cursorX += 6f * scale
 
-        val textColor = ImVec4(0.8f, 0.8f, 0.8f, 1f)
-        val bgColor = ImVec4(0.2f, 0.2f, 0.2f, 0.5f)
+        // Calculate the exact height of the code block
+        val lineCount = state.lines.size
+        val lineHeight = font.fontSize * 1.2f * scale
+        val topBarHeight = font.fontSize * 1.5f * scale
+        val codeBlockPadding = padding * 2 // Add some padding at the top and bottom of the code block
+        state.targetHeight = lineCount * lineHeight + topBarHeight + codeBlockPadding
 
-        ImGui.pushFont(font.font)
-        val codeLines = codeBlock.content.lines()
-        val maxLineWidth = codeLines.maxOfOrNull { ImGui.calcTextSize(it).x } ?: 0f
-        val blockHeight = codeLines.size * font.fontSize * lineHeight * scale
-        ImGui.popFont()
-        val width = ImGui.getContentRegionAvail().x
+        // Smoothly animate the code block height
+        state.currentHeight = lerp(state.currentHeight, state.targetHeight, ImGui.getIO().deltaTime * 5f)
 
-        // Draw background with drop shadow
+        val highlightedWidth = ImGui.getWindowContentRegionMaxX() - padding * 2
+        val highlightedStartX = ImGui.getCursorScreenPosX() + padding
+        val highlightedEndX = highlightedStartX + highlightedWidth
+        val highlightedEndY = cursorY + state.currentHeight
+        val highlightedColor = ImVec4(0.1f, 0.1f, 0.1f, 1f)
+
+        // Render the code block background
         drawList.addRectFilled(
-            cursorX - padding + shadowOffset,
-            cursorY + shadowOffset,
-            cursorX + width - padding * 2 + shadowOffset - 6f * scale,
-            cursorY + blockHeight + padding * 2 + shadowOffset,
-            ImGui.colorConvertFloat4ToU32(0f, 0f, 0f, 0.3f),
-            cornerRadius
-        )
-        drawList.addRectFilled(
-            cursorX - padding,
+            highlightedStartX,
             cursorY,
-            cursorX + width - padding * 2 - 6f * scale,
-            cursorY + blockHeight + padding * 2,
-            ImColor.rgba(bgColor.x, bgColor.y, bgColor.z, bgColor.w),
-            cornerRadius
+            highlightedEndX,
+            highlightedEndY,
+            ImColor.rgba(highlightedColor.x, highlightedColor.y, highlightedColor.z, highlightedColor.w),
+            borderRadius
         )
 
-        // Render code lines
-        var lineY = cursorY + padding
-        codeLines.forEach { line ->
+        // Render top bar
+        val topBarStartX = ImGui.getCursorScreenPosX() + padding
+        val topBarEndX = ImGui.getWindowContentRegionMaxX() - padding
+        val topBarColor = ImVec4(0.1f, 0.1f, 0.1f, 1f)
+
+        drawList.addRectFilled(
+            topBarStartX,
+            cursorY,
+            topBarEndX,
+            cursorY + topBarHeight,
+            ImColor.rgba(topBarColor.x, topBarColor.y, topBarColor.z, topBarColor.w),
+            borderRadius
+        )
+        cursorY += topBarHeight
+
+        // Render language label
+        if (state.language.isNotEmpty()) {
+            val labelColor = ImVec4(0.7f, 0.7f, 0.7f, 1f)
             drawList.addText(
                 font.font,
                 font.fontSize * scale,
-                cursorX,
-                lineY,
-                ImColor.rgba(textColor.x, textColor.y, textColor.z, textColor.w),
-                line
+                cursorX + padding / 2,
+                cursorY - topBarHeight + padding / 2,
+                ImColor.rgba(labelColor.x, labelColor.y, labelColor.z, labelColor.w),
+                state.language
             )
-            lineY += font.fontSize * lineHeight * scale
         }
 
-        cursorY += blockHeight
+        // Highlight and render the code
+        highlightCode(drawList, state.codeText, state.language)
+
+        // Update cursor position after rendering the code block
         cursorX = ImGui.getCursorScreenPosX() + padding
+        cursorY += state.currentHeight - topBarHeight - padding * 2
+
+        // Ensure we move to the next line after the code block
+        renderNewLine()
+
+        MarkdownFont.pop()
     }
 
-    private fun renderInlineCode(inlineCode: MarkdownNode.InlineCode) {
+    private fun renderElement(element: Element) {
+        when (element.tagName()) {
+            "body" -> renderChildren(element)
+            "p" -> renderParagraph(element)
+            "h1", "h2", "h3", "h4", "h5", "h6" -> renderHeading(element)
+            "strong", "b" -> renderBold(element)
+            "em", "i" -> renderItalic(element)
+            "a" -> renderLink(element)
+            "img" -> renderImage(element)
+            "ul", "ol" -> renderList(element)
+            "li" -> renderListItem(element)
+            "pre" -> renderCodeBlock(element)
+            "code" -> {
+                if (element.parent()?.tagName() != "pre") {
+                    renderInlineCode(element)
+                }
+            }
+
+            "br" -> renderNewLine()
+            "hr" -> renderHorizontalRule()
+            else -> renderChildren(element)
+        }
+    }
+
+
+    private fun renderInlineCode(element: Element) {
         val textColor = ImVec4(0.8f, 0.8f, 0.8f, 1f)
-        val bgColor = ImVec4(0.2f, 0.2f, 0.2f, 0.5f)
 
-        ImGui.pushFont(font.font)
-        val textSize = ImGui.calcTextSize(inlineCode.content)
-        ImGui.popFont()
+        MarkdownFont.push()
 
-        if (cursorX + textSize.x > ImGui.getCursorScreenPosX() + ImGui.getWindowContentRegionMinX() - padding) {
+//        ImGui.pushFont(font.font)
+        val textSize = ImGui.calcTextSize(element.text())
+        val textWidth = textSize.x * scale
+        val textHeight = textSize.y * scale
+//        ImGui.popFont()
+
+        val availableWidth = ImGui.getWindowContentRegionMaxX() - cursorX - padding * 2
+        if (textSize.x > availableWidth) {
             renderNewLine()
         }
 
+        val startX = cursorX
+        val startY = cursorY
+
         // Draw background with drop shadow
         drawList.addRectFilled(
-            cursorX - padding * 0.5f + shadowOffset,
-            cursorY - padding * 0.5f + shadowOffset,
-            cursorX + textSize.x + padding * 0.5f + shadowOffset,
-            cursorY + textSize.y + padding * 0.5f + shadowOffset,
+            startX - padding * 0.5f + shadowOffset,
+            startY - padding * 0.5f + shadowOffset,
+            startX + textWidth + padding * 0.5f + shadowOffset,
+            startY + textHeight + padding * 0.5f + shadowOffset,
             ImGui.colorConvertFloat4ToU32(0f, 0f, 0f, 0.3f),
             cornerRadius * 0.5f
         )
         drawList.addRectFilled(
-            cursorX - padding * 0.5f,
-            cursorY - padding * 0.5f,
-            cursorX + textSize.x + padding * 0.5f,
-            cursorY + textSize.y + padding * 0.5f,
-            ImColor.rgba(bgColor.x, bgColor.y, bgColor.z, bgColor.w),
+            startX - padding * 0.5f,
+            startY - padding * 0.5f,
+            startX + textWidth + padding * 2f,
+            startY + textHeight + padding * 0.5f,
+            ImColor.rgba(38, 44, 54, 255),
             cornerRadius * 0.5f
         )
 
         drawList.addText(
             font.font,
-            font.fontSize * scale,
-            cursorX,
-            cursorY,
+            font.fontSize.toFloat(),
+            startX,
+            startY,
             ImColor.rgba(textColor.x, textColor.y, textColor.z, textColor.w),
-            inlineCode.content
+            element.text()
         )
 
-        cursorX += textSize.x + padding
+        cursorX += textWidth + padding
+        // Don't update cursorY here to keep following text on the same line
+
+        MarkdownFont.pop()
     }
+
 
     private fun renderNewLine() {
         cursorY += font.fontSize * lineHeight * scale
         cursorX = ImGui.getCursorScreenPosX() + padding
     }
+
 
     private fun renderHorizontalRule() {
         if (cursorX > ImGui.getCursorScreenPosX() + padding) {
@@ -567,10 +725,10 @@ class MarkdownRenderer() {
         }
         val width = ImGui.getContentRegionAvail().x
 
-        // Check if the previous node was a heading
-        if (lastRenderedNode is MarkdownNode.Heading) {
+        // Check if the previous element was a heading
+        if (lastRenderedElement?.tagName()?.startsWith("h") == true) {
             // Render the line directly under the heading
-            cursorY -= 5f * scale
+            cursorY -= baseSpacing // Move up to be closer to the heading
         } else {
             cursorY += 10f * scale
         }
@@ -584,38 +742,30 @@ class MarkdownRenderer() {
             1f * scale
         )
 
-        if (lastRenderedNode !is MarkdownNode.Heading) {
+        if (lastRenderedElement?.tagName()?.startsWith("h") != true) {
             cursorY += 10f * scale
+        } else {
+            cursorY += 5f * scale // Add a small space after the line when it follows a heading
         }
 
-        lastRenderedNode = MarkdownNode.HorizontalRule
+        lastRenderedElement = null
     }
 
-    private var insideColor = false
-
-    private fun renderCustomColor(customColor: MarkdownNode.CustomColor) {
-        val color = parseColor(customColor.color)
-        if (insideColor) {
-            cursorX -= 3f * scale
+    private fun calculateImageStartX(windowWidth: Float, imageWidth: Float, alt: String): Float {
+        val alignment = when {
+            alt.contains("left", ignoreCase = true) -> ImageAlignment.LEFT
+            alt.contains("right", ignoreCase = true) -> ImageAlignment.RIGHT
+            else -> ImageAlignment.CENTER
         }
 
-        withColor(color) {
-            insideColor = true
-            customColor.children.forEach { renderNode(it) }
-            insideColor = false
+        return when (alignment) {
+            ImageAlignment.LEFT -> ImGui.getCursorScreenPosX() + padding
+            ImageAlignment.RIGHT -> ImGui.getCursorScreenPosX() + windowWidth - imageWidth - padding * 3
+            ImageAlignment.CENTER -> ImGui.getCursorScreenPosX() + (windowWidth - imageWidth) / 2 - padding * 2
         }
     }
 
-
-    private fun parseColor(colorString: String): ImVec4 {
-        return when (colorString.toLowerCase()) {
-            "red" -> ImVec4(231f / 255f, 76f / 255f, 60f / 255f, 1f)
-            "green" -> ImVec4(46f / 255f, 204f / 255f, 113f / 255f, 1f)
-            "blue" -> ImVec4(52f / 255f, 152f / 255f, 219f / 255f, 1f)
-            "yellow" -> ImVec4(241f / 255f, 196f / 255f, 15f / 255f, 1f)
-            "purple" -> ImVec4(155f / 255f, 89f / 255f, 182f / 255f, 1f)
-            else -> ImVec4(0.876f, 0.876f, 0.876f, 1f)
-        }
+    private enum class ImageAlignment { LEFT, CENTER, RIGHT
     }
 
     private inline fun withColor(color: ImVec4, block: () -> Unit) {
@@ -624,4 +774,157 @@ class MarkdownRenderer() {
         block()
         currentColor = colorStack.removeAt(colorStack.lastIndex)
     }
+
+
+    private val YAML_PATTERNS = listOf(
+        Triple("key", "^\\s*(\\w+):\\s*".toRegex(), ImVec4(0.8f, 0.4f, 0.4f, 1f)),
+        Triple("string", "\"([^\"]*)\"|'([^']*)'".toRegex(), ImVec4(0.4f, 0.8f, 0.4f, 1f)),
+        Triple("number", "\\b\\d+(\\.\\d+)?\\b".toRegex(), ImVec4(0.4f, 0.6f, 0.8f, 1f)),
+        Triple("boolean", "\\b(true|false)\\b".toRegex(RegexOption.IGNORE_CASE), ImVec4(0.8f, 0.6f, 0.4f, 1f)),
+        Triple("comment", "#.*$".toRegex(), ImVec4(0.5f, 0.5f, 0.5f, 1f))
+    )
+
+    private val LUA_PATTERNS = listOf(
+        // Comments (multi-line and single-line)
+        Triple("comment", Regex("--.*$|--\\[\\[.*?\\]\\]", RegexOption.DOT_MATCHES_ALL), ImVec4(0.4f, 0.6f, 0.4f, 1f)),
+
+        // Strings (including long strings)
+        Triple(
+            "string",
+            "\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*'|\\[\\[.*?\\]\\]".toRegex(RegexOption.DOT_MATCHES_ALL),
+            ImVec4(0.9f, 0.6f, 0.3f, 1f)
+        ),
+
+        // Keywords (moved to higher priority and adjusted regex)
+        Triple(
+            "keyword",
+            "\\b(and|break|do|else|elseif|end|false|for|function|if|in|local|nil|not|or|repeat|return|then|true|until|while)\\b".toRegex(),
+            ImVec4(0.9f, 0.4f, 0.4f, 1f)
+        ),
+
+        // Function definitions
+        Triple(
+            "function",
+            Regex("\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()"),
+            ImVec4(0.4f, 0.7f, 0.9f, 1f)
+        ),
+
+        // Built-in functions and libraries
+        Triple(
+            "builtin",
+            Regex("\\b(assert|collectgarbage|dofile|error|getmetatable|ipairs|load|loadfile|next|pairs|pcall|print|rawequal|rawget|rawlen|rawset|require|select|setmetatable|tonumber|tostring|type|xpcall)\\b"),
+            ImVec4(0.5f, 0.8f, 0.8f, 1f)
+        ),
+
+        // Numbers (including hexadecimal)
+        Triple(
+            "number",
+            "\\b(0x[a-fA-F0-9]+|\\d+(\\.\\d*)?([eE][+-]?\\d+)?)\\b".toRegex(),
+            ImVec4(0.6f, 0.6f, 0.9f, 1f)
+        ),
+        // Operators
+        Triple("operator", "[+\\-*/%^#=<>]|==|~=|<=|>=|\\.\\.|\\.\\.\\.".toRegex(), ImVec4(0.8f, 0.8f, 0.4f, 1f)),
+
+        // Punctuation
+        Triple("punctuation", "[(){}\\[\\],;:]".toRegex(), ImVec4(0.7f, 0.7f, 0.7f, 1f)),
+
+
+        )
+
+
+    private val DEFAULT_COLOR = ImVec4(0.9f, 0.9f, 0.9f, 1f)
+
+
+    fun highlightCode(drawList: ImDrawList, code: String, language: String): Float {
+        val patterns = when (language.lowercase()) {
+            "yaml" -> YAML_PATTERNS
+            "lua" -> LUA_PATTERNS
+            else -> emptyList()
+        }
+        return highlightCode(drawList, code, patterns)
+    }
+
+
+    private fun highlightCode(
+        drawList: ImDrawList,
+        code: String,
+        patterns: List<Triple<String, Regex, ImVec4>>
+    ): Float {
+        MarkdownFont.push()
+        font.fontSize = (16 * scale).toInt()
+        val font = MarkdownFont.current.font
+        val fontSize = MarkdownFont.current.fontSize.toFloat()
+        val startX = cursorX
+        val startY = cursorY
+        var currentY = startY
+        val lineHeight = fontSize * 1.2f
+        var height = 0f
+
+        code.lines().forEach { line ->
+            var currentX = startX
+            var remainingLine = line
+
+            while (remainingLine.isNotEmpty()) {
+                var didPreMatch = false
+                val match = patterns.firstNotNullOfOrNull { (_, regex, color) ->
+                    regex.find(remainingLine)?.let { Triple(it.value, it.range, color) }
+                }
+
+                if (match != null) {
+                    val (text, range, color) = match
+                    // Draw any text before the match
+                    if (range.first > 0) {
+                        //Match all the text before the match
+                        while (remainingLine.isNotEmpty()) {
+                            val text = remainingLine.takeWhile { it != ' ' }
+                            drawList.addText(
+                                font,
+                                fontSize,
+                                currentX,
+                                currentY,
+                                ImColor.rgba(DEFAULT_COLOR),
+                                text
+                            )
+                            currentX += ImGui.calcTextSize(text).x * scale
+                            remainingLine = remainingLine.substring(text.length)
+                            if (remainingLine.isNotEmpty()) {
+                                drawList.addText(
+                                    font,
+                                    fontSize,
+                                    currentX,
+                                    currentY,
+                                    ImColor.rgba(DEFAULT_COLOR),
+                                    " "
+                                )
+                                currentX += ImGui.calcTextSize(" ").x * scale
+                                remainingLine = remainingLine.substring(1)
+                            }
+                        }
+                    }
+                    // Draw the matched text
+                    drawList.addText(font, fontSize, currentX, currentY, ImColor.rgba(color), text)
+                    currentX += ImGui.calcTextSize(text).x * scale
+                    remainingLine = remainingLine.substring(range.last + 1)
+                    height += ImGui.calcTextSize(text).y
+                } else {
+                    // Draw any remaining text
+                    drawList.addText(
+                        font,
+                        fontSize,
+                        currentX,
+                        currentY,
+                        ImColor.rgba(DEFAULT_COLOR),
+                        remainingLine
+                    )
+                    height += ImGui.calcTextSize(remainingLine).y * 1.2f
+                    break
+                }
+            }
+            currentY += lineHeight
+        }
+        MarkdownFont.pop()
+
+        return height - padding
+    }
 }
+
