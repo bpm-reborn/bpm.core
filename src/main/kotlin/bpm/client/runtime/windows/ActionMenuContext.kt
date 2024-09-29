@@ -16,9 +16,8 @@ import bpm.common.property.Property
 import bpm.common.property.PropertyMap
 import bpm.common.property.cast
 import bpm.common.property.castOr
-import bpm.common.schemas.Schemas
+import bpm.common.upstream.Schemas
 import bpm.common.type.NodeLibrary
-import bpm.common.workspace.Workspace
 import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.packets.LinkDeleteRequest

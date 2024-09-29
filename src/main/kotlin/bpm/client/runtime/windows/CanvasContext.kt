@@ -1,7 +1,6 @@
 package bpm.client.runtime.windows
 
 import bpm.client.font.Fonts
-import bpm.client.render.panel.VariablesPanel
 import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.Keyboard
 import bpm.client.runtime.Platform
@@ -15,7 +14,7 @@ import bpm.common.packets.internal.Time
 import bpm.common.property.Property
 import bpm.common.property.PropertyMap
 import bpm.common.property.configured
-import bpm.common.schemas.Schemas
+import bpm.common.upstream.Schemas
 import bpm.common.type.NodeLibrary
 import bpm.common.type.NodeType
 import bpm.common.utils.contains

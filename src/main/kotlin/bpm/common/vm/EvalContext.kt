@@ -81,7 +81,7 @@ object EvalContext {
             try {
                 Success(function.call(*args), functionName)
             } catch (e: LuaException) {
-                logger.error(e) { "Error calling function `$functionName` in group `$groupName`" }
+//                logger.error(e) { "Error calling function `$functionName` in group `$groupName`" }
                 RuntimeError(e.message ?: "Unknown error", e.stackTrace, functionName)
             }
         }

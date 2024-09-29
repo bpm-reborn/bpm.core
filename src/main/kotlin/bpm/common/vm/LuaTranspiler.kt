@@ -4,7 +4,7 @@ import bpm.common.logging.KotlinLogging
 import bpm.common.network.Endpoint
 import bpm.common.network.listener
 import bpm.common.property.*
-import bpm.common.schemas.Schemas
+import bpm.common.upstream.Schemas
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.graph.Edge
 import bpm.common.workspace.graph.Node

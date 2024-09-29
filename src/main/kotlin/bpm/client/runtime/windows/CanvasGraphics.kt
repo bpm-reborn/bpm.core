@@ -11,7 +11,7 @@ import bpm.common.network.Client
 import bpm.common.network.Endpoint
 import bpm.common.network.listener
 import bpm.common.property.*
-import bpm.common.schemas.Schemas
+import bpm.common.upstream.Schemas
 import bpm.common.utils.FontAwesome
 import bpm.common.utils.fmodf
 import bpm.common.workspace.graph.Edge

@@ -1,5 +1,6 @@
 package bpm.client.runtime
 
+import bpm.client.docs.Docs
 import imgui.ImGui
 import imgui.ImGuiIO
 import imgui.flag.ImGuiConfigFlags
@@ -9,6 +10,7 @@ import net.minecraft.client.Minecraft
 import net.neoforged.api.distmarker.Dist
 import net.neoforged.api.distmarker.OnlyIn
 import bpm.client.font.Fonts
+import bpm.client.render.markdown.MarkdownBrowser
 import bpm.client.runtime.windows.CanvasWindow
 import bpm.common.logging.KotlinLogging
 import bpm.common.network.Listener
@@ -68,6 +70,8 @@ object ClientRuntime : Listener {
     val minecraft: Minecraft get() = Minecraft.getInstance()
     val player: LocalPlayer get() = minecraft.player!!
     val level get() = minecraft.level
+
+    val markdownBrowser by lazy { MarkdownBrowser(client.installed<Docs>()) }
 
     operator fun get(workspaceUid: UUID): Workspace? {
         val cahced = cachedWorkspaces[workspaceUid]

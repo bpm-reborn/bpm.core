@@ -11,6 +11,7 @@ import net.minecraft.world.item.ItemStack
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.world.Container
+import net.minecraft.world.item.Item
 import net.neoforged.neoforge.items.wrapper.InvWrapper
 import net.neoforged.neoforge.server.ServerLifecycleHooks
 import java.util.concurrent.ConcurrentHashMap
@@ -31,6 +32,12 @@ object Network : LuaBuiltin {
     @JvmStatic
     fun getOutputs(uuid: String): CombinedItemHandler? {
         return getHandlers(uuid, setOf(ProxiedType.OUTPUT))
+    }
+
+    @JvmStatic
+    fun getRegistryName(item: ItemStack): String {
+        val name = item.item.builtInRegistryHolder().registeredName
+        return name
     }
 
     @JvmStatic
@@ -81,11 +88,10 @@ object Network : LuaBuiltin {
     }
 
 
-     fun getItemHandler(world: ServerLevel, pos: BlockPos, direction: Direction?): IItemHandler? {
+    fun getItemHandler(world: ServerLevel, pos: BlockPos, direction: Direction?): IItemHandler? {
         val blockEntity = world.getBlockEntity(pos)
         if (blockEntity != null) {
-            //QUARRIS: This is not actually a compile error. Think we found a bug in intellij it's self.
-            val cap = world.getCapability(Capabilities.ItemHandler.BLOCK, pos, direction)
+            val cap = direction?.let { world.getCapability(Capabilities.ItemHandler.BLOCK, pos, it) }
             if (cap != null) {
                 return cap
             }
@@ -104,7 +110,8 @@ object Network : LuaBuiltin {
     }
     @JvmStatic
     fun extractItem(handler: IItemHandler, slot: Int, amount: Int, simulate: Boolean): ItemStack {
-        return handler.extractItem(slot, amount, simulate)
+        val extracted = handler.extractItem(slot, amount, simulate)
+        return extracted
     }
 
     @JvmStatic
