@@ -4,19 +4,27 @@ import bpm.client.docs.Docs
 import bpm.client.font.Fonts
 import bpm.client.utils.use
 import bpm.common.utils.FontAwesome
+import bpm.common.vm.ComplexLuaTranspiler
 import imgui.*
 import imgui.callback.ImGuiInputTextCallback
 import imgui.flag.*
 import imgui.internal.ImRect
 import imgui.type.ImString
+import org.intellij.markdown.ast.ASTNode
+import org.intellij.markdown.flavours.commonmark.CommonMarkFlavourDescriptor
+import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
+import org.intellij.markdown.html.HtmlGenerator
+import org.intellij.markdown.parser.MarkdownParser
 import java.util.*
 
 class MarkdownBrowser(private val docs: Docs) {
 
-    private val markdownRenderer = MarkdownRenderer()
+    private val flavour = CommonMarkFlavourDescriptor()
+    private val parser = MarkdownParser(flavour)
+    private var currentFile: String? = null
+    private var currentHtml: String? = null
     private val history = LinkedList<String>()
     private var currentIndex = -1
-    private var currentFile: String? = null
     private val iconFont = Fonts.getFamily("Fa")["Regular"][18]
     private val boldFont = Fonts.getFamily("Inter")["Bold"][18]
     private val regularFont = Fonts.getFamily("Inter")["Regular"][18]
@@ -38,12 +46,10 @@ class MarkdownBrowser(private val docs: Docs) {
     private var currentPath = ""
 
 
-
     init {
         // Initialize the markdownFiles with the doc tree from Docs
         markdownFiles.putAll(docs.getDocTree())
     }
-
 
 
     fun reloadDocs() {
@@ -82,7 +88,6 @@ class MarkdownBrowser(private val docs: Docs) {
 
         ImGui.end()
     }
-
 
 
     private fun renderNavBar() {
@@ -135,6 +140,7 @@ class MarkdownBrowser(private val docs: Docs) {
             ImGui.setMouseCursor(ImGuiMouseCursor.Hand)
         }
     }
+
     private fun lerp(a: Float, b: Float, t: Float): Float {
         return a + (b - a) * t.coerceIn(0f, 1f)
     }
@@ -230,6 +236,7 @@ class MarkdownBrowser(private val docs: Docs) {
                         updateAutocomplete()
                     }
                 }
+
                 ImGuiInputTextFlags.CallbackEdit -> {
                     currentPath = data.buf.toString()
                     updateAutocomplete()
@@ -356,7 +363,6 @@ class MarkdownBrowser(private val docs: Docs) {
 
         ImGui.popClipRect()
     }
-
 
 
     private fun renderFileTree(
@@ -488,6 +494,53 @@ class MarkdownBrowser(private val docs: Docs) {
     }
 
 
+    class CodeFenceTagRenderer : HtmlGenerator.TagRenderer {
+
+        private var inCodeFence = false
+        private var codeLanguage: String? = null
+
+        override fun closeTag(tagName: CharSequence): CharSequence {
+            return when {
+                inCodeFence && tagName == "pre" -> {
+                    inCodeFence = false
+                    codeLanguage = null
+                    "</code></pre>"
+                }
+
+                else -> "</$tagName>"
+            }
+        }
+
+        override fun openTag(
+            node: ASTNode,
+            tagName: CharSequence,
+            vararg attributes: CharSequence?,
+            autoClose: Boolean
+        ): CharSequence {
+            return when {
+                tagName == "pre" && attributes.any { it?.startsWith("class=\"language-") == true } -> {
+                    inCodeFence = true
+                    codeLanguage = attributes.firstOrNull { it?.startsWith("class=\"language-") == true }
+                        ?.removePrefix("class=\"language-")?.removeSuffix("\"").toString()
+                    "<pre><code${codeLanguage?.let { " class=\"language-$it\"" } ?: ""}>"
+                }
+
+                else -> buildString {
+                    append("<$tagName")
+                    attributes.filterNotNull().forEach { append(" $it") }
+                    if (autoClose) append(" />") else append(">")
+                }
+            }
+        }
+
+        override fun printHtml(html: CharSequence): CharSequence {
+            return if (inCodeFence) {
+                html.toString().replace("```", "")
+            } else {
+                html
+            }
+        }
+    }
 
     private fun renderFolderContents(
         folder: Map<String, Any>,
@@ -505,17 +558,33 @@ class MarkdownBrowser(private val docs: Docs) {
         ImGui.popStyleVar()
     }
 
+    private val renderer = HtmlRenderer()
+
     private fun renderContent(width: Float) {
         val height = ImGui.getWindowHeight() - ImGui.getCursorPosY() - 10f
 
         ImGui.pushStyleColor(ImGuiCol.ChildBg, ImColor.rgb(18, 18, 18))
         ImGui.pushStyleVar(ImGuiStyleVar.ChildRounding, 10f)
-        ImGui.beginChild("Content", width, height, false, ImGuiWindowFlags.HorizontalScrollbar)
 
-        currentFile?.let { fileName ->
-            getFileContent(fileName)?.let { content ->
-                val document = Markdown.parseMarkdown(content)
-                markdownRenderer.render(document)
+        // Use ImGuiWindowFlags.AlwaysVerticalScrollbar to ensure scrollbar is always visible
+        ImGui.beginChild(
+            "Content",
+            width,
+            height,
+            false,
+            ImGuiWindowFlags.HorizontalScrollbar or ImGuiWindowFlags.AlwaysVerticalScrollbar
+        )
+
+        currentFile?.let {
+            // Remove the nested child window and set cursor position once
+            ImGui.setCursorPos(10f, 10f)
+
+            currentHtml?.let { html ->
+                renderer.render(html)
+
+                // Ensure the content area extends to cover all rendered content
+                val lastItemRect = ImGui.getItemRectMax()
+                ImGui.dummy(0f, ImGui.getScrollMaxY() - lastItemRect.y + 20f)
             }
         }
 
@@ -523,6 +592,7 @@ class MarkdownBrowser(private val docs: Docs) {
         ImGui.popStyleVar()
         ImGui.popStyleColor()
     }
+
 
     private fun getFileContent(path: String): String? {
         return docs.getDocContent(path)
@@ -537,14 +607,47 @@ class MarkdownBrowser(private val docs: Docs) {
             history.add(fileName)
             currentIndex = history.size - 1
 
-            // If the loaded file is a folder, expand it in the sidebar
+            // Reset currentHtml to trigger content update
+            currentHtml = null
+
+            val content = getFileContent(fileName)
+            content?.let {
+                val parsedTree = parser.buildMarkdownTreeFromString(it)
+                var generatedHtml = HtmlGenerator(it, parsedTree, flavour).generateHtml()
+
+                // Post-process the generated HTML
+                generatedHtml = postProcessHtml(generatedHtml)
+
+                currentHtml = generatedHtml
+            }
+
             if (isFolder(fileName)) {
                 expandedFolders.add(fileName)
             }
 
-            // Update the buffer string with the new file name
             bufferString.set(fileName)
         }
+    }
+
+    private fun postProcessHtml(html: String): String {
+        var processedHtml = html
+
+        // Replace unclosed code blocks
+        val codeBlockRegex = Regex("<pre><code([^>]*)>(.*?)```\\s*", RegexOption.DOT_MATCHES_ALL)
+        processedHtml = processedHtml.replace(codeBlockRegex) { matchResult ->
+            val attributes = matchResult.groupValues[1]
+            val content = matchResult.groupValues[2].trim()
+            "<pre><code$attributes>$content</code></pre>"
+        }
+
+        // Close any remaining unclosed code and pre tags
+        processedHtml = processedHtml.replace(Regex("<pre>(?!.*</pre>)"), "<pre></pre>")
+        processedHtml = processedHtml.replace(Regex("<code>(?!.*</code>)"), "<code></code>")
+
+        // Remove any leftover triple backticks
+        processedHtml = processedHtml.replace("```", "")
+
+        return processedHtml
     }
 
     private fun isValidPath(path: String): Boolean {

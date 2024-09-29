@@ -19,8 +19,8 @@ class Docs(private val path: Path) : Listener {
 
     override fun onInstall() {
         // Clone or pull the repository and load the documentation
-        val docsPath = gitDocLoader.cloneOrPull()
-        loadDocTree(docsPath)
+//        val docsPath = gitDocLoader.cloneOrPull()
+        loadDocTree(path)
         logger.info { "Loaded documentation from Git repository" }
     }
 

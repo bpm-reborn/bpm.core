@@ -147,6 +147,10 @@ dependencies {
     libraries('io.github.classgraph:classgraph:4.8.165')
     jarJar('io.github.classgraph:classgraph:4.8.165')
     jarJar("org.snakeyaml:snakeyaml-engine:2.7")
+    libraries('org.jetbrains:markdown:0.7.3')
+    jarJar("org.jetbrains:markdown:0.7.3")
+    libraries('org.jsoup:jsoup:1.18.1')
+    jarJar("org.jsoup:jsoup:1.18.1")
 
     libraries('party.iroiro.luajava:luajit:4.0.3-SNAPSHOT')
     jarJar('party.iroiro.luajava:luajit:4.0.3-SNAPSHOT')
