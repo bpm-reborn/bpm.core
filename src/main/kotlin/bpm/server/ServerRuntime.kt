@@ -8,7 +8,7 @@ import bpm.common.network.listener
 import bpm.common.packets.Packet
 import bpm.common.property.Property
 import bpm.common.property.PropertyMap
-import bpm.common.schemas.Schemas
+import bpm.common.upstream.Schemas
 import bpm.common.vm.EvalContext
 import bpm.common.workspace.packets.WorkspaceCreateRequestPacket
 import bpm.common.workspace.packets.WorkspaceCreateResponsePacket

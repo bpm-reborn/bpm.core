@@ -10,7 +10,7 @@ import bpm.common.workspace.graph.Edge
 import bpm.common.workspace.graph.Node
 import bpm.common.property.Property
 import bpm.common.property.cast
-import bpm.common.schemas.Schemas
+import bpm.common.upstream.Schemas
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 

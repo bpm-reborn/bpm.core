@@ -11,7 +11,7 @@ import bpm.common.network.Client
 import bpm.common.network.Endpoint
 import bpm.common.network.listener
 import bpm.common.property.Property
-import bpm.common.schemas.Schemas
+import bpm.common.upstream.Schemas
 import bpm.common.utils.FontAwesome
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.packets.NodeType
@@ -24,7 +24,6 @@ import imgui.ImDrawList
 import imgui.ImGui
 import imgui.flag.*
 import imgui.type.ImString
-import net.minecraft.client.gui.GuiGraphics
 import org.joml.Vector2f
 import org.joml.Vector3f
 import org.joml.Vector4f

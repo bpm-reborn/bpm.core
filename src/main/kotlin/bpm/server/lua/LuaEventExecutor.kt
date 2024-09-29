@@ -5,7 +5,6 @@ import bpm.server.ServerRuntime
 
 object LuaEventExecutor {
 
-
     fun onTick() = with(ServerRuntime) {
         for (workspace in workspaces.values) {
             if (workspace.needsRecompile) continue

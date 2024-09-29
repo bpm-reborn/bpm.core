@@ -1,11 +1,11 @@
-package bpm.common.schemas
+package bpm.common.upstream
 
 import org.eclipse.jgit.api.Git
 import java.nio.file.Path
 import java.nio.file.Files
 import bpm.common.logging.KotlinLogging
 
-class GitSchemaLoader(private val repoUrl: String, private val branch: String, private val localPath: Path) {
+class GitLoader(private val repoUrl: String, private val branch: String, private val localPath: Path) {
 
     private val logger = KotlinLogging.logger {}
 
@@ -25,7 +25,7 @@ class GitSchemaLoader(private val repoUrl: String, private val branch: String, p
             .setURI(repoUrl)
             .setDirectory(localPath.toFile())
             .setBranch(branch)
-            .call().use { git ->
+            .call().use { gits ->
                 logger.info { "Repository cloned successfully" }
             }
     }
