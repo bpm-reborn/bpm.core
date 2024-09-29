@@ -1,9 +1,0 @@
-[29Sep2024 16:31:28.303] [main/INFO] [bpm.client.render.markdown.MarkdownTestRunnerKt$main$1#initializeFonts - MarkdownTestRunner.kt:20/]: Registered font family: Inter, 8..50, [Regular, Bold, Italic, BoldItalic, SemiBold, ExtraBold, Medium]
-[29Sep2024 16:31:28.305] [main/INFO] [bpm.client.render.markdown.MarkdownTestRunnerKt$main$1#initializeFonts - MarkdownTestRunner.kt:20/]: Registered font family: Minecraft, 8..50, [Title, Body]
-[29Sep2024 16:31:28.307] [main/INFO] [bpm.client.render.markdown.MarkdownTestRunnerKt$main$1#initializeFonts - MarkdownTestRunner.kt:20/]: Registered font family: Fa, 24..84, [Regular]
-[29Sep2024 16:31:28.310] [main/INFO] [bpm.client.render.markdown.MarkdownTestRunnerKt$main$1#initializeFonts - MarkdownTestRunner.kt:20/]: Loaded font family: Inter
-[29Sep2024 16:31:28.311] [main/INFO] [bpm.client.render.markdown.MarkdownTestRunnerKt$main$1#initializeFonts - MarkdownTestRunner.kt:20/]: Loaded font family: Minecraft
-[29Sep2024 16:31:28.316] [main/INFO] [bpm.client.render.markdown.MarkdownTestRunnerKt$main$1#initializeFonts - MarkdownTestRunner.kt:20/]: Loaded font family: Fa
-[29Sep2024 16:31:29.511] [main/INFO] [bpm.client.docs.Docs#<init> - Docs.kt:19/]: Pulling latest changes from https://github.com/meng-devs/bpm.docs.git
-[29Sep2024 16:31:30.112] [main/INFO] [bpm.client.docs.Docs#<init> - Docs.kt:19/]: Repository pulled successfully
-[29Sep2024 16:31:30.140] [main/INFO] [bpm.client.render.markdown.MarkdownTestRunnerKt$main$1#init - MarkdownTestRunner.kt:62/]: Loaded documentation from Git repository

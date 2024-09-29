@@ -22,3 +22,7 @@ eclipse
 run
 runs
 .kotlin
+logs/*
+*.log
+*.log.*
+imgui.ini
