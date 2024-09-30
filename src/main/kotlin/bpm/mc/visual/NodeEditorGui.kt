@@ -30,10 +30,8 @@ class NodeEditorGui : Screen(Component.literal("Node Editor")) {
         renderBackground(pGuiGraphics, pMouseX, pMouseY, pPartialTick)
         ClientRuntime.newFrame()
         ClientRuntime.process(pGuiGraphics)
-        renderHelp(pGuiGraphics)
-        if (helpShown) {
-            ClientRuntime.markdownBrowser.render()
-        }
+//        renderHelp(pGuiGraphics)
+
         ClientRuntime.endFrame()
 
         ClientGui.renderPost(pGuiGraphics)

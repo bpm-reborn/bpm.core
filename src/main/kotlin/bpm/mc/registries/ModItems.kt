@@ -2,6 +2,7 @@ package bpm.mc.registries
 
 import bpm.Bpm
 import bpm.booostrap.ModRegistry
+import bpm.mc.item.EnderBookItem
 import bpm.mc.item.EnderControllerItem
 import net.minecraft.world.item.BlockItem
 import net.minecraft.world.item.Item
@@ -27,6 +28,12 @@ object ModItems : ModRegistry<Item> {
     val ENDER_PIPE by register {
         registry.registerItem("ender_pipe") {
             BlockItem(ModBlocks.ENDER_PIPE, Item.Properties())
+        }
+    }
+
+    val ENDER_BOOK by register {
+        registry.registerItem("ender_book") {
+            EnderBookItem()
         }
     }
 }

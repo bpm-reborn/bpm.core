@@ -46,6 +46,8 @@ class MarkdownBrowser(private val docs: Docs) {
             val width = ImGui.calcTextSize(text).x
             return (width + 60f).coerceAtLeast(100f)
         }
+
+
     private val minNavInputHeight = 30f
     private val hoveredNavInputHeight = 34f
     private val focusedNavInputHeight = 38f
@@ -59,6 +61,7 @@ class MarkdownBrowser(private val docs: Docs) {
     private var zoomLevel = 1.0f
     private val minZoom = 0.5f
     private val maxZoom = 2.0f
+    private val zoomStep = 0.1f
 
     private var currentAnchor: String? = null
     private val renderer = MarkdownRenderer()
@@ -111,12 +114,25 @@ class MarkdownBrowser(private val docs: Docs) {
 
         ImGui.begin("Markdown Browser", windowFlags)
 
+        handleZoomInput()
         renderNavBar()
         isMouseInWindow = ImGui.isWindowHovered(ImGuiHoveredFlags.RootAndChildWindows)
 
         renderSidebarAndContent()
 
         ImGui.end()
+    }
+
+
+    private fun handleZoomInput() {
+        val io = ImGui.getIO()
+        if (io.keyCtrl) {
+            val mouseWheel = io.mouseWheel
+            if (mouseWheel != 0f) {
+                zoomLevel = (zoomLevel + mouseWheel * zoomStep).coerceIn(minZoom, maxZoom)
+                updateZoom()
+            }
+        }
     }
 
 

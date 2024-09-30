@@ -16,7 +16,7 @@ import kotlin.io.path.readText
 class Docs(private val path: Path) : Listener {
 
     private val logger = KotlinLogging.logger { }
-    private val gitDocLoader = GitLoader("https://github.com/meng-devs/bpm.docs.git", "main", path)
+    private val gitDocLoader = GitLoader("https://github.com/bpm-reborn/bpm.docs.git", "main", path)
     private val docTree: MutableMap<String, Any> = mutableMapOf()
     private val documentCache: MutableMap<String, Node> = mutableMapOf()
     private val parser = org.commonmark.parser.Parser.builder().build()

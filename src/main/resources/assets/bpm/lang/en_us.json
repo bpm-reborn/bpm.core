@@ -2,6 +2,6 @@
   "block.bpm.ender_pipe_controller": "Ender Controller",
   "block.bpm.ender_pipe": "Ender Pipe",
   "block.bpm.ender_pipe_proxy": "Ender Proxy",
-
+  "item.bpm.ender_book": "Ender Book",
   "tab.bpm.title": "BPM"
 }

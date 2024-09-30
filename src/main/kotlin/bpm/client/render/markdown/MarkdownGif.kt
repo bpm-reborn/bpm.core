@@ -34,7 +34,7 @@ object MarkdownGif {
 
     fun loadGif(url: String): GifData? {
         if (url in gifData) return gifData[url]
-
+        var pixelData: ByteBuffer? = null
         try {
             val connection = URL(url).openConnection()
             connection.connect()
@@ -50,7 +50,7 @@ object MarkdownGif {
             val channels = BufferUtils.createIntBuffer(1)
             val delaysBuffer: PointerBuffer = MemoryUtil.memAllocPointer(1)
 
-            val pixelData = STBImage.stbi_load_gif_from_memory(buffer, delaysBuffer, width, height, frames, channels, 4)
+            pixelData = STBImage.stbi_load_gif_from_memory(buffer, delaysBuffer, width, height, frames, channels, 4)
             if (pixelData != null) {
                 val frameCount = frames.get(0)
                 val gifFrames = mutableListOf<GifFrame>()
@@ -67,43 +67,44 @@ object MarkdownGif {
                     pixelData.position(frameSize * i)
                     frameBuffer.put(pixelData)
                     frameBuffer.flip()
-
-                    val textureId = createTexture(frameBuffer, width.get(0), height.get(0))
+                    val imageData = MarkdownImages.ImageData(width.get(0), height.get(0), 4, frameBuffer)
+                    val textureId = MarkdownImages.loadOpenGLTexture(imageData)
                     val duration = delays[i] // Use the actual delay for each frame
                     gifFrames.add(GifFrame(textureId, duration))
                 }
 
                 gifData[url] = GifData(gifFrames, width.get(0), height.get(0))
-                STBImage.stbi_image_free(pixelData)
             }
         } catch (e: Exception) {
             println("Failed to load GIF: $url")
             return null
+        } finally {
+            MemoryUtil.memFree(pixelData)
         }
 
         return gifData[url]
     }
 
-    private fun createTexture(buffer: ByteBuffer, width: Int, height: Int): Int {
-        val textureId = GL11.glGenTextures()
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId)
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR)
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR)
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE)
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE)
-        GL11.glTexImage2D(
-            GL11.GL_TEXTURE_2D,
-            0,
-            GL11.GL_RGBA,
-            width,
-            height,
-            0,
-            GL11.GL_RGBA,
-            GL11.GL_UNSIGNED_BYTE,
-            buffer
-        )
-        return textureId
-    }
+//    private fun createTexture(buffer: ByteBuffer, width: Int, height: Int): Int {
+//        val textureId = GL11.glGenTextures()
+//        GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId)
+//        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR)
+//        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR)
+//        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL12.GL_CLAMP_TO_EDGE)
+//        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL12.GL_CLAMP_TO_EDGE)
+//        GL11.glTexImage2D(
+//            GL11.GL_TEXTURE_2D,
+//            0,
+//            GL11.GL_RGBA,
+//            width,
+//            height,
+//            0,
+//            GL11.GL_RGBA,
+//            GL11.GL_UNSIGNED_BYTE,
+//            buffer
+//        )
+//        return textureId
+//    }
 
     fun renderGif(url: String, drawList: ImDrawList, startX: Float, startY: Float, scale: Float) {
         val gif = gifData[url] ?: return

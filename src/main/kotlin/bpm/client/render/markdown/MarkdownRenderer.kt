@@ -34,6 +34,8 @@ class MarkdownRenderer {
     private var headingAnchors = mutableMapOf<String, Float>()
     private var scrolledAnchor: String? = null
     private var reset = false
+    var isHovered = false
+        private set
 
     fun reset() {
 //        indentLevel = 1
@@ -144,7 +146,7 @@ class MarkdownRenderer {
         }
         MarkdownFont.push()
         font.isMedium = true
-        font.fontSize = 18
+        font.fontSize = (18 * scale).toInt()
         cursorX += 5f * scale
         renderChildren(element)
         MarkdownFont.pop()
@@ -362,22 +364,22 @@ class MarkdownRenderer {
 
         val textWidth = endX - startX
         val textHeight = font.fontSize * scale
-
-        drawList.addLine(
-            cursorX - textWidth,
-            cursorY + textHeight,
-            cursorX,
-            cursorY + textHeight,
-            ImColor.rgba(linkColor.x, linkColor.y, linkColor.z, linkColor.w),
-            1f * scale
-        )
-
-        if (ImGui.isMouseHoveringRect(cursorX - textSize.x, cursorY, cursorX, cursorY + textSize.y)) {
+        // If hovered, render the underline
+        if (ImGui.isMouseHoveringRect(startX, cursorY, endX, cursorY + textHeight)) {
+            drawList.addLine(
+                startX,
+                cursorY + textHeight,
+                endX,
+                cursorY + textHeight,
+                ImColor.rgba(linkColor.x, linkColor.y, linkColor.z, linkColor.w),
+                1f * scale
+            )
             ImGui.setTooltip(href)
             ImGui.setMouseCursor(ImGuiMouseCursor.Hand)
             if (ImGui.isMouseClicked(0)) {
                 onLinkClickedCallback(href)
             }
+
         }
     }
 
@@ -483,13 +485,14 @@ class MarkdownRenderer {
         }
         indentLevel++
         cursorX += listIndentation
-        cursorY -= 15f
+        cursorY -= 40 * scale
         element.children().forEach { child ->
             if (child.tagName() == "li") {
                 renderListItem(child)
+                cursorY -= 12.5f * scale
             }
         }
-        cursorY += 10f
+        cursorY += 20 * scale
         indentLevel--
         cursorX -= listIndentation
         // Add extra space after lists
@@ -597,14 +600,13 @@ class MarkdownRenderer {
         // Calculate the exact height of the code block
         val lineCount = state.lines.size
         val lineHeight = font.fontSize * 1.2f
-        val topBarHeight = font.fontSize * 1.5f * scale
         val codeBlockPadding = padding * 2 // Add some padding at the top and bottom of the code block
         state.targetHeight = lineCount * lineHeight + codeBlockPadding
 
         val highlightedWidth = ImGui.getWindowContentRegionMaxX() - padding * 2
         val highlightedStartX = ImGui.getCursorScreenPosX() + padding
         val highlightedEndX = highlightedStartX + highlightedWidth
-        var highlightedEndY = (cursorY + state.currentHeight)
+        val highlightedEndY = (cursorY + state.currentHeight)
         val highlightedColor = ImVec4(0.1f, 0.1f, 0.1f, 1f)
 
         // Check if the code block is hovered
@@ -740,19 +742,13 @@ class MarkdownRenderer {
         // Smoothly animate the code block height
         state.currentHeight = lerp(state.currentHeight, state.targetHeight, ImGui.getIO().deltaTime * animationSpeed)
 
-        cursorX += padding * 2
+        cursorX += (padding * 3) * scale
         cursorY += padding
 
         // Highlight and render the code
         highlightCode(drawList, state.codeText, state.language)
-        cursorX -= padding * 2
-
-        // Update cursor position after rendering the code block
-        cursorX = ImGui.getCursorScreenPosX() + padding
         cursorY += state.currentHeight
-
         // Ensure we move to the next line after the code block
-        renderNewLine()
 
         MarkdownFont.pop()
     }
@@ -786,7 +782,7 @@ class MarkdownRenderer {
         val textColor = ImVec4(0.8f, 0.8f, 0.8f, 1f)
 
         MarkdownFont.push()
-
+        font.fontSize = (22 * scale).toInt()
 //        ImGui.pushFont(font.font)
         val textSize = ImGui.calcTextSize(element.text())
         val textWidth = textSize.x * scale
@@ -802,14 +798,14 @@ class MarkdownRenderer {
         val startY = cursorY
 
         // Draw background with drop shadow
-        drawList.addRectFilled(
-            startX - padding * 0.5f + shadowOffset,
-            startY - padding * 0.5f + shadowOffset,
-            startX + textWidth + padding * 0.5f + shadowOffset,
-            startY + textHeight + padding * 0.5f + shadowOffset,
-            ImGui.colorConvertFloat4ToU32(0f, 0f, 0f, 0.3f),
-            cornerRadius * 0.5f
-        )
+//        drawList.addRectFilled(
+//            startX - padding * 0.5f + shadowOffset,
+//            startY - padding * 0.5f + shadowOffset,
+//            startX + textWidth + padding * 0.5f + shadowOffset,
+//            startY + textHeight + padding * 0.5f + shadowOffset,
+//            ImGui.colorConvertFloat4ToU32(0f, 0f, 0f, 0.3f),
+//            cornerRadius * 0.5f
+//        )
         drawList.addRectFilled(
             startX - padding * 0.5f,
             startY - padding * 0.5f,

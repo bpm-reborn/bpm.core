@@ -4,6 +4,7 @@ import bpm.mc.visual.ProxyScreen.width
 import com.mojang.blaze3d.platform.GlConst.GL_CLAMP_TO_EDGE
 import io.netty.buffer.ByteBuf
 import kotlinx.coroutines.*
+import net.minecraft.client.Minecraft
 import org.lwjgl.BufferUtils
 import org.lwjgl.opengl.GL11
 import org.lwjgl.opengl.GL11.*
@@ -15,7 +16,6 @@ import org.lwjgl.system.MemoryStack
 object MarkdownImages {
 
     private val imageData: MutableMap<String, ImageData> = mutableMapOf()
-    private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
     data class ImageData(
         val width: Int,
@@ -53,7 +53,8 @@ object MarkdownImages {
         }
     }
 
-    private fun loadOpenGLTexture(imageData: ImageData): Int {
+     fun loadOpenGLTexture(imageData: ImageData): Int {
+
         val texture = GL11.glGenTextures()
         glBindTexture(GL_TEXTURE_2D, texture)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
@@ -102,7 +103,6 @@ object MarkdownImages {
     }
 
     fun cleanup() {
-        coroutineScope.cancel()
         imageData.values.forEach { STBImage.stbi_image_free(it.buffer) }
         imageData.clear()
         MarkdownGif.cleanup()

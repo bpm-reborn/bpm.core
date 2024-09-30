@@ -23,7 +23,7 @@ class Schemas(private val path: Path, private val side: Endpoint.Side) : Listene
     val library: NodeLibrary = NodeLibrary()
     private val logger = KotlinLogging.logger { }
     //TODO: make this a configuration option
-    private val gitSchemaLoader = GitLoader("https://github.com/meng-devs/bpm.nodes.git", "main", path)
+    private val gitSchemaLoader = GitLoader("https://github.com/bpm-reborn/bpm.nodes.git", "main", path)
 
     override fun onInstall() {
         if (side == Endpoint.Side.CLIENT) return
