@@ -26,3 +26,5 @@ logs/*
 *.log
 *.log.*
 imgui.ini
+.vscode/
+runs/*

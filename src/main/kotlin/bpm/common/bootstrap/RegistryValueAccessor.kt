@@ -1,4 +1,4 @@
-package bpm.booostrap
+package bpm.common.bootstrap
 
 import net.neoforged.neoforge.registries.DeferredHolder
 import kotlin.reflect.KProperty

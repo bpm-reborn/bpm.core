@@ -1,4 +1,4 @@
-package bpm.booostrap
+package bpm.common.bootstrap
 
 import bpm.Bpm
 import bpm.Bpm.LOGGER
@@ -175,7 +175,7 @@ class Bootstrap(
         val schemaPath = gameDir.resolve("schemas")
         Client.install(ClientRuntime)
             .install<Schemas>(schemaPath, Endpoint.Side.CLIENT)
-            .install<Docs>(gameDir.resolve("docs"))
+            .install<Docs>()
             .install<CanvasContext>()
             .install<PipeNetwork.ProxyManagerClient>()
             .install<ProxyScreen>()

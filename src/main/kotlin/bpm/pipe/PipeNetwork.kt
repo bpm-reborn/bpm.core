@@ -1,6 +1,7 @@
 package bpm.pipe
 
 
+import bpm.common.bootstrap.BpmIO
 import bpm.common.logging.KotlinLogging
 import bpm.common.network.Client
 import bpm.common.network.Listener
@@ -36,17 +37,8 @@ object PipeNetwork {
 
 
     fun load(level: ServerLevel) {
-        val name = level.toString().removePrefix("ServerLevel[").removeSuffix("]") //To tired, dont' care
-        val path = pipeDir.resolve("$name.dat")
-        if (!path.toFile().exists()) {
-            logger.warn { "Pipe network state file not found at $path" }
-            return
-        }
         ProxyManagerServer.clear()
-        state = Serial.read(path) ?: let {
-            logger.warn { "Failed to load PipeNetManagerState from disk, creating new state" }
-            PipeNetManagerState()
-        }
+        state = BpmIO.loadPipeNetState(level) ?: return
         val worldPipes = state.networks.flatMap { it.value.pipes.values }.filter {
             it.level == level.dimension()
         } //The pipes for this world
@@ -58,11 +50,7 @@ object PipeNetwork {
         }
     }
 
-    fun save(serverLevel: ServerLevel) {
-        val name = serverLevel.toString().removePrefix("ServerLevel[").removeSuffix("]")
-        val path = pipeDir.resolve("$name.dat")
-        Serial.write(path, state)
-    }
+    fun save(serverLevel: ServerLevel) = BpmIO.savePipeNetState(serverLevel, state)
 
     fun hasControllerInNetwork(level: Level, posIn: BlockPos): Boolean {
         val connectedNetworks = state.blockPosToNetwork[posIn]?.let { state.networks[it] } ?: return false

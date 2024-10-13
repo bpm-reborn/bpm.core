@@ -1,7 +1,7 @@
 package bpm.mc.registries
 
 import bpm.Bpm
-import bpm.booostrap.ModRegistry
+import bpm.common.bootstrap.ModRegistry
 import bpm.mc.block.UUIDSerializer
 import net.neoforged.neoforge.attachment.AttachmentType
 import net.neoforged.neoforge.registries.DeferredRegister

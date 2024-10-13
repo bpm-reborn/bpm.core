@@ -1,12 +1,11 @@
 package bpm.server.lua
 
+import bpm.common.bootstrap.BpmIO
 import bpm.common.logging.KotlinLogging
-import bpm.common.vm.ComplexLuaTranspiler
+import bpm.common.vm.LuaTranspiler
 import bpm.common.vm.EvalContext
 import bpm.common.workspace.Workspace
 import party.iroiro.luajava.Lua
-import party.iroiro.luajava.value.LuaFunction
-import party.iroiro.luajava.value.LuaValue
 import party.iroiro.luajava.value.RefLuaValue
 import java.util.concurrent.ConcurrentHashMap
 
@@ -24,10 +23,9 @@ class WorkspaceLuaContext(val workspace: Workspace, private val luaThread: Lua) 
 
     fun compile() {
         cleanup()
-
-        workspace.save()
+        BpmIO.saveWorkspace(workspace)
         workspace.needsRecompile = false
-        val compiledSource = ComplexLuaTranspiler.generateLuaScript(workspace)
+        val compiledSource = LuaTranspiler.generateLuaScript(workspace)
 
         try {
             val result = luaThread.eval(compiledSource)[0]

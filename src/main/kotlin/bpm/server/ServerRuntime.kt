@@ -1,5 +1,6 @@
 package bpm.server
 
+import bpm.common.bootstrap.BpmIO
 import bpm.common.logging.KotlinLogging
 import bpm.common.network.Endpoint
 import bpm.common.network.Listener
@@ -67,9 +68,9 @@ object ServerRuntime : Listener {
      * Clears the existing workspaces list and refreshes it by loading all available workspaces.
      */
     override fun onInstall() {
-        val workspaceNames = Workspace.list()
+        val workspaceNames = BpmIO.listWorkspaces()
         workspaceNames.forEach { uuid ->
-            val workspace = Workspace.load(uuid)
+            val workspace = BpmIO.loadWorkspace(uuid)
             if (workspace == null) {
                 logger.warn { "Failed to load workspace: $uuid" }
                 return@forEach
@@ -94,7 +95,7 @@ object ServerRuntime : Listener {
     /**
      * Returns true if the function was executed successfully, false otherwise.
      */
-    fun execute(workspace: Workspace, functionName: String) =synchronized(EvalContext) {
+    fun execute(workspace: Workspace, functionName: String) = synchronized(EvalContext) {
         if (workspace.needsRecompile) {
             logger.warn { "Workspace needs recompilation" }
             return
@@ -300,7 +301,7 @@ object ServerRuntime : Listener {
 
     private fun compileWorkspace(workspace: Workspace) {
         try {
-            workspace.save()
+            BpmIO.saveWorkspace(workspace)
             workspace.needsRecompile = false
             val result = EvalContext.eval(workspace)
             if (result.isRealFailure) {
@@ -477,17 +478,6 @@ object ServerRuntime : Listener {
         clients.add(sender)
         //send the packet to all clients that have the same workspace opened, except the sender.
         server.sendToAll(nodeMovePacket, *clients.toTypedArray())
-    }
-
-    //Removes any function callbacks that were registered for the workspace
-    fun closeWorkspace(workspaceUid: UUID) {
-        val workspace = workspaces[workspaceUid] ?: return
-        workspace.save()
-//        workspaces.remove(workspaceUid)
-//        openedWorkspaces.filter { (_, uid) -> uid == workspaceUid }.keys.forEach { openedWorkspaces.remove(it) }
-//        users.filter { (_, user) -> user.workspaceUid == workspaceUid }.keys.forEach { users.remove(it) }
-
-        workspace.needsRecompile = true
     }
 
     fun recompileWorkspace(workspaceUi: UUID) {

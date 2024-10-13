@@ -1,6 +1,6 @@
 package bpm
 
-import bpm.booostrap.Bootstrap
+import bpm.common.bootstrap.Bootstrap
 import net.neoforged.fml.common.Mod
 import bpm.common.utils.ClassResourceScanner
 import org.apache.logging.log4j.LogManager

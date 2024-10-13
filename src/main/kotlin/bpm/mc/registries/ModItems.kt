@@ -1,12 +1,11 @@
 package bpm.mc.registries
 
 import bpm.Bpm
-import bpm.booostrap.ModRegistry
+import bpm.common.bootstrap.ModRegistry
 import bpm.mc.item.EnderBookItem
 import bpm.mc.item.EnderControllerItem
 import net.minecraft.world.item.BlockItem
 import net.minecraft.world.item.Item
-import net.neoforged.bus.api.IEventBus
 import net.neoforged.neoforge.registries.DeferredRegister
 
 object ModItems : ModRegistry<Item> {

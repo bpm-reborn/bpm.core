@@ -1,7 +1,7 @@
 package bpm.mc.registries
 
 import bpm.Bpm
-import bpm.booostrap.ModRegistry
+import bpm.common.bootstrap.ModRegistry
 import net.minecraft.core.registries.Registries
 import net.minecraft.network.chat.Component
 import net.minecraft.world.item.CreativeModeTab

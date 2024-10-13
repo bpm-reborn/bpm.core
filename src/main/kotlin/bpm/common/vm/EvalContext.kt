@@ -38,7 +38,7 @@ object EvalContext {
         functionGroups.clear()
 
         return try {
-            val compiledSource = ComplexLuaTranspiler.generateLuaScript(workspace)
+            val compiledSource = LuaTranspiler.generateLuaScript(workspace)
             logger.debug { "Compiled Lua script: $compiledSource" }
 
             val result = lua.eval(compiledSource)[0]

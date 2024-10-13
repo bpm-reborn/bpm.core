@@ -1,10 +1,11 @@
 package bpm.client.docs
 
+import bpm.common.bootstrap.BpmIO
 import bpm.common.logging.KotlinLogging
 import bpm.common.network.Listener
 import bpm.common.packets.Packet
-import bpm.common.upstream.GitLoader
 import org.commonmark.node.Node
+import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
 import java.nio.file.Files
 import java.nio.file.Path
@@ -13,19 +14,18 @@ import kotlin.io.path.isDirectory
 import kotlin.io.path.name
 import kotlin.io.path.readText
 
-class Docs(private val path: Path) : Listener {
+class Docs : Listener {
 
     private val logger = KotlinLogging.logger { }
-    private val gitDocLoader = GitLoader("https://github.com/bpm-reborn/bpm.docs.git", "main", path)
     private val docTree: MutableMap<String, Any> = mutableMapOf()
     private val documentCache: MutableMap<String, Node> = mutableMapOf()
-    private val parser = org.commonmark.parser.Parser.builder().build()
+    private val parser = Parser.builder().build()
     private var renderer: HtmlRenderer = HtmlRenderer.builder().build()
+
     override fun onInstall() {
-        // Clone or pull the repository and load the documentation
-        val docsPath = gitDocLoader.cloneOrPull()
-        loadDocTree(docsPath)
-        logger.info { "Loaded documentation from Git repository" }
+        // Load the documentation
+        loadDocTree(BpmIO.docsPath)
+        logger.info { "Loaded documentation" }
     }
 
     private fun loadDocTree(rootPath: Path) {
@@ -41,7 +41,6 @@ class Docs(private val path: Path) : Listener {
                     path.isDirectory() -> {
                         result[path.name] = loadDirectory(path)
                     }
-
                     path.toString().endsWith(".md") -> {
                         val document = parser.parse(path.readText())
                         documentCache[path.name] = document
@@ -65,9 +64,9 @@ class Docs(private val path: Path) : Listener {
     fun getDocTree(): Map<String, Any> = docTree
 
     fun reloadDocs() {
-        val docsPath = gitDocLoader.cloneOrPull()
-        loadDocTree(docsPath)
-        logger.info { "Reloaded documentation from Git repository" }
+        BpmIO.loadDocs() // This will update the repository if necessary
+        loadDocTree(BpmIO.docsPath)
+        logger.info { "Reloaded documentation" }
     }
 
     // This is kept in case we need to handle any client-side packets in the future

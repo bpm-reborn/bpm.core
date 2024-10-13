@@ -23,6 +23,18 @@ inline fun <reified T : Property<*>> Property<*>.cast(): T = this as T
 
 inline infix fun <reified T : Property<*>> Property<*>.castOr(crossinline block: () -> T): T = this as? T ?: block()
 
+/**
+ * Retrieves the value of the property.
+ *
+ * @return The value of the property.
+ *
+ * @param R The type of the value to retrieve.
+ */
+inline fun <reified R : Any?> Property<*>.value(): R? {
+    val value = if (this is Property.Null) null else this.get() as R
+    if (value == "null") return null
+    return value
+}
 
 /**
  * Retrieves the property with the specified name.
@@ -280,6 +292,7 @@ interface Property<T : Any> {
      * @param defaultValue The default value of the color property. Defaults to Vector4i(40, 20, 69, 255).
      */
     class Vec2f(defaultValue: Vector2f) : PropertyLiteral<Vector2f>(defaultValue) {
+
         constructor(x: kotlin.Float, y: kotlin.Float) : this(Vector2f(x, y))
         /**
          * This variable represents the number of bytes.
@@ -295,6 +308,7 @@ interface Property<T : Any> {
      * @param defaultValue The default value of the vector.
      */
     class Vec3f(defaultValue: Vector3f) : PropertyLiteral<Vector3f>(defaultValue) {
+
         constructor(x: kotlin.Float, y: kotlin.Float, z: kotlin.Float) : this(Vector3f(x, y, z))
         /**
          * This variable represents the number of bytes.
@@ -331,6 +345,7 @@ interface Property<T : Any> {
      * @constructor Creates a Vec2i object with the specified default value.
      */
     class Vec2i(defaultValue: Vector2i) : PropertyLiteral<Vector2i>(defaultValue) {
+
         constructor(x: kotlin.Int, y: kotlin.Int) : this(Vector2i(x, y))
         /**
          * This variable represents the number of bytes.
@@ -350,6 +365,7 @@ interface Property<T : Any> {
      * @param defaultValue The default value for the vector.
      */
     class Vec3i(defaultValue: Vector3i) : PropertyLiteral<Vector3i>(defaultValue) {
+
         constructor(x: kotlin.Int, y: kotlin.Int, z: kotlin.Int) : this(Vector3i(x, y, z))
         /**
          * This variable represents the number of bytes.
@@ -365,6 +381,7 @@ interface Property<T : Any> {
      * @param defaultValue The default value of the vector.
      */
     class Vec4i(defaultValue: Vector4i) : PropertyLiteral<Vector4i>(defaultValue) {
+
         constructor(x: kotlin.Int, y: kotlin.Int, z: kotlin.Int, w: kotlin.Int) : this(Vector4i(x, y, z, w))
         /**
          * This variable represents the number of bytes.
@@ -619,7 +636,7 @@ fun Property.Vec4i.toVecColor(): Property.Vec4f = Property.Vec4f(
 )
 
 //RRGGBBAA
-fun Property.Vec4f.toHexString():String{
+fun Property.Vec4f.toHexString(): String {
     val r = (get().x * 255).toInt().toString(16).padStart(2, '0')
     val g = (get().y * 255).toInt().toString(16).padStart(2, '0')
     val b = (get().z * 255).toInt().toString(16).padStart(2, '0')
@@ -628,20 +645,22 @@ fun Property.Vec4f.toHexString():String{
 }
 
 
-fun Property.Vec3f.toHexString():String{
+fun Property.Vec3f.toHexString(): String {
     val r = (get().x * 255).toInt().toString(16).padStart(2, '0')
     val g = (get().y * 255).toInt().toString(16).padStart(2, '0')
     val b = (get().z * 255).toInt().toString(16).padStart(2, '0')
     return "#$r$g$b"
 }
-fun Property.Vec4i.toHexString():String{
+
+fun Property.Vec4i.toHexString(): String {
     val r = get().x.toString(16).padStart(2, '0')
     val g = get().y.toString(16).padStart(2, '0')
     val b = get().z.toString(16).padStart(2, '0')
     val a = get().w.toString(16).padStart(2, '0')
     return "#$r$g$b$a"
 }
-fun Property.Vec3i.toHexString():String{
+
+fun Property.Vec3i.toHexString(): String {
     val r = get().x.toString(16).padStart(2, '0')
     val g = get().y.toString(16).padStart(2, '0')
     val b = get().z.toString(16).padStart(2, '0')

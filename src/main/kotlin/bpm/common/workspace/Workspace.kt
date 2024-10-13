@@ -1,5 +1,6 @@
 package bpm.common.workspace
 
+import bpm.common.bootstrap.BpmIO
 import bpm.common.logging.KotlinLogging
 import bpm.common.memory.Buffer
 import bpm.common.property.Property
@@ -51,13 +52,6 @@ data class Workspace(
             val centerY = settings.bounds.y + (settings.bounds.w - settings.bounds.y) / 2
             return Vector2f(centerX, centerY)
         }
-    /**
-     * Converts the absolute position to a position relative to the current settings.
-     *
-     * @param absPos the absolute position to convert
-     * @return the converted relative position
-     */
-    fun convertPosition(absPos: Vector2f): Vector2f = convertPosition(absPos.x, absPos.y)
 
     /**
      * Converts the given absolute position to a scaled and adjusted position
@@ -77,13 +71,6 @@ data class Workspace(
         return Vector2f(x, y)
     }
 
-    /**
-     * Converts the absolute size represented by a Vector2f into another Vector2f.
-     *
-     * @param absSize The absolute size represented by a Vector2f.
-     * @return The converted size represented by another Vector2f.
-     */
-    fun convertSize(absSize: Vector2f): Vector2f = convertSize(absSize.x, absSize.y)
 
     /**
      * Converts the absolute width and height to scaled width and height based on the current zoom level.
@@ -203,24 +190,6 @@ data class Workspace(
     }
 
     /**
-     * Saves the data.
-     *
-     * This method is responsible for saving the data. It should be called to persist
-     * any changes made to the data.
-     *
-     * @throws Exception if an error occurs while saving the data.
-     */
-    fun save() {
-        val path = childPath("workspaces", "$uid.ws", createDirs = false)
-        Serial.write(path, this)
-        logger.info { "Wrote workspace to file $path" }
-    }
-
-    fun variableIteratior(iterable: (String, Property<*>) -> Unit) {
-        graph.variables
-    }
-
-    /**
      * Serializer is a class that provides methods for serializing and deserializing instances
      * of the Workspace class.
      */
@@ -271,66 +240,6 @@ data class Workspace(
 
         private val logger = KotlinLogging.logger { }
 
-        init {
-            val rootPath = rootPath()
-            if (!rootPath.toFile().exists()) {
-                rootPath.toFile().mkdirs()
-            }
-
-        }
-
-        /**
-         * Loads a workspace with the given name from the file system.
-         *
-         * @param workspaceName the name of the workspace to load
-         * @return the loaded workspace or null if the workspace doesn't exist or is not a file
-         */
-        fun load(workspaceName: String): Workspace? {
-            val workspaceFile = childPath("workspaces", "$workspaceName.ws", createDirs = false).toFile()
-            if (!workspaceFile.exists() || !workspaceFile.isFile) {
-                logger.warn { "Attempted to load null workspace with name '$workspaceFile'" }
-                return null
-            }
-            return Serial.read<Workspace>(workspaceFile.toPath())
-        }
-
-        /**
-         * Retrieves a list of all available workspaces.
-         *
-         * @return A list of workspace names.
-         */
-        fun list(): List<String> {
-            val folder = childPath("workspaces", createDirs = false).toFile()
-            if (!folder.exists()) {
-                logger.warn { "No workspace folder found!" }
-                return emptyList()
-            }
-            val folders = folder.listFiles()?.map { it.nameWithoutExtension }?.toList()
-            if (folders == null) {
-                logger.warn { "Failed to locate any workspaces in workspace folder!" }
-                return emptyList()
-            }
-            return folders
-        }
-
-
-        fun childPath(vararg children: String, createDirs: Boolean = true): Path {
-            val path = Path.of(rootPath().toString(), *children)
-            if (!path.toFile().exists() && createDirs) {
-                path.toFile().mkdirs()
-            }
-            return path
-        }
-
-        fun rootPath(): Path {
-            val workspaces = FMLPaths.GAMEDIR.get().resolve("workspaces")
-            if (!workspaces.toFile().exists()) {
-                workspaces.toFile().mkdirs()
-            }
-
-            return workspaces
-        }
-
         /**
          * Creates a new workspace with the given name and description.
          *
@@ -343,8 +252,8 @@ data class Workspace(
             val nodeLibrary = NodeLibrary()
             val users = mutableMapOf<UUID, User>()
             val workspace = Workspace(graph, nodeLibrary, name, users, description, uuid)
-            workspace.save()
             logger.info { "Created new workspace: $name" }
+            BpmIO.saveWorkspace(workspace)
             return workspace
         }
     }

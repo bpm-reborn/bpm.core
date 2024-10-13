@@ -1,14 +1,13 @@
 package bpm.mc.registries
 
 import bpm.Bpm
-import bpm.booostrap.ModRegistry
+import bpm.common.bootstrap.ModRegistry
 import bpm.mc.block.EnderControllerBlock
 import bpm.mc.block.EnderPipeBlock
 import bpm.mc.block.EnderProxyBlock
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.SoundType
 import net.minecraft.world.level.block.state.BlockBehaviour
-import net.neoforged.bus.api.IEventBus
 import net.neoforged.neoforge.registries.DeferredRegister
 
 // THIS LINE IS REQUIRED FOR USING PROPERTY DELEGATES
