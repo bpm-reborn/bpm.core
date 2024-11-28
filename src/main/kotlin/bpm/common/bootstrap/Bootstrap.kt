@@ -3,6 +3,7 @@ package bpm.common.bootstrap
 import bpm.Bpm
 import bpm.Bpm.LOGGER
 import bpm.client.docs.Docs
+import bpm.client.render.world.QuantumRenderer
 import bpm.mc.visual.ClientGui
 import bpm.mc.visual.Overlay3D
 import bpm.network.MinecraftNetworkAdapter
@@ -25,6 +26,9 @@ import bpm.common.packets.Packet
 import bpm.common.upstream.Schemas
 import bpm.common.serial.Serialize
 import bpm.common.utils.*
+import bpm.mc.item.QuantumEntanglementItem
+import bpm.mc.registries.ModItemRenderers
+import bpm.mc.registries.ModItems
 import bpm.mc.visual.CustomBackgroundRenderer
 import bpm.mc.visual.ProxyScreen
 import bpm.pipe.PipeNetwork
@@ -32,10 +36,13 @@ import bpm.server.lua.LuaBuiltin
 import bpm.server.ServerRuntime
 import bpm.server.lua.LuaEventExecutor
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
+import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer
 import net.minecraft.client.renderer.ShaderInstance
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.server.level.ServerLevel
 import net.neoforged.neoforge.client.event.*
+import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions
+import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent
 import net.neoforged.neoforge.event.tick.ServerTickEvent
 import org.apache.logging.log4j.Level
 import thedarkcolour.kotlinforforge.neoforge.forge.FORGE_BUS
@@ -92,6 +99,7 @@ class Bootstrap(
             FORGE_BUS.addListener(::renderOverlay3D)
 
             modBus.addListener(::registerShaders)
+            modBus.addListener(::registerClientExtensions)
             Minecraft.getInstance()
         }, serverTarget = {
 
@@ -202,6 +210,21 @@ class Bootstrap(
         } catch (e: IOException) {
             Bpm.LOGGER.error("Failed to register shaders", e)
         }
+
+
+        event.registerShader(
+            ShaderInstance(
+                event.resourceProvider,
+                ResourceLocation.tryParse("${Bpm.ID}:quantum_sphere"),
+                DefaultVertexFormat.POSITION_TEX
+            )
+        ) { shader ->
+            QuantumRenderer.shader = shader
+        }
+    }
+    @OnlyIn(Dist.CLIENT)
+    private fun registerClientExtensions(event: RegisterClientExtensionsEvent) {
+        event.registerItem(ModItemRenderers.QuantumSphereRenderer, ModItems.ENDER_LINK)
     }
 
     private fun onServerTick(event: ServerTickEvent.Pre) {

@@ -4,6 +4,7 @@ import bpm.Bpm
 import bpm.common.bootstrap.ModRegistry
 import bpm.mc.item.EnderBookItem
 import bpm.mc.item.EnderControllerItem
+import bpm.mc.item.QuantumEntanglementItem
 import net.minecraft.world.item.BlockItem
 import net.minecraft.world.item.Item
 import net.neoforged.neoforge.registries.DeferredRegister
@@ -21,6 +22,12 @@ object ModItems : ModRegistry<Item> {
     val ENDER_PROXY by register {
         registry.registerItem("ender_pipe_proxy") {
             BlockItem(ModBlocks.ENDER_PROXY, Item.Properties())
+        }
+    }
+
+    val ENDER_LINK by register {
+        registry.registerItem("ender_link") {
+            QuantumEntanglementItem()
         }
     }
 
