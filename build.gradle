@@ -126,9 +126,9 @@ dependencies {
     implementation('thedarkcolour:kotlinforforge-neoforge:5.5.0:slim')
 
     libraries('io.github.spair:imgui-java-binding:1.86.12')
-    libraries('io.github.spair:imgui-java-app:1.86.12')
+//    libraries('io.github.spair:imgui-java-app:1.86.12')
     jarJar('io.github.spair:imgui-java-binding:1.86.12')
-    jarJar('io.github.spair:imgui-java-app:1.86.12')
+//    jarJar('io.github.spair:imgui-java-app:1.86.12')
     libraries('io.github.spair:imgui-java-lwjgl3:1.86.12') {
         transitive = false
     }
@@ -158,8 +158,6 @@ dependencies {
     jarJar('party.iroiro.luajava:luajava:4.0.2')
     libraries('org.eclipse.jgit:org.eclipse.jgit:7.0.0.202409031743-r')
     jarJar('org.eclipse.jgit:org.eclipse.jgit:7.0.0.202409031743-r')
-
-
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

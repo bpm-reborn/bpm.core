@@ -162,15 +162,20 @@ class NodeLibrary(private val directory: Path? = null) : Iterable<NodeTypeMeta> 
         val transformedMetas = arrayListOf<NodeTypeMeta>()
         for (meta in partials) {
             //get the name of the node type
-            val name: String = meta.yaml.getScalar("name")?.content ?: meta.name
+            try {
 
-            //get the group of the node type
-            val group: String = meta.yaml.getScalar("group")?.content ?: meta.group
+                val name: String = meta.yaml.getScalar("name")?.content ?: meta.name
 
-            //The extension type of the node type
-            val extends: String = meta.yaml.getScalar("extends")?.content ?: meta.extends
+                //get the group of the node type
+                val group: String = meta.yaml.getScalar("group")?.content ?: meta.group
 
-            transformedMetas.add(NodeTypeMeta(meta.path, name, group, extends))
+                //The extension type of the node type
+                val extends: String = meta.yaml.getScalar("extends")?.content ?: meta.extends
+
+                transformedMetas.add(NodeTypeMeta(meta.path, name, group, extends))
+            } catch (e: Exception) {
+                log.error { "Error parsing node type: ${meta.name}" }
+            }
         }
         log.info { "Partial parsing completed. Transformed ${transformedMetas.size} node types." }
         return transformedMetas
