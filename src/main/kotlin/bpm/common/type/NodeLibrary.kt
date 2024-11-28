@@ -281,10 +281,16 @@ class NodeLibrary(private val directory: Path? = null) : Iterable<NodeTypeMeta> 
     private fun parsePropertyBagForNode(yaml: YamlMap): PropertyMap {
         val properties = Property.Object()
         for ((key, value) in yaml.entries) {
-            when (key.content) {
-                "edges" -> properties[key.content] = parseEdges(value as YamlMap)
-                else -> properties[key.content] = parseProperty(value)
+            try {
+
+                when (key.content) {
+                    "edges" -> properties[key.content] = parseEdges(value as YamlMap)
+                    else -> properties[key.content] = parseProperty(value)
+                }
+            } catch (e: Exception) {
+                log.error { "Failed to parse property $key: $e" }
             }
+
         }
         return properties
     }

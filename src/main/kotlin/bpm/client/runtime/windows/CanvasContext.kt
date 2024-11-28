@@ -120,19 +120,20 @@ class CanvasContext : Listener {
         hoveredPin = null
 
         for (node in workspace.graph.nodes) {
+            val nodeBounds = getNodeBounds(node)
             val headerBounds = getHeaderBounds(node)
             if (headerBounds.contains(mousePos.x, mousePos.y)) {
                 hoveredTitleBar = node.uid
                 return
             }
 
-            for (edge in workspace.graph.getEdges(node)) {
-                val edgeBounds = getEdgeBounds(node, edge)
-                if (isPointOverEdge(mousePos, edgeBounds)) {
-                    hoveredPin = Pair(node.uid, edge)
-                    return
-                }
-            }
+//            for (edge in workspace.graph.getEdges(node)) {
+//                val edgeBounds = getEdgePosition(node, edge, nodeBounds)
+//                if (isPointOverEdge(mousePos, edgeBounds)) {
+//                    hoveredPin = Pair(node.uid, edge)
+//                    return
+//                }
+//            }
         }
     }
 
@@ -322,7 +323,7 @@ class CanvasContext : Listener {
     }
 
     fun handleSelection(isPropertyWindowHovered: Boolean) {
-        if (isLinking || isPropertyWindowHovered ) return
+        if (isLinking || isPropertyWindowHovered) return
 
         val mousePos = ImGui.getMousePos()
         val isLeftClickPressed = ImGui.isMouseClicked(ImGuiMouseButton.Left)
@@ -474,12 +475,13 @@ class CanvasContext : Listener {
         val targetEdge = workspace.graph.getEdge(link.to) ?: return false
         val targetNode = workspace.getNode(targetEdge.owner) ?: return false
 
-        val sourceBounds = getEdgeBounds(sourceNode, sourceEdge)
-        val targetBounds = getEdgeBounds(targetNode, targetEdge)
+        val sourceBounds = getNodeBounds(sourceNode)
+        val targetBounds = getNodeBounds(targetNode)
 
-        val startPos = Vector2f(sourceBounds.x, sourceBounds.y)
-        val endPos = Vector2f(targetBounds.x, targetBounds.y)
-
+//        val startPos = Vector2f(sourceBounds.x, sourceBounds.y)
+//        val endPos = Vector2f(targetBounds.x, targetBounds.y)
+        val startPos = getEdgePosition(sourceNode, sourceEdge, sourceBounds)
+        val endPos = getEdgePosition(targetNode, targetEdge, targetBounds)
         val midX = (startPos.x + endPos.x) / 2
         val controlPoint1 = Vector2f(midX, startPos.y)
         val controlPoint2 = Vector2f(midX, endPos.y)
@@ -625,7 +627,7 @@ class CanvasContext : Listener {
 
     //COllect the selected nodes from the selection start and end if selectionNodesIds is empty
     private fun collectSelectedNodes() {
-        if (selectedNodeIds.isEmpty()) {
+        if (selectedNodeIds.isEmpty() && selectionStart != null && selectionEnd != null) {
             val topLeft = Vector2f(
                 minOf(selectionStart!!.x, selectionEnd!!.x),
                 minOf(selectionStart!!.y, selectionEnd!!.y)
@@ -961,7 +963,7 @@ class CanvasContext : Listener {
 
     fun getEdgePosition(node: Node, edge: Edge, nodeBounds: Vector4f): Vector2f {
         val edgeSpacing = 20f * zoom
-        val edgeStartY = nodeBounds.y + 35f * zoom  // Start below the header
+        val edgeStartY = nodeBounds.y + 30f * zoom  // Start below the header
 
         val edges = workspace.graph.getEdges(node)
         val edgesOfSameDirection = edges.filter { it.direction == edge.direction }

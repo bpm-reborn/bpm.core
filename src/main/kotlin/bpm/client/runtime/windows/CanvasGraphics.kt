@@ -101,8 +101,8 @@ class CanvasGraphics(
 
             val sourceColor = ImColor.rgba(sourceNode.color.x, sourceNode.color.y, sourceNode.color.z, 255)
             val targetColor = ImColor.rgba(targetNode.color.x, targetNode.color.y, targetNode.color.z, 255)
-            sourcePos.y -= 5f * context.zoom
-            targetPos.y -= 5f * context.zoom
+//            sourcePos.y -= 5f * context.zoom
+//            targetPos.y -= 5f * context.zoom
             if (sourceEdge.type == "exec" || targetEdge.type == "exec") {
                 drawExecLink(drawList, sourcePos, targetPos, sourceColor, targetColor, context.zoom, window.currentTime)
             } else {
@@ -414,20 +414,23 @@ class CanvasGraphics(
         val mousePos = ImGui.getMousePos()
 
         val edgeBounds = getBoundsForEdge(edge, pos)
-//        drawList.addRect(
-//            edgeBounds.x,
-//            edgeBounds.y,
-//            edgeBounds.z,
-//            edgeBounds.w,
-//            ImColor.rgba(120, 0, 0, 255),
-//            0f,
-//            0,
-//            1f
-//        )
-        if (isPointOverRect(Vector2f(mousePos.x, mousePos.y), edgeBounds)) {
+        val edgePos = context.getEdgePosition(node, edge, nodeBounds)
+
+        //Compute the text size for the edge
+        val textSize = ImGui.calcTextSize(edge.name)
+        val textBounds = Vector4f(
+            edgePos.x - textSize.x / 2,
+            edgePos.y - textSize.y / 2,
+            edgePos.x + textSize.x / 2,
+            edgePos.y + textSize.y / 2
+        )
+
+        // Check if the mouse is over the edge
+
+        if (isPointOverRect(Vector2f(mousePos.x, mousePos.y), textBounds)) {
             renderTooltip(edge.description)
-        /*}
-        if (context.isPointOverEdge(Vector2f(mousePos.x, mousePos.y), pos)) {*/
+            /*}
+            if (context.isPointOverEdge(Vector2f(mousePos.x, mousePos.y), pos)) {*/
 
 
             drawList.addCircle(
