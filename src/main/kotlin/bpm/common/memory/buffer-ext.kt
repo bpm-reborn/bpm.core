@@ -1,5 +1,6 @@
 package bpm.common.memory
 
+import bpm.common.serial.Serial
 import net.minecraft.core.BlockPos
 import net.minecraft.resources.ResourceKey
 import net.minecraft.resources.ResourceLocation
@@ -7,16 +8,18 @@ import org.joml.*
 import java.util.*
 import kotlin.reflect.KClass
 
-fun <T : Any> Buffer.writeList(list: List<T>) {
+inline fun <reified T : Any> Buffer.writeList(list: List<T>) {
     writeInt(list.size)
-    list.forEach(::writeAny)
+    list.forEach {
+        Serial.write(this, it)
+    }
 }
 
 inline fun <reified T : Any> Buffer.readList(): List<T> = readList(T::class)
-fun <T : Any> Buffer.readList(clazz: KClass<T>): List<T> {
+inline fun <reified T : Any> Buffer.readList(clazz: KClass<T>): List<T> {
     val list = mutableListOf<T>()
     repeat(readInt()) {
-        list.add(readAny(clazz))
+        list.add(Serial.read(this) ?: error("Failed to read list element"))
     }
     return list
 }
@@ -27,10 +30,10 @@ fun <T : Any> Buffer.writeSet(set: Set<T>) {
 }
 
 inline fun <reified T : Any> Buffer.readSet(): Set<T> = readSet(T::class)
-fun <T : Any> Buffer.readSet(clazz: KClass<T>): Set<T> {
+inline fun <reified T : Any> Buffer.readSet(clazz: KClass<T>): Set<T> {
     val set = mutableSetOf<T>()
     repeat(readInt()) {
-        set.add(readAny(clazz))
+        set.add(Serial.read(this) ?: error("Failed to read set element"))
     }
     return set
 }
@@ -69,7 +72,7 @@ fun <T : Any> Buffer.writeAny(value: T) {
 }
 
 inline fun <reified T : Any> Buffer.readAny(): T = readAny(T::class)
-fun <T : Any> Buffer.readAny(clazz: KClass<T>): T {
+inline fun <reified T : Any> Buffer.readAny(clazz: KClass<T>): T {
     val value = when (clazz) {
         Int::class -> readInt()
         Float::class -> readFloat()

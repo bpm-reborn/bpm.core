@@ -9,7 +9,8 @@
   "attributes": [
     "Position",
     "UV0",
-    "Color"
+    "Color",
+    "Normal"
   ],
   "uniforms": [
     {
@@ -29,12 +30,6 @@
       "type": "float",
       "count": 1,
       "values": [ 0.0 ]
-    },
-    {
-      "name": "QuantumState",
-      "type": "float",
-      "count": 4,
-      "values": [ 0.0, 0.0, 0.0, 0.0 ]
     }
   ]
 }

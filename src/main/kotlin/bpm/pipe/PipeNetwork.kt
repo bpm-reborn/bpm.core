@@ -32,9 +32,6 @@ object PipeNetwork {
 
     private val logger = KotlinLogging.logger {}
     private var state = PipeNetManagerState()
-    // Path to the directory where the pipe network state is saved, initialized in setupPipeDirectory
-    private val pipeDir: Path = setupPipeDirectory()
-
 
     fun load(level: ServerLevel) {
         ProxyManagerServer.clear()

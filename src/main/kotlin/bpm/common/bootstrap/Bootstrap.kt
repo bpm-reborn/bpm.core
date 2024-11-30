@@ -3,7 +3,10 @@ package bpm.common.bootstrap
 import bpm.Bpm
 import bpm.Bpm.LOGGER
 import bpm.client.docs.Docs
+import bpm.client.render.world.EnderLinkProjectileRenderer
 import bpm.client.render.world.QuantumRenderer
+import bpm.client.render.world.SharedQuantumRenderer
+import bpm.client.render.world.SharedQuantumRenderer.shader
 import bpm.mc.visual.ClientGui
 import bpm.mc.visual.Overlay3D
 import bpm.network.MinecraftNetworkAdapter
@@ -26,7 +29,9 @@ import bpm.common.packets.Packet
 import bpm.common.upstream.Schemas
 import bpm.common.serial.Serialize
 import bpm.common.utils.*
-import bpm.mc.item.QuantumEntanglementItem
+import bpm.mc.links.EnderNet
+import bpm.mc.model.EnderLinkModel
+import bpm.mc.registries.ModEntities
 import bpm.mc.registries.ModItemRenderers
 import bpm.mc.registries.ModItems
 import bpm.mc.visual.CustomBackgroundRenderer
@@ -36,12 +41,13 @@ import bpm.server.lua.LuaBuiltin
 import bpm.server.ServerRuntime
 import bpm.server.lua.LuaEventExecutor
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
-import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer
+import com.mojang.blaze3d.vertex.VertexFormat
+import net.minecraft.client.renderer.RenderStateShard
+import net.minecraft.client.renderer.RenderType
 import net.minecraft.client.renderer.ShaderInstance
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.server.level.ServerLevel
 import net.neoforged.neoforge.client.event.*
-import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent
 import net.neoforged.neoforge.event.tick.ServerTickEvent
 import org.apache.logging.log4j.Level
@@ -100,6 +106,8 @@ class Bootstrap(
 
             modBus.addListener(::registerShaders)
             modBus.addListener(::registerClientExtensions)
+            modBus.addListener(::onRegisterLayers)
+            modBus.addListener(::onRegisterEntityRenderers)
             Minecraft.getInstance()
         }, serverTarget = {
 
@@ -130,6 +138,18 @@ class Bootstrap(
         }
     }
 
+    private fun onRegisterLayers(event: EntityRenderersEvent.RegisterLayerDefinitions) {
+        event.registerLayerDefinition(EnderLinkModel.LAYER_LOCATION) {
+            EnderLinkModel.createBodyLayer()
+        }
+    }
+
+    private fun onRegisterEntityRenderers(event: EntityRenderersEvent.RegisterRenderers) {
+        event.registerEntityRenderer(ModEntities.ENDER_LINK_PROJECTILE) {
+            EnderLinkProjectileRenderer(it)
+        }
+    }
+
     private fun registerPackets() = packetsList.forEach(Network::register)
 
 
@@ -154,13 +174,14 @@ class Bootstrap(
 
     @OnlyIn(Dist.CLIENT)
     private fun renderOverlay3D(event: RenderLevelStageEvent) =
-        if (event.stage == RenderLevelStageEvent.Stage.AFTER_LEVEL) Overlay3D.render(
+        if (event.stage == RenderLevelStageEvent.Stage.AFTER_SKY) Overlay3D.render(
             event.levelRenderer,
             event.poseStack,
             event.projectionMatrix,
             event.modelViewMatrix,
             event.camera,
-            event.frustum
+            event.frustum,
+            Minecraft.getInstance().renderBuffers().bufferSource()
         )
         else Unit
 
@@ -186,6 +207,7 @@ class Bootstrap(
             .install<Docs>()
             .install<CanvasContext>()
             .install<PipeNetwork.ProxyManagerClient>()
+            .install<EnderNet>()
             .install<ProxyScreen>()
             .install<ClientGui>()
     }
@@ -216,15 +238,37 @@ class Bootstrap(
             ShaderInstance(
                 event.resourceProvider,
                 ResourceLocation.tryParse("${Bpm.ID}:quantum_sphere"),
-                DefaultVertexFormat.POSITION_TEX
+                DefaultVertexFormat.POSITION_TEX_COLOR_NORMAL
             )
         ) { shader ->
-            QuantumRenderer.shader = shader
+            SharedQuantumRenderer.shader = shader
         }
     }
     @OnlyIn(Dist.CLIENT)
     private fun registerClientExtensions(event: RegisterClientExtensionsEvent) {
         event.registerItem(ModItemRenderers.QuantumSphereRenderer, ModItems.ENDER_LINK)
+    }
+
+
+    @OnlyIn(Dist.CLIENT)
+    private fun renderWorldLast(event: RenderLevelStageEvent.RegisterStageEvent) {
+        val renderType = RenderType.create(
+            "quantum_particle",
+            DefaultVertexFormat.POSITION_TEX_COLOR_NORMAL,
+            VertexFormat.Mode.QUADS,
+            256,
+            false,
+            true,
+            RenderType.CompositeState.builder()
+                .setShaderState(RenderStateShard.ShaderStateShard { shader })
+                .setTransparencyState(RenderStateShard.TRANSLUCENT_TRANSPARENCY)
+                .setWriteMaskState(RenderStateShard.COLOR_DEPTH_WRITE)
+                .setCullState(RenderStateShard.NO_CULL)
+                .setLightmapState(RenderStateShard.NO_LIGHTMAP)
+                .createCompositeState(true)
+        )
+
+        val stage = event.register(ResourceLocation.fromNamespaceAndPath(Bpm.ID, "ender_link_overlay"), renderType)
     }
 
     private fun onServerTick(event: ServerTickEvent.Pre) {
@@ -248,12 +292,14 @@ class Bootstrap(
         val level = event.level
         if (level !is ServerLevel) return
         PipeNetwork.save(level)
+        EnderNet.save(level)
     }
 
     private fun onLevelLoad(event: net.neoforged.neoforge.event.level.LevelEvent.Load) {
         val level = event.level
         if (level !is ServerLevel) return
         PipeNetwork.load(level)
+        EnderNet.load(level)
     }
 
 

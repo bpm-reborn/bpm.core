@@ -7,6 +7,7 @@ import bpm.common.property.value
 import bpm.common.serial.Serial
 import bpm.common.upstream.GitLoader
 import bpm.common.workspace.Workspace
+import bpm.mc.links.EnderNetState
 import bpm.pipe.PipeNetManagerState
 import net.minecraft.server.level.ServerLevel
 import net.neoforged.fml.loading.FMLPaths
@@ -83,6 +84,19 @@ object BpmIO {
         val levelFileName = "${level.name}.dat"
         val filePath = worldDataPath.resolve(levelFileName)
         Serial.write(filePath, state)
+    }
+
+    fun saveEnderNetState(level: ServerLevel, state: EnderNetState) {
+        val levelFileName = "bpm.${level.name}.dat"
+        val filePath = worldDataPath.resolve(levelFileName)
+        Serial.write(filePath, state)
+    }
+
+    fun loadEnderNetState(level: ServerLevel): EnderNetState? {
+        val levelFileName = "bpm.${level.name}.dat"
+        val filePath = worldDataPath.resolve(levelFileName)
+        if (!Files.exists(filePath)) return null
+        return Serial.read(filePath)
     }
 
     fun loadPipeNetState(level: ServerLevel): PipeNetManagerState? {

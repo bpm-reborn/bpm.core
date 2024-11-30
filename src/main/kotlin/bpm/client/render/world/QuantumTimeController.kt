@@ -119,7 +119,7 @@ class QuantumTimeController {
         // Calculate tunneling probability using WKB approximation
         if (particleEnergy < barrierHeight) {
             val barrierWidth = potentialField.getBarrierWidth(particle.position)
-            val kappa = sqrt(2f * ELECTRON_MASS * (barrierHeight - particleEnergy)) / REDUCED_PLANCK
+            val kappa = sqrt(1.25f * ELECTRON_MASS * (barrierHeight - particleEnergy)) / REDUCED_PLANCK
             val tunnelProbability = exp(-2f * kappa * barrierWidth)
 
             // Scaled probability for game visibility

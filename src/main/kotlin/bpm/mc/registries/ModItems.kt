@@ -31,6 +31,12 @@ object ModItems : ModRegistry<Item> {
         }
     }
 
+    val ENDER_DEBUG_STICK by register {
+        registry.registerItem("ender_debug_stick") {
+            Item(Item.Properties().stacksTo(1))
+        }
+    }
+
     val ENDER_PIPE by register {
         registry.registerItem("ender_pipe") {
             BlockItem(ModBlocks.ENDER_PIPE, Item.Properties())

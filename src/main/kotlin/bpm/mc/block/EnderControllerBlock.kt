@@ -1,6 +1,7 @@
 package bpm.mc.block
 
 import bpm.common.logging.KotlinLogging
+import bpm.mc.links.EnderNet
 import bpm.pipe.PipeNetwork
 import bpm.server.ServerRuntime
 import net.minecraft.ChatFormatting
@@ -83,10 +84,22 @@ class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), 
                 if (playerUUID != null) {
                     ServerRuntime.openWorkspace(uuid, playerUUID)
                 }
+                EnderNet.addController(tile)
 //                }
             }
         }
         super.setPlacedBy(level, p_49848_, p_49849_, p_49850_, p_49851_)
+    }
+
+    override fun onRemove(state: BlockState, level: Level, pos: BlockPos, newState: BlockState, isMoving: Boolean) {
+        if (!level.isClientSide) {
+            val blockEntity = level.getBlockEntity(pos) as? EnderControllerTileEntity
+            if (blockEntity != null) {
+                EnderNet.removeController(blockEntity)
+                ServerRuntime.recompileWorkspace(blockEntity.getUUID())
+            }
+        }
+        super.onRemove(state, level, pos, newState, isMoving)
     }
 
     override fun getCollisionShape(

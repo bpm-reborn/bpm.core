@@ -11,7 +11,6 @@ object NetUtils {
      */
     val DefaultUUID: UUID = UUID.fromString("00000000-0000-0000-0000-000000000000")
 
-
     /**
      * Checks if the given UUID is the default UUID.
      *

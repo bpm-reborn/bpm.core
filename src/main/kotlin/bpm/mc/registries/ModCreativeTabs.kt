@@ -21,7 +21,8 @@ object ModCreativeTabs : ModRegistry<CreativeModeTab> {
                 CreativeModeTab.builder()
                     .displayItems { _, output ->
                         ModItems.registry.entries.forEach {
-                            output.accept(it.get())
+                            if (it.get() != ModItems.ENDER_DEBUG_STICK)
+                                output.accept(it.get())
                         }
                     }
                     .icon { ItemStack(ModItems.ENDER_PIPE) }
