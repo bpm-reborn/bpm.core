@@ -52,7 +52,6 @@ abstract class Panel(val title: String, val icon: String) {
         renderTitle(drawList, position, size)
         renderContent(drawList, position, size)
         renderFooter(drawList, position, size)
-
         checkResizeAndArrange()
     }
 

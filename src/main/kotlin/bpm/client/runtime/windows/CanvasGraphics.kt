@@ -48,7 +48,6 @@ class CanvasGraphics(
 
     private var gfx: GuiGraphics? = null
 
-
     val panels = PanelManager(this)
         .apply {
             addPanel(VariablesPanel)
@@ -1032,25 +1031,6 @@ class CanvasGraphics(
         )
     }
 
-
-    private fun getBezierTangent(startPos: Vector2f, endPos: Vector2f, t: Float): Vector2f {
-        val midX = (startPos.x + endPos.x) / 2
-        val controlPoint1 = Vector2f(midX, startPos.y)
-        val controlPoint2 = Vector2f(midX, endPos.y)
-
-        val u = 1 - t
-        val tangent = Vector2f(
-            3 * u * u * (controlPoint1.x - startPos.x) + 6 * u * t * (controlPoint2.x - controlPoint1.x) + 3 * t * t * (endPos.x - controlPoint2.x),
-            3 * u * u * (controlPoint1.y - startPos.y) + 6 * u * t * (controlPoint2.y - controlPoint1.y) + 3 * t * t * (endPos.y - controlPoint2.y)
-        )
-
-        return tangent.normalize()
-    }
-
-
-    private fun easeInOutCubic(t: Float): Float {
-        return if (t < 0.5f) 4 * t * t * t else 1 - (-2 * t + 2).pow(3) / 2
-    }
 
     fun renderEdgeDrag(drawList: ImDrawList, draggedEdge: Pair<Node, Edge>?, dragStartPos: Vector2f?) {
         if (draggedEdge != null && dragStartPos != null) {

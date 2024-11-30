@@ -6,6 +6,8 @@ import bpm.client.utils.use
 import bpm.common.network.Client
 import bpm.common.utils.FontAwesome
 import bpm.common.workspace.packets.ProxyNodeCreateRequest
+import bpm.mc.links.EnderControllerState
+import bpm.mc.links.WorldPos
 import bpm.pipe.PipeNetwork
 import bpm.pipe.proxy.ProxiedState
 import bpm.pipe.proxy.ProxiedType
@@ -28,7 +30,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
     private val bodyFont = Fonts.getFamily("Inter")["Light"]
     private val recordedDrawCall = mutableListOf<(gfx: GuiGraphics) -> Unit>()
     private val unClippedRecordedDrawCalls = mutableListOf<(gfx: GuiGraphics) -> Unit>()
-    private var draggedProxy: Pair<BlockPos, ProxiedState>? = null
+    private var draggedProxy: Pair<BlockPos, WorldPos>? = null
 
     override fun renderBody(
         drawList: ImDrawList, position: Vector2f, size: Vector2f
@@ -43,7 +45,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
 
     private fun renderProxyState(
         drawList: ImDrawList,
-        proxyState: ProxyState,
+        proxyState: EnderControllerState,
         position: Vector2f,
         size: Vector2f
     ) {
@@ -60,62 +62,61 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
         // Render proxied blocks
         ImGui.indent(20f)
         var index = 0
-        proxyState.proxiedBlocks.filter { it.value.proxiedFaces.values.any { it != ProxiedType.NONE } }
-            .forEach { (blockPos, proxiedState) ->
 
-                //Draw connection lines
-                val pos1 = Vector2f(pos.x + 40, ImGui.getCursorScreenPosY() + 10f)
-                val originPos = Vector2f(pos1.x + 10f, pos1.y + 30f)
+        val links = proxyState.links.forEach { pos ->
+            //Draw connection lines
+            val pos1 = Vector2f(pos.x + 40, ImGui.getCursorScreenPosY() + 10f)
+            val originPos = Vector2f(pos1.x + 10f, pos1.y + 30f)
 
-                val thickness = 3f
+            val thickness = 3f
+            drawList.addLine(
+                pos1.x - 20f, pos1.y + 30f, originPos.x, originPos.y, ImColor.rgba(100, 100, 100, 255), thickness
+            )
+            if (index != 0) {
+                //Add veritcal connnection line
                 drawList.addLine(
-                    pos1.x - 20f, pos1.y + 30f, originPos.x, originPos.y, ImColor.rgba(100, 100, 100, 255), thickness
+                    pos1.x - 20f, pos1.y, pos1.x - 20f, pos1.y - 30f, ImColor.rgba(100, 100, 100, 255), thickness
                 )
-                if (index != 0) {
-                    //Add veritcal connnection line
-                    drawList.addLine(
-                        pos1.x - 20f, pos1.y, pos1.x - 20f, pos1.y - 30f, ImColor.rgba(100, 100, 100, 255), thickness
-                    )
-                    drawList.addLine(
-                        pos1.x - 20f,
-                        pos1.y - 15f,
-                        pos1.x - 20f,
-                        pos1.y + 30f,
-                        ImColor.rgba(100, 100, 100, 255),
-                        thickness
-                    )
+                drawList.addLine(
+                    pos1.x - 20f,
+                    pos1.y - 15f,
+                    pos1.x - 20f,
+                    pos1.y + 30f,
+                    ImColor.rgba(100, 100, 100, 255),
+                    thickness
+                )
 
-                } else {
+            } else {
 //                    drawList.addCircleFilled(pos1.x - 20f, pos1.y - 12f, 5f, ImColor.rgba(100, 100, 100, 255))
 
-                    drawList.addLine(
-                        pos1.x - 20f,
-                        pos1.y - 15f,
-                        pos1.x - 20f,
-                        pos1.y + 30f,
-                        ImColor.rgba(100, 100, 100, 255),
-                        thickness
-                    )
-                }
-                drawList.addCircleFilled(pos1.x - 20f, pos1.y + 30f, 5f, ImColor.rgba(12, 12, 12, 255))
-                drawList.addCircle(pos1.x - 20f, pos1.y + 30f, 5f, ImColor.rgba(66, 66, 66, 255), 12, 2f)
+                drawList.addLine(
+                    pos1.x - 20f,
+                    pos1.y - 15f,
+                    pos1.x - 20f,
+                    pos1.y + 30f,
+                    ImColor.rgba(100, 100, 100, 255),
+                    thickness
+                )
+            }
+            drawList.addCircleFilled(pos1.x - 20f, pos1.y + 30f, 5f, ImColor.rgba(12, 12, 12, 255))
+            drawList.addCircle(pos1.x - 20f, pos1.y + 30f, 5f, ImColor.rgba(66, 66, 66, 255), 12, 2f)
 
-                index++
-                if (ImGui.isMouseClicked(ImGuiMouseButton.Left) && isMouseOver(pos1, size.x - 75f, 60f)) {
-                    draggedProxy = blockPos to proxiedState
-                    isDragging = true
-                }
+            index++
+            if (ImGui.isMouseClicked(ImGuiMouseButton.Left) && isMouseOver(pos1, size.x - 75f, 60f)) {
+                draggedProxy = blockPos to proxiedState
+                isDragging = true
+            }
 //                drawList.addCircleFilled(originPos.x, originPos.y, 5f, ImColor.rgba(100, 100, 100, 255))
 
-                renderProxiedBlock(
-                    drawList,
-                    blockPos,
-                    proxiedState,
-                    Vector2f(pos.x + 35f, ImGui.getCursorScreenPosY() + 10f),
-                    Vector2f(size.x - 70f, 60f)
-                )
-                ImGui.dummy(0f, 60f)
-            }
+            renderProxiedBlock(
+                drawList,
+                blockPos,
+                proxiedState,
+                Vector2f(pos.x + 35f, ImGui.getCursorScreenPosY() + 10f),
+                Vector2f(size.x - 70f, 60f)
+            )
+            ImGui.dummy(0f, 60f)
+        }
         ImGui.unindent(20f)
     }
 

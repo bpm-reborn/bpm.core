@@ -7,6 +7,8 @@ import kotlinx.coroutines.*
 import org.lwjgl.BufferUtils
 import org.lwjgl.opengl.GL11
 import org.lwjgl.opengl.GL11.*
+import org.lwjgl.opengl.GL15
+import org.lwjgl.opengl.GL21
 import java.net.URL
 import java.nio.ByteBuffer
 import org.lwjgl.stb.STBImage
@@ -35,7 +37,12 @@ object MarkdownImages {
             loadImage(url)
         }
         if (imgData != null && imgData.textureId == -1) {
-            imgData.textureId = loadOpenGLTexture(imgData)
+            val textureId = loadOpenGLTexture(imgData)
+            if (textureId == -1) {
+                imageData.remove(url) // Remove failed texture
+                return null
+            }
+            imgData.textureId = textureId
         }
         return imgData
     }
@@ -53,30 +60,157 @@ object MarkdownImages {
         }
     }
 
-     fun loadOpenGLTexture(imageData: ImageData): Int {
-        val texture = GL11.glGenTextures()
-        glBindTexture(GL_TEXTURE_2D, texture)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+    fun loadOpenGLTexture(imageData: ImageData): Int {
+        try {
+            // Validate input data
+            if (!validateImageData(imageData)) {
+                return -1
+            }
 
+            // Generate texture ID
+            val texture = GL11.glGenTextures()
+            if (texture == 0) {
+                println("Failed to generate texture")
+                return -1
+            }
 
-        glTexImage2D(
-            GL_TEXTURE_2D,
-            0,
-            GL_RGBA,
-            imageData.width,
-            imageData.height,
-            0,
-            GL_RGBA,
-            GL_UNSIGNED_BYTE,
-            imageData.buffer
-        )
-        glBindTexture(GL_TEXTURE_2D, 0)
-        return texture
+            try {
+                // Create a PBO for texture upload
+                val pbo = GL15.glGenBuffers()
+                GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, pbo)
+
+                // Calculate buffer size and alignment
+                val alignedWidth = nextPowerOfTwo(imageData.width)
+                val alignedHeight = nextPowerOfTwo(imageData.height)
+                val bufferSize = alignedWidth * alignedHeight * 4 // 4 bytes per pixel for RGBA
+
+                // Allocate buffer and copy data
+                GL15.glBufferData(GL21.GL_PIXEL_UNPACK_BUFFER, bufferSize.toLong(), GL15.GL_STREAM_DRAW)
+                val mappedBuffer = GL15.glMapBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, GL15.GL_WRITE_ONLY)
+                if (mappedBuffer != null) {
+                    // Copy and pad the image data to power-of-two dimensions
+                    copyAndPadImageData(imageData, mappedBuffer, alignedWidth, alignedHeight)
+                    GL15.glUnmapBuffer(GL21.GL_PIXEL_UNPACK_BUFFER)
+                }
+
+                // Bind texture and set parameters
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D, texture)
+
+                // Set texture parameters
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR)
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR)
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL15.GL_CLAMP_TO_EDGE)
+                GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL15.GL_CLAMP_TO_EDGE)
+
+                // Set proper alignment
+                GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 4)
+                GL11.glPixelStorei(GL11.GL_UNPACK_ROW_LENGTH, 0)
+                GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS, 0)
+                GL11.glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS, 0)
+
+                // Upload texture data from PBO
+                GL11.glTexImage2D(
+                    GL11.GL_TEXTURE_2D,
+                    0,
+                    GL11.GL_RGBA8,
+                    alignedWidth,
+                    alignedHeight,
+                    0,
+                    GL11.GL_RGBA,
+                    GL11.GL_UNSIGNED_BYTE,
+                    0L // Offset in PBO
+                )
+
+                // Cleanup
+                GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, 0)
+                GL15.glDeleteBuffers(pbo)
+                GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0)
+
+                return if (checkGLError("Texture upload") == GL11.GL_NO_ERROR) texture else {
+                    GL11.glDeleteTextures(texture)
+                    -1
+                }
+            } catch (e: Exception) {
+                GL11.glDeleteTextures(texture)
+                throw e
+            }
+        } catch (e: Exception) {
+            println("Exception while loading texture: ${e.message}")
+            e.printStackTrace()
+            return -1
+        }
     }
 
+    private fun validateImageData(imageData: ImageData): Boolean {
+        if (imageData.width <= 0 || imageData.height <= 0) {
+            println("Invalid image dimensions: ${imageData.width}x${imageData.height}")
+            return false
+        }
+        if (imageData.buffer == null || !imageData.buffer.hasRemaining()) {
+            println("Invalid buffer state")
+            return false
+        }
+        if (imageData.buffer.remaining() < imageData.width * imageData.height * 4) {
+            println("Buffer too small for image dimensions")
+            return false
+        }
+        return true
+    }
+
+    private fun nextPowerOfTwo(n: Int): Int {
+        var value = n
+        value--
+        value = value or (value shr 1)
+        value = value or (value shr 2)
+        value = value or (value shr 4)
+        value = value or (value shr 8)
+        value = value or (value shr 16)
+        value++
+        return value
+    }
+
+    private fun copyAndPadImageData(imageData: ImageData, mappedBuffer: ByteBuffer, alignedWidth: Int, alignedHeight: Int) {
+        val srcBuffer = imageData.buffer
+        srcBuffer.rewind()
+
+        // Copy row by row, padding as needed
+        for (y in 0 until imageData.height) {
+            // Copy one row
+            for (x in 0 until imageData.width) {
+                val srcPos = (y * imageData.width + x) * 4
+                val dstPos = (y * alignedWidth + x) * 4
+                for (i in 0..3) {
+                    mappedBuffer.put(dstPos + i, srcBuffer.get(srcPos + i))
+                }
+            }
+            // Pad remaining pixels in row
+            for (x in imageData.width until alignedWidth) {
+                val dstPos = (y * alignedWidth + x) * 4
+                mappedBuffer.put(dstPos, 0)     // R
+                mappedBuffer.put(dstPos + 1, 0) // G
+                mappedBuffer.put(dstPos + 2, 0) // B
+                mappedBuffer.put(dstPos + 3, 0) // A
+            }
+        }
+        // Pad remaining rows
+        for (y in imageData.height until alignedHeight) {
+            for (x in 0 until alignedWidth) {
+                val dstPos = (y * alignedWidth + x) * 4
+                mappedBuffer.put(dstPos, 0)     // R
+                mappedBuffer.put(dstPos + 1, 0) // G
+                mappedBuffer.put(dstPos + 2, 0) // B
+                mappedBuffer.put(dstPos + 3, 0) // A
+            }
+        }
+    }
+
+    private fun checkGLError(operation: String): Int {
+        val error = GL11.glGetError()
+        if (error != GL11.GL_NO_ERROR) {
+            println("OpenGL error after $operation: $error")
+        }
+        return error
+    }
     private fun downloadImage(url: String): ByteArray {
         val connection = URL(url).openConnection()
         connection.connect()
