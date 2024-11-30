@@ -142,7 +142,14 @@ object Serial {
      * @return The deserialized object of type [T], or null if deserialization fails.
      */
     inline fun <reified T : Any> read(buffer: Buffer): T? =
-        get(T::class.java).deserialize(buffer)
+        read(T::class, buffer)
+
+    fun <T : Any> read(type: KClass<T>, buffer: Buffer): T? = get(type.java).deserialize(buffer)
+
+
+    fun has(type: Class<*>): Boolean = serializers.containsKey(type)
+
+    inline fun <reified T : Any> has(): Boolean = has(T::class.java)
 
 
     /**

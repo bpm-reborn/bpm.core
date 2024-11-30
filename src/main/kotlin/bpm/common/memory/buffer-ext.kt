@@ -11,29 +11,35 @@ import kotlin.reflect.KClass
 inline fun <reified T : Any> Buffer.writeList(list: List<T>) {
     writeInt(list.size)
     list.forEach {
-        Serial.write(this, it)
+        if (!Serial.has<T>()) writeAny(it)
+        else Serial.write(this, it) ?: error("Failed to write list element")
     }
 }
 
 inline fun <reified T : Any> Buffer.readList(): List<T> = readList(T::class)
-inline fun <reified T : Any> Buffer.readList(clazz: KClass<T>): List<T> {
+fun <T : Any> Buffer.readList(clazz: KClass<T>): List<T> {
     val list = mutableListOf<T>()
     repeat(readInt()) {
-        list.add(Serial.read(this) ?: error("Failed to read list element"))
+        if (!Serial.has(clazz.java)) list.add(readAny(clazz))
+        else list.add(Serial.read(clazz, this) ?: error("Failed to read list element"))
     }
     return list
 }
 
-fun <T : Any> Buffer.writeSet(set: Set<T>) {
+inline fun <reified T : Any> Buffer.writeSet(set: Set<T>) {
     writeInt(set.size)
-    set.forEach(::writeAny)
+    set.forEach {
+        if (!Serial.has<T>()) writeAny(it)
+        else Serial.write(this, it) ?: error("Failed to write set element")
+    }
 }
 
 inline fun <reified T : Any> Buffer.readSet(): Set<T> = readSet(T::class)
-inline fun <reified T : Any> Buffer.readSet(clazz: KClass<T>): Set<T> {
+fun <T : Any> Buffer.readSet(clazz: KClass<T>): Set<T> {
     val set = mutableSetOf<T>()
     repeat(readInt()) {
-        set.add(Serial.read(this) ?: error("Failed to read set element"))
+        if (!Serial.has(clazz.java)) set.add(readAny(clazz))
+        else set.add(Serial.read(clazz, this) ?: error("Failed to read set element"))
     }
     return set
 }
@@ -72,7 +78,7 @@ fun <T : Any> Buffer.writeAny(value: T) {
 }
 
 inline fun <reified T : Any> Buffer.readAny(): T = readAny(T::class)
-inline fun <reified T : Any> Buffer.readAny(clazz: KClass<T>): T {
+fun <T : Any> Buffer.readAny(clazz: KClass<T>): T {
     val value = when (clazz) {
         Int::class -> readInt()
         Float::class -> readFloat()

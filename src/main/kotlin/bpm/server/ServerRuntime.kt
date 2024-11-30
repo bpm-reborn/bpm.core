@@ -268,6 +268,7 @@ object ServerRuntime : Listener {
                 "x" to packet.blockPos.x
                 "y" to packet.blockPos.y
                 "z" to packet.blockPos.z
+                "level" to packet.level.location().toString()
             }
             node.properties["override"] = Property.String("\${OUTPUT.proxied = {x = ${packet.blockPos.x}, y = ${packet.blockPos.y}, z = ${packet.blockPos.z}}}".trimIndent())
             //Set the source to output a block position

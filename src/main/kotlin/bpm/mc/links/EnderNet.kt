@@ -110,6 +110,7 @@ object EnderNet : Listener {
         logger.info { "Cleared EnderNet state" }
     }
 
+    //Synchronizes the state with the client
     override fun onPacket(packet: Packet, from: UUID) {
         when (packet) {
             is PacketEnderNetControllerAdded -> {

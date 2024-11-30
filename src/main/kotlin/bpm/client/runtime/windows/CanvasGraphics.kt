@@ -1,10 +1,13 @@
 package bpm.client.runtime.windows
 
+import bpm.client.dockspace.DockPosition
+import bpm.client.dockspace.RootPanel
 import bpm.client.font.Fonts
 import bpm.client.render.panel.ConsolePanel
 import bpm.client.render.panel.PanelManager
 import bpm.client.render.panel.ProxiesPanel
 import bpm.client.render.panel.VariablesPanel
+import bpm.client.render.panels.Panels
 import bpm.client.runtime.ClientRuntime
 import bpm.client.utils.use
 import bpm.common.network.Client
@@ -18,10 +21,8 @@ import bpm.common.workspace.graph.Edge
 import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.packets.EdgePropertyUpdate
-import imgui.ImColor
-import imgui.ImDrawList
-import imgui.ImFont
-import imgui.ImGui
+import bpm.mc.links.WorldPos
+import imgui.*
 import imgui.flag.ImDrawFlags
 import imgui.flag.ImGuiMouseButton
 import imgui.flag.ImGuiMouseCursor
@@ -29,16 +30,19 @@ import imgui.flag.ImGuiStyleVar
 import imgui.type.ImString
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphics
+import net.minecraft.core.BlockPos
 import net.minecraft.core.registries.BuiltInRegistries
+import net.minecraft.core.registries.Registries
+import net.minecraft.resources.ResourceKey
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.world.item.ItemStack
 import net.minecraft.world.item.Items
+import net.minecraft.world.level.Level
 import org.joml.Vector2f
 import org.joml.Vector3f
 import org.joml.Vector4f
 import org.joml.Vector4i
 import kotlin.math.max
-import kotlin.math.pow
 
 class CanvasGraphics(
     private val window: CanvasWindow,
@@ -54,7 +58,15 @@ class CanvasGraphics(
             addPanel(ProxiesPanel)
             addPanel(ConsolePanel)
         }
+//
+//    val dockspace = RootPanel()
+//        .apply {
+//            addChild(Panels.Links, DockPosition.LEFT).apply {
+//                addChild(Panels.Variables, DockPosition.BOTTOM)
+//            }
+//        }
 
+    private val recordedDrawCalls = mutableListOf<(gfx: GuiGraphics) -> Unit>()
     private val headerFamily get() = Fonts.getFamily("Inter")["Bold"]
     private val headerFont get() = headerFamily[window.workspace.settings.fontHeaderSize]
     private val bodyFamily get() = Fonts.getFamily("Inter")["Regular"]
@@ -82,7 +94,16 @@ class CanvasGraphics(
     }
 
 
-    fun renderPanels(drawList: ImDrawList) = panels.renderPanels(drawList)
+    fun renderPanels(drawList: ImDrawList) {
+//        dockspace.render(drawList)
+        panels.renderPanels(drawList)
+
+    }
+
+
+    fun onResize(displaySize: ImVec2?) {
+//        dockspace.onResize(displaySize?.x ?: 0f, displaySize?.y ?: 0f)
+    }
 
 
     fun renderLinks(drawList: ImDrawList, links: Collection<Link>) {
@@ -250,32 +271,86 @@ class CanvasGraphics(
             )
         }
 
-        // Render node name
-        headerFont.use {
-            val textSize = ImGui.calcTextSize(fullText)
-
-            if (textSize.x > availableWidth) {
-                // Truncate text if it's too long
-                displayText = truncateText(fullText, availableWidth)
+        if (node.type == "World" && node.name == "Proxy") {
+            val blockPos = node.properties["value"].cast<Property.Object>()
+            val worldPos = cachedWorldPos.getOrPut(blockPos) {
+                val x = blockPos["x"].cast<Property.Int>().get()
+                val y = blockPos["y"].cast<Property.Int>().get()
+                val z = blockPos["z"].cast<Property.Int>().get()
+                val level = blockPos["level"].cast<Property.String>().get()
+                val levelKey = ResourceKey.create(Registries.DIMENSION, ResourceLocation.tryParse(level))
+                WorldPos(levelKey, BlockPos(x, y, z))
             }
+            headerFont.use {
+                //Get the block name
+                if (worldPos.level == Minecraft.getInstance().level!!.dimension()) {
+                    val blockState = Minecraft.getInstance().level!!.getBlockState(worldPos.pos)
+                    val block = blockState.block
+                    val blockName = block.name.string
+                    val textSize = ImGui.calcTextSize(blockName)
+                    if (textSize.x > availableWidth + 10 * context.zoom) {
+                        displayText = truncateText(blockName, availableWidth + 10 * context.zoom)
+                    } else {
+                        displayText = blockName
+                    }
 
-            val textX = nodeBounds.x + iconSize + 2f * context.zoom
-            val textY = titleBounds.y - 1 * context.zoom
+                    val textX = nodeBounds.x + iconSize + 2f * context.zoom
+                    val textY = titleBounds.y
+                    drawShadowedText(
+                        drawList,
+                        headerFont,
+                        window.workspace.settings.fontSize.toFloat() * 1f,
+                        textX,
+                        textY,
+                        ImColor.rgba(255, 255, 255, 255),
+                        displayText,
+                        scale = 1f,
+                        offsetX = 3f * context.zoom,
+                        offsetY = 3f * context.zoom
+                    )
+                } else {
+                    val text = "Proxy: ${worldPos.pos.x}, ${worldPos.pos.y}, ${worldPos.pos.z}"
+                    drawShadowedText(
+                        drawList,
+                        headerFont,
+                        window.workspace.settings.fontSize.toFloat() * 1f,
+                        nodeBounds.x + iconSize + 2f * context.zoom,
+                        titleBounds.y - 1 * context.zoom,
+                        ImColor.rgba(255, 255, 255, 255),
+                        text,
+                        scale = 1f,
+                        offsetX = 3f * context.zoom,
+                        offsetY = 3f * context.zoom
+                    )
+                }
+            }
+        } else
+        // Render node name
+            headerFont.use {
+                val textSize = ImGui.calcTextSize(fullText)
 
-            // Render truncated or full text
-            drawShadowedText(
-                drawList,
-                headerFont,
-                window.workspace.settings.fontHeaderSize.toFloat() * 1f,
-                textX,
-                textY,
-                ImColor.rgba(255, 255, 255, 255),
-                displayText,
-                scale = 1f,
-                offsetX = 3f * context.zoom,
-                offsetY = 3f * context.zoom
-            )
-        }
+                if (textSize.x > availableWidth) {
+                    // Truncate text if it's too long
+                    displayText = truncateText(fullText, availableWidth)
+                }
+
+                val textX = nodeBounds.x + iconSize + 2f * context.zoom
+                val textY = titleBounds.y - 1 * context.zoom
+
+                // Render truncated or full text
+                drawShadowedText(
+                    drawList,
+                    headerFont,
+                    window.workspace.settings.fontHeaderSize.toFloat() * 1f,
+                    textX,
+                    textY,
+                    ImColor.rgba(255, 255, 255, 255),
+                    displayText,
+                    scale = 1f,
+                    offsetX = 3f * context.zoom,
+                    offsetY = 3f * context.zoom
+                )
+            }
 
 
     }
@@ -611,47 +686,125 @@ class CanvasGraphics(
         }
     }
 
+
+    private val cachedWorldPos = mutableMapOf<Property.Object, WorldPos>()
+
     private fun renderNodeBody(drawList: ImDrawList, node: Node, bounds: Vector4f, color: Int) {
+        // Check if this is a proxy node
+        val isProxy = node.type == "World" && node.name == "Proxy"
+
         // Adjust bounds to account for edge offset
         val edgeOffset = 10f * context.zoom
-        val adjustedBounds = Vector4f(
-            bounds.x, bounds.y, bounds.z, bounds.w
-        )
-
-        // Main body
+        val adjustedBounds = Vector4f(bounds.x, bounds.y, bounds.z, bounds.w)
+        // Standard node rendering
         drawList.addRectFilled(
-            adjustedBounds.x, adjustedBounds.y, adjustedBounds.z, adjustedBounds.w, color, 10f * context.zoom
+            adjustedBounds.x,
+            adjustedBounds.y,
+            adjustedBounds.z,
+            adjustedBounds.w,
+            color,
+            10f * context.zoom
         )
 
-        // Hover effect
+        if (isProxy) {
+            //TODO: maybe we should do this only every few seconds and cache it?
+            val blockPos = node.properties["value"].cast<Property.Object>()
+            val worldPos = cachedWorldPos.getOrPut(blockPos) {
+                val x = blockPos["x"].cast<Property.Int>().get()
+                val y = blockPos["y"].cast<Property.Int>().get()
+                val z = blockPos["z"].cast<Property.Int>().get()
+                val world = blockPos["level"].cast<Property.String>().get()
+                WorldPos(
+                    ResourceLocation.tryParse(world)?.let { ResourceKey.create(Registries.DIMENSION, it) }
+                        ?: Level.OVERWORLD, BlockPos(x, y, z))
+            }
+
+            val level = Minecraft.getInstance().level
+            if (level?.dimension() == worldPos.level) {
+                val blockState = level.getBlockState(worldPos.pos)
+                val block = blockState.block
+                val itemStack = ItemStack(block)
+                val displayName = itemStack.displayName
+                val text = displayName.string
+//                    drawList.addText(
+//                        bodyFont,
+//                        14f * context.zoom,
+//                        adjustedBounds.x + 10f * context.zoom,
+//                        adjustedBounds.y + 20f * context.zoom,
+//                        ImColor.rgba(255, 255, 255, 255),
+//                        text
+//                    )
+                recordedDrawCalls.add {
+                    renderBlockItem(
+                        itemStack,
+                        adjustedBounds.x + 10f * context.zoom,
+                        adjustedBounds.y + 15f * context.zoom,
+                        24 * context.zoom
+                    )
+                }
+            }
+//            //render the level and block position
+//            val levelText = "Level: ${worldPos.level.location()}"
+//            val positionText = "Position: ${worldPos.pos.x}, ${worldPos.pos.y}, ${worldPos.pos.z}"
+//            bodyFont.use {
+//                drawList.addText(
+//                    bodyFont,
+//                    14f * context.zoom,
+//                    adjustedBounds.x + 10f * context.zoom,
+//                    adjustedBounds.y + 20f * context.zoom,
+//                    ImColor.rgba(255, 255, 255, 255),
+//                    levelText
+//                )
+//                drawList.addText(
+//                    bodyFont,
+//                    14f * context.zoom,
+//                    adjustedBounds.x + 10f * context.zoom,
+//                    adjustedBounds.y + 35f * context.zoom,
+//                    ImColor.rgba(255, 255, 255, 255),
+//                    positionText
+//                )
+//            }
+
+        }
+
+        // Hover effect (enhanced for proxy nodes)
         if (window.hoveredNode?.uid == node.uid || context.isNodeInSelectionBox(node)) {
+            val hoverColor = if (isProxy) {
+                ImColor.rgba(100, 180, 255, 185)  // Brighter blue for proxy nodes
+            } else {
+                ImColor.rgba(69, 163, 230, 185)
+            }
+
             drawList.addRect(
                 adjustedBounds.x - 1f * context.zoom,
                 adjustedBounds.y + 2 * context.zoom,
                 adjustedBounds.z + 1f * context.zoom,
                 adjustedBounds.w + 1f * context.zoom,
-                ImColor.rgba(69, 163, 230, 185),
+                hoverColor,
                 10f * context.zoom,
                 ImDrawFlags.None,
                 2f * context.zoom
             )
         }
 
-        // Selection outline
+        // Selection outline (enhanced for proxy nodes)
         if (context.isNodeSelected(node)) {
-            //selectedNodes.add(node.uid)
+            val selectionColor = if (isProxy) {
+                ImColor.rgba(200, 220, 255, 255)  // Brighter outline for proxy nodes
+            } else {
+                ImColor.rgba(255, 255, 255, 255)
+            }
+
             drawList.addRect(
                 adjustedBounds.x - 1.5f * context.zoom,
                 adjustedBounds.y + 1.5f * context.zoom,
                 adjustedBounds.z + 1.5f * context.zoom,
                 adjustedBounds.w + 1.5f * context.zoom,
-                ImColor.rgba(255, 255, 255, 255),
+                selectionColor,
                 10f * context.zoom,
                 ImDrawFlags.None,
                 2f * context.zoom
             )
-        } else {
-            //selectedNodes.remove(node.uid)
         }
     }
 
@@ -1109,7 +1262,9 @@ class CanvasGraphics(
     fun renderOverlay(gfx: GuiGraphics, bounds: Vector4f) {
         //Set the mincraft gfx for this frame before rendering the panels
         this.gfx = gfx
+        recordedDrawCalls.forEach { it(gfx) }
         panels.renderPanelsPost(gfx, bounds)
+        recordedDrawCalls.clear()
         this.gfx = null //Reset the gfx to null after rendering the panels
     }
 
@@ -1120,7 +1275,9 @@ class CanvasGraphics(
     fun renderBlockItem(blockId: String, x: Float, y: Float, scale: Float = 42.0f) {
         val item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(blockId)) ?: Items.AIR
         val itemStack = ItemStack(item)
-        renderBlockItem(itemStack, x, y, scale)
+        recordedDrawCalls.add {
+            renderBlockItem(itemStack, x, y, scale)
+        }
     }
 
     /**

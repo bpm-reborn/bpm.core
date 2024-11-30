@@ -264,7 +264,7 @@ class CanvasContext : Listener {
             nodePos.x - padding / 2f,
             nodePos.y - padding - 2 * zoom,
             nodePos.x + nodeSize.x,
-            nodePos.y + nodeSize.y,
+            (nodePos.y + nodeSize.y) - 5 * zoom,
         )
     }
 

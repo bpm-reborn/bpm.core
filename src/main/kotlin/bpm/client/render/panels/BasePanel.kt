@@ -6,7 +6,6 @@ import imgui.flag.ImGuiWindowFlags
 import org.joml.Vector2f
 
 abstract class BasePanel(
-    override val id: String,
     override val title: String,
     initialPosition: Vector2f = Vector2f(0f, 0f),
     initialSize: Vector2f = Vector2f(300f, 200f)
@@ -30,23 +29,29 @@ abstract class BasePanel(
         beforeRender(drawList)
 
         // Set up ImGui window
-        ImGui.setNextWindowPos(position.x, position.y)
-        ImGui.setNextWindowSize(size.x, size.y)
+//        ImGui.setNextWindowPos(position.x, position.y)
+//        ImGui.setNextWindowSize(size.x, size.y)
 
-        val windowFlags = ImGuiWindowFlags.NoCollapse or
-                ImGuiWindowFlags.NoBringToFrontOnFocus
+//        val windowFlags = ImGuiWindowFlags.NoCollapse or
+//                ImGuiWindowFlags.NoBringToFrontOnFocus
 
-        if (ImGui.begin("$id##$title", windowFlags)) {
-            renderContent(drawList)
+//        if (ImGui.begin("$id##$title", windowFlags)) {
+        renderContent(drawList)
 
-            // Render children
-            children.forEach { child ->
-                child.render(drawList)
-            }
+        // Render children
+        children.forEach { child ->
+            child.render(drawList)
         }
-        ImGui.end()
+//        }
+//        ImGui.end()
 
         afterRender(drawList)
+    }
+
+    override fun renderPost(drawList: ImDrawList) {
+        children.forEach { child ->
+            child.renderPost(drawList)
+        }
     }
 
     override fun onResize(newSize: Vector2f) {

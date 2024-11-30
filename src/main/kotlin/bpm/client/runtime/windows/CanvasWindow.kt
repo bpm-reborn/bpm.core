@@ -19,6 +19,7 @@ import imgui.flag.ImGuiPopupFlags
 import imgui.flag.ImGuiWindowFlags
 import net.minecraft.client.gui.GuiGraphics
 import org.joml.Vector2f
+import org.joml.Vector2i
 import org.joml.Vector4f
 import java.util.*
 
@@ -106,6 +107,8 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         }
     }
 
+    private val lastSize = Vector2i()
+
     /**
      * Manage all the rendering related to the main canvas here.
      */
@@ -131,6 +134,11 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
         val mousePos = ImGui.getMousePos()
         val displaySize = ImGui.getIO().displaySize
+
+        if (lastSize.x != displaySize.x.toInt() || lastSize.y != displaySize.y.toInt()) {
+            lastSize.set(displaySize.x.toInt(), displaySize.y.toInt())
+            graphics.onResize(displaySize)
+        }
 
         updateAnimationTime()
         context.handleEdgeDragging()

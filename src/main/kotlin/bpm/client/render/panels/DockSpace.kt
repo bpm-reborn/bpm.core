@@ -1,5 +1,6 @@
 package bpm.client.render.panels
 
+import bpm.client.runtime.windows.CanvasGraphics
 import imgui.ImColor
 import imgui.ImDrawList
 import org.joml.Vector2f
@@ -7,9 +8,11 @@ import org.joml.Vector2f
 // Enhanced DockSpace class with layout calculations
 class DockSpace(
     val id: Int,
+    private val gfx: CanvasGraphics,
     var position: Vector2f,
     var size: Vector2f
 ) {
+
     private val dockedPanels = mutableMapOf<DockPosition, MutableList<DockablePanel>>()
     private val layoutCache = mutableMapOf<DockPosition, LayoutRegion>()
 
@@ -74,6 +77,16 @@ class DockSpace(
         }
     }
 
+    fun renderPost(drawList: ImDrawList) {
+        // Render panels in each region according to layout
+        dockedPanels.forEach { (position, panels) ->
+            val region = layoutCache[position] ?: return@forEach
+            panels.forEach { panel ->
+                panel.renderPost(drawList)
+            }
+        }
+    }
+
     private fun calculatePanelPosition(
         panel: DockablePanel,
         region: LayoutRegion,
@@ -92,12 +105,14 @@ class DockSpace(
                     region.position.y + (region.size.y / panelsInRegion) * index + spacing * index
                 )
             }
+
             DockPosition.TOP, DockPosition.BOTTOM -> {
                 Vector2f(
                     region.position.x + (region.size.x / panelsInRegion) * index + spacing * index,
                     region.position.y
                 )
             }
+
             DockPosition.CENTER -> region.position
             DockPosition.FLOATING -> panel.position // Maintain current position for floating panels
         }
@@ -120,12 +135,14 @@ class DockSpace(
                     (region.size.y - spacing) / panelsInRegion
                 )
             }
+
             DockPosition.TOP, DockPosition.BOTTOM -> {
                 Vector2f(
                     (region.size.x - spacing) / panelsInRegion,
                     region.size.y
                 )
             }
+
             DockPosition.CENTER -> region.size
             DockPosition.FLOATING -> panel.size // Maintain current size for floating panels
         }
@@ -237,6 +254,7 @@ class DockSpace(
                 )
                 region.size = Vector2f(newWidth, region.size.y)
             }
+
             DockPosition.RIGHT -> {
                 val newWidth = (region.size.x - delta.x).coerceIn(
                     config.sidePanelMinWidth,
@@ -245,6 +263,7 @@ class DockSpace(
                 region.size = Vector2f(newWidth, region.size.y)
                 region.position = Vector2f(region.position.x + delta.x, region.position.y)
             }
+
             DockPosition.TOP -> {
                 val newHeight = (region.size.y + delta.y).coerceIn(
                     config.topBottomPanelMinHeight,
@@ -252,6 +271,7 @@ class DockSpace(
                 )
                 region.size = Vector2f(region.size.x, newHeight)
             }
+
             DockPosition.BOTTOM -> {
                 val newHeight = (region.size.y - delta.y).coerceIn(
                     config.topBottomPanelMinHeight,
@@ -260,6 +280,7 @@ class DockSpace(
                 region.size = Vector2f(region.size.x, newHeight)
                 region.position = Vector2f(region.position.x, region.position.y + delta.y)
             }
+
             else -> {}
         }
     }

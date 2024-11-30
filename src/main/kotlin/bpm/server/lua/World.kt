@@ -86,6 +86,8 @@ object World : LuaBuiltin {
         cachedProxiedHandlers[pos] = handler
         return handler
     }
+
+
     @JvmStatic
     fun playSoundAt(x: Float, y: Float, z: Float, soundName: String, volume: Float, pitch: Float) {
         val sound = getSoundByName(soundName)
