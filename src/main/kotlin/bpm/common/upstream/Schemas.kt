@@ -8,8 +8,10 @@ import bpm.common.property.Property
 import bpm.common.property.configured
 import bpm.common.type.NodeLibrary
 import bpm.common.type.NodeType
+import bpm.common.type.NodeTypeMeta
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.graph.Edge
+import bpm.common.workspace.graph.Function
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.packets.NodeLibraryReloadRequest
 import bpm.common.workspace.packets.NodeLibraryRequest
@@ -143,6 +145,51 @@ class Schemas(private val path: Path, private val side: Endpoint.Side) : Listene
             )
         }
         return Property.Vec4i(0, 0, 0, 255)
+    }
+
+    private fun createFunctionEdges(workspace: Workspace, function: Function): Property.Object {
+        val edgesMap = Property.Object()
+
+        // Add function's edges
+        workspace.graph.getEdges(function.uid).forEach { edge ->
+            edgesMap[edge.name] = Property.Object {
+                "name" to Property.String(edge.name)
+                "direction" to Property.String(edge.direction)
+                "type" to Property.String(edge.type)
+                "description" to Property.String(edge.description)
+                "value" to (edge.properties["value"] as? Property.Object ?: Property.Object())
+            }
+        }
+
+        return edgesMap
+    }
+
+    fun createFromFunction(workspace: Workspace, function: Function, position: Vector2f): Node {
+        // Create NodeTypeMeta for the function
+        val meta = NodeTypeMeta(
+            name = function.name,
+            group = "Functions"
+        )
+
+        // Create the node type properties
+        val nodeType = NodeType(meta, Property.Object {
+            "name" to Property.String(function.name)
+            "group" to Property.String("Functions")
+            "theme" to Property.Object {
+                "color" to Property.Vec4f(function.color)
+                "width" to Property.Float(function.width)
+                "height" to Property.Float(function.height)
+                "icon" to Property.Int(function.icon)
+            }
+            "edges" to createFunctionEdges(workspace, function)
+            "description" to Property.String("Function Implementation: ${function.name}")
+            "meta" to Property.Object {
+                "name" to Property.String(function.name)
+                "group" to Property.String("Functions")
+                "nodeTypeName" to Property.String("Functions/${function.name}")
+            }
+        })
+        return  createFromType(workspace, nodeType, position)
     }
 
 

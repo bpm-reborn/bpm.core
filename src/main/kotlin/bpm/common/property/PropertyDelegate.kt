@@ -9,15 +9,21 @@ class PropertyDelegate<T : Any>(
 
     operator fun getValue(thisRef: Any?, property: KProperty<*>): T {
         val name = property.name
-        if (!propertyMap.contains(name)) propertyMap[name] = Property.of(defaultValue())
+        if (!propertyMap.contains(name)) {
+            val default = defaultValue()
+            if (default is Property<*>) propertyMap[name] = default
+            else propertyMap[name] = Property.of(defaultValue())
+        }
         return propertyMap.getTyped<Property<T>>(property.name)
             .get()
     }
 
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
         val name = property.name
-        if (!propertyMap.contains(name)) propertyMap[name] = Property.of(value)
-        else propertyMap.getTyped<Property<T>>(property.name)
+        if (!propertyMap.contains(name)) {
+            if (value is Property<*>) propertyMap[name] = value
+            else propertyMap[name] = Property.of(value)
+        } else propertyMap.getTyped<Property<T>>(property.name)
             .set(value)
     }
 }

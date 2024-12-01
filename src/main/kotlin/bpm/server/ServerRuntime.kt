@@ -4,17 +4,23 @@ import bpm.common.bootstrap.BpmIO
 import bpm.common.logging.KotlinLogging
 import bpm.common.network.Endpoint
 import bpm.common.network.Listener
+import bpm.common.network.NetUtils
 import bpm.common.network.Network.new
 import bpm.common.network.listener
 import bpm.common.packets.Packet
 import bpm.common.property.Property
 import bpm.common.property.PropertyMap
+import bpm.common.property.cast
+import bpm.common.property.configured
 import bpm.common.upstream.Schemas
+import bpm.common.utils.FontAwesome
 import bpm.common.vm.EvalContext
 import bpm.common.workspace.packets.WorkspaceCreateRequestPacket
 import bpm.common.workspace.packets.WorkspaceCreateResponsePacket
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.WorkspaceSettings
+import bpm.common.workspace.graph.Edge
+import bpm.common.workspace.graph.Function
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.graph.User
 import bpm.common.workspace.packets.*
@@ -22,6 +28,7 @@ import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
 import net.neoforged.neoforge.server.ServerLifecycleHooks
 import org.joml.Vector2f
+import org.joml.Vector4i
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -114,172 +121,279 @@ object ServerRuntime : Listener {
      *
      * @param packet the packet that was received
      */
-    override fun onPacket(packet: Packet, from: UUID) = when (packet) {
-        // When the user asks for a list of workspaces, send them the list of workspaces.
-        is WorkspaceLibraryRequest -> sendWorkspaces(from)
-        is WorkspaceSettingsStore -> {
-            val settings = workspaceSettings.getOrPut(from) { mutableMapOf() }
-            settings[packet.workspaceUid] = packet.workspaceSettings
-        }
-
-        is WorkspaceSettingsRead -> {
-            val settings = workspaceSettings[from]?.get(packet.workspaceUid)
-            if (settings != null) {
-                server.send(new<WorkspaceSettingsLoad> {
-                    this.workspaceSettings = settings
-                }, from)
+    override fun onPacket(packet: Packet, from: UUID) {
+        when (packet) {
+            // When the user asks for a list of workspaces, send them the list of workspaces.
+            is WorkspaceLibraryRequest -> sendWorkspaces(from)
+            is WorkspaceSettingsStore -> {
+                val settings = workspaceSettings.getOrPut(from) { mutableMapOf() }
+                settings[packet.workspaceUid] = packet.workspaceSettings
             }
-            Unit
-        }
 
-//        is WorkspaceSelected -> openWorkspace(packet.workspaceUid, from)
-        is NodeMoved -> broadCastNodeMove(from, packet)
-        is WorkspaceCreateRequestPacket -> createWorkspace(packet.name, packet.description, from)
-        is NodeCreateRequest -> createNode(
-            users[from]?.workspaceUid ?: error("User not in workspace"),
-            packet.nodeType,
-            packet.position,
-        )
-
-        is NodeDeleteRequest ->
-            with(workspaces[users[from]?.workspaceUid] ?: error("User not in workspace")) {
-                val linksToDelete: MutableSet<UUID> = mutableSetOf()
-                packet.uuids.forEach { uuid ->
-                    val node: Node = getNode(uuid) ?: let { return }
-
-                    graph.getLinks(node).forEach { link ->
-                        linksToDelete.add(link.uid)
-                        removeLink(link.uid)
-                    }
-
-                    removeNode(uuid)
+            is WorkspaceSettingsRead -> {
+                val settings = workspaceSettings[from]?.get(packet.workspaceUid)
+                if (settings != null) {
+                    server.send(new<WorkspaceSettingsLoad> {
+                        this.workspaceSettings = settings
+                    }, from)
                 }
-
-                // Delete links
-                sendToUsersInWorkspace(uid, new<LinkDeleted> {
-                    this.uuids.addAll(linksToDelete)
-                })
-
-                // Delete node
-                sendToUsersInWorkspace(uid, new<NodeDeleted> {
-                    this.uuids.addAll(packet.uuids)
-                })
+                Unit
             }
 
-        is LinkCreateRequest -> {
-            val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
-            workspace?.addLink(packet.link)
-            logger.debug { "Link created: ${packet.link}" }
-
-            sendToUsersInWorkspace(users[from]?.workspaceUid ?: error("User not in workspace"), new<LinkCreated> {
-                this.link = packet.link
-            })
-        }
-
-        is LinkDeleteRequest ->
-            with(workspaces[users[from]?.workspaceUid] ?: error("User not in workspace")) {
-                packet.uuids.forEach(::removeLink)
-
-                sendToUsersInWorkspace(uid, new<LinkDeleted> {
-                    this.uuids.addAll(packet.uuids)
-                })
-            }
-
-        is WorkspaceCompileRequest -> {
-            val workspace = workspaces[packet.workspaceId] ?: error("Workspace not found")
-            compileWorkspace(workspace)
-        }
-
-        is EdgePropertyUpdate -> {
-            val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
-                ?: error("Workspace not found")
-            updateEdgeProperty(workspace, packet.edgeUid, packet.property, from)
-        }
-
-        is VariableCreateRequest -> {
-            val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
-                ?: error("Workspace not found")
-            createVariable(workspace, packet.name, packet.property, from)
-        }
-
-        is VariableDeleteRequest -> {
-            val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
-                ?: error("Workspace not found")
-            workspace.removeVariable(packet.name)
-            sendToUsersInWorkspace(workspace.uid, new<VariableDeleted> {
-                this.name = packet.name
-            })
-        }
-
-        is VariableUpdateRequest -> {
-            val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
-                ?: error("Workspace not found")
-            workspace.updateVariable(packet.variableName, packet.property["value"])
-            sendToUsersInWorkspace(workspace.uid, new<VariableUpdated> {
-                this.variableName = packet.variableName
-                this.property = packet.property
-            })
-        }
-
-        is VariableNodeCreateRequest -> {
-            val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
-                ?: error("Workspace not found")
-            val type =
-                if (packet.type == bpm.common.workspace.packets.NodeType.GetVariable) "Variables/Get Variable" else "Variables/Set Variable"
-            val library = listener<Schemas>(Endpoint.Side.SERVER).library
-            val nodeType = library[type] ?: error("Node type not found")
-            val edges = nodeType.properties["edges"] as? Property.Object ?: error("Edges not found")
-            val input = edges["name"] as? Property.Object ?: error("Input not found")
-            val value = input["value"] as? Property.Object ?: error("Value not found")
-            val default = value["default"] as? Property.String ?: error("Default not found")
-
-            //Sets the default to the variable name
-            default.set(packet.variableName)
-
-            val node = listener<Schemas>(Endpoint.Side.SERVER).createFromType(
-                workspace, nodeType, packet.position
+            //        is WorkspaceSelected -> openWorkspace(packet.workspaceUid, from)
+            is NodeMoved -> broadCastNodeMove(from, packet)
+            is WorkspaceCreateRequestPacket -> createWorkspace(packet.name, packet.description, from)
+            is NodeCreateRequest -> createNode(
+                users[from]?.workspaceUid ?: error("User not in workspace"),
+                packet.nodeType,
+                packet.position,
+                packet.function
             )
 
-            val variableName = packet.variableName
-            val variable = workspace.getVariable(variableName)
-            if (variable is Property.Null) run {
-                logger.warn { "Failed to create node: $type. Variable not found." }
-                return
-            } else {
-                node.properties["value"] = variable
+            is NodeDeleteRequest ->
+                with(workspaces[users[from]?.workspaceUid] ?: error("User not in workspace")) {
+                    val linksToDelete: MutableSet<UUID> = mutableSetOf()
+                    packet.uuids.forEach { uuid ->
+                        val node: Node = getNode(uuid) ?: let { return }
+
+                        graph.getLinks(node).forEach { link ->
+                            linksToDelete.add(link.uid)
+                            removeLink(link.uid)
+                        }
+
+                        removeNode(uuid)
+                    }
+
+                    // Delete links
+                    sendToUsersInWorkspace(uid, new<LinkDeleted> {
+                        this.uuids.addAll(linksToDelete)
+                    })
+
+                    // Delete node
+                    sendToUsersInWorkspace(uid, new<NodeDeleted> {
+                        this.uuids.addAll(packet.uuids)
+                    })
+                }
+
+            is LinkCreateRequest -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                workspace?.addLink(packet.link)
+                logger.debug { "Link created: ${packet.link}" }
+
+                sendToUsersInWorkspace(users[from]?.workspaceUid ?: error("User not in workspace"), new<LinkCreated> {
+                    this.link = packet.link
+                })
             }
 
-            //send the node
-            sendToUsersInWorkspace(workspace.uid, new<NodeCreated> {
-                this.node = node
-            })
+            is LinkDeleteRequest ->
+                with(workspaces[users[from]?.workspaceUid] ?: error("User not in workspace")) {
+                    packet.uuids.forEach(::removeLink)
 
-        }
+                    sendToUsersInWorkspace(uid, new<LinkDeleted> {
+                        this.uuids.addAll(packet.uuids)
+                    })
+                }
 
-
-        is ProxyNodeCreateRequest -> {
-            val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
-                ?: error("Workspace not found")
-            val type = "World/Proxy"
-            val library = listener<Schemas>(Endpoint.Side.SERVER).library
-            val nodeType = library[type] ?: error("Node type not found")
-            val node = listener<Schemas>(Endpoint.Side.SERVER).createFromType(workspace, nodeType, packet.position)
-            node.properties["value"] = Property.Object {
-                "x" to packet.blockPos.x
-                "y" to packet.blockPos.y
-                "z" to packet.blockPos.z
-                "level" to packet.level.location().toString()
+            is WorkspaceCompileRequest -> {
+                val workspace = workspaces[packet.workspaceId] ?: error("Workspace not found")
+                compileWorkspace(workspace)
             }
-            node.properties["override"] = Property.String("\${OUTPUT.proxied = {x = ${packet.blockPos.x}, y = ${packet.blockPos.y}, z = ${packet.blockPos.z}}}".trimIndent())
-            //Set the source to output a block position
 
-            //send the node
-            sendToUsersInWorkspace(workspace.uid, new<NodeCreated> {
-                this.node = node
-            })
+            is EdgePropertyUpdate -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                updateEdgeProperty(workspace, packet.edgeUid, packet.property, from)
+            }
+
+            is VariableCreateRequest -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                createVariable(workspace, packet.name, packet.property, from)
+            }
+
+            is VariableDeleteRequest -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                workspace.removeVariable(packet.name)
+                sendToUsersInWorkspace(workspace.uid, new<VariableDeleted> {
+                    this.name = packet.name
+                })
+            }
+
+            is VariableUpdateRequest -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                workspace.updateVariable(packet.variableName, packet.property["value"])
+                sendToUsersInWorkspace(workspace.uid, new<VariableUpdated> {
+                    this.variableName = packet.variableName
+                    this.property = packet.property
+                })
+            }
+
+            is VariableNodeCreateRequest -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                val type =
+                    if (packet.type == bpm.common.workspace.packets.NodeType.GetVariable) "Variables/Get Variable" else "Variables/Set Variable"
+                val library = listener<Schemas>(Endpoint.Side.SERVER).library
+                val nodeType = library[type] ?: error("Node type not found")
+                val edges = nodeType.properties["edges"] as? Property.Object ?: error("Edges not found")
+                val input = edges["name"] as? Property.Object ?: error("Input not found")
+                val value = input["value"] as? Property.Object ?: error("Value not found")
+                val default = value["default"] as? Property.String ?: error("Default not found")
+
+                //Sets the default to the variable name
+                default.set(packet.variableName)
+
+                val node = listener<Schemas>(Endpoint.Side.SERVER).createFromType(
+                    workspace, nodeType, packet.position
+                )
+
+                val variableName = packet.variableName
+                val variable = workspace.getVariable(variableName)
+                if (variable is Property.Null) run {
+                    logger.warn { "Failed to create node: $type. Variable not found." }
+                    return
+                } else {
+                    node.properties["value"] = variable
+                }
+
+                //send the node
+                sendToUsersInWorkspace(workspace.uid, new<NodeCreated> {
+                    this.node = node
+                })
+
+            }
+
+
+            is ProxyNodeCreateRequest -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                val type = "World/Proxy"
+                val library = listener<Schemas>(Endpoint.Side.SERVER).library
+                val nodeType = library[type] ?: error("Node type not found")
+                val node = listener<Schemas>(Endpoint.Side.SERVER).createFromType(workspace, nodeType, packet.position)
+                node.properties["value"] = Property.Object {
+                    "x" to packet.blockPos.x
+                    "y" to packet.blockPos.y
+                    "z" to packet.blockPos.z
+                    "level" to packet.level.location().toString()
+                }
+                node.properties["override"] = Property.String("\${OUTPUT.proxied = {x = ${packet.blockPos.x}, y = ${packet.blockPos.y}, z = ${packet.blockPos.z}}}".trimIndent())
+                //Set the source to output a block position
+
+                //send the node
+                sendToUsersInWorkspace(workspace.uid, new<NodeCreated> {
+                    this.node = node
+                })
+            }
+
+            is FunctionCreateRequest -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                val function = packet.function
+                workspace.graph.addFunction(function)
+                //update all the nodes function parent
+                function.nodes.forEach { nodeId ->
+                    val node = workspace.graph.getNode(nodeId.get()) ?: return@forEach
+                    node.function = function.uid
+                }
+
+                sendToUsersInWorkspace(workspace.uid, new<FunctionCreated> {
+                    this.function = function
+                })
+
+            }
+
+            is FunctionResized -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                val function = workspace.graph.getFunction(packet.uid) ?: return
+                function.width = packet.width
+                function.height = packet.height
+                sendToUsersInWorkspace(workspace.uid, new<FunctionResized> {
+                    this.uid = packet.uid
+                    this.width = packet.width
+                    this.height = packet.height
+                })
+            }
+
+            is FunctionMoved -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                val function = workspace.graph.getFunction(packet.uid) ?: return
+                function.x = packet.x
+                function.y = packet.y
+                sendToUsersInWorkspace(workspace.uid, new<FunctionMoved> {
+                    this.uid = packet.uid
+                    this.x = packet.x
+                    this.y = packet.y
+                })
+            }
+
+            is FunctionMinimized -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                val function = workspace.graph.getFunction(packet.uid) ?: return
+                function.minimized = packet.minimized
+                sendToUsersInWorkspace(workspace.uid, new<FunctionMinimized> {
+                    this.uid = packet.uid
+                    this.minimized = packet.minimized
+                })
+            }
+
+            is FunctionColored -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                val function = workspace.graph.getFunction(packet.uid) ?: return
+                function.color = packet.newColor
+                sendToUsersInWorkspace(workspace.uid, new<FunctionColored> {
+                    this.uid = packet.uid
+                    this.newColor = packet.newColor
+                })
+            }
+
+            is FunctionNamed -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                val function = workspace.graph.getFunction(packet.uid) ?: return
+                function.name = packet.newName
+                sendToUsersInWorkspace(workspace.uid, new<FunctionNamed> {
+                    this.uid = packet.uid
+                    this.newName = packet.newName
+                })
+            }
+
+            is FunctionDeleted -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                val function = workspace.graph.getFunction(packet.uid) ?: return
+                val nodes = function.nodes.mapNotNull { workspace.getNode(it.get()) }
+                nodes.forEach {
+                    workspace.removeNode(it.uid)
+                    sendToUsersInWorkspace(workspace.uid, new<NodeDeleted> {
+                        this.uuids.add(it.uid)
+                    })
+                }
+                workspace.graph.removeFunction(packet.uid)
+                sendToUsersInWorkspace(workspace.uid, new<FunctionDeleted> {
+                    this.uid = packet.uid
+                })
+            }
+
+            is FunctionEdgeCreated -> {
+                val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
+                    ?: error("Workspace not found")
+                val edge = packet.edge
+                workspace.addEdge(workspace.graph.getFunction(packet.uid) ?: return, edge)
+                sendToUsersInWorkspace(workspace.uid, new<FunctionEdgeCreated> {
+                    this.uid = packet.uid
+                    this.edge = edge
+                })
+            }
+
+            else -> Unit
         }
-
-        else -> Unit
     }
 
     private fun createVariable(workspace: Workspace, name: String, property: PropertyMap, from: UUID) {
@@ -318,7 +432,7 @@ object ServerRuntime : Listener {
         }
     }
 
-    private fun createNode(workspaceId: UUID, nodeType: String, position: Vector2f) {
+    private fun createNode(workspaceId: UUID, nodeType: String, position: Vector2f, function: UUID) {
         val workspace = workspaces[workspaceId] ?: run {
             logger.warn { "Failed to create node: $workspaceId" }
             return
@@ -326,10 +440,32 @@ object ServerRuntime : Listener {
 
         val schema = listener<Schemas>(Endpoint.Side.SERVER).library[nodeType] ?: run {
             logger.warn { "Failed to create node: $nodeType. Unknown type." }
+            //Try to create from function
+            if (nodeType.startsWith("Functions/")) {
+                val functionName = nodeType.removePrefix("Functions/")
+
+                val func = workspace.graph.getFunctionByName(functionName) ?: run {
+                    logger.warn { "Failed to create node: $nodeType. Function not found." }
+                    return
+                }
+
+                val nodeInstance = listener<Schemas>(Endpoint.Side.SERVER).createFromFunction(workspace, func, position)
+                nodeInstance.height = 100f
+                nodeInstance.width = 200f
+                nodeInstance.function = func.uid
+                sendToUsersInWorkspace(workspaceId, new<NodeCreated> {
+                    this.node = nodeInstance
+                })
+            }
             return
         }
-        val node = listener<Schemas>(Endpoint.Side.SERVER).createFromType(workspace, schema, position)
 
+
+        val node = listener<Schemas>(Endpoint.Side.SERVER).createFromType(workspace, schema, position)
+        if (function != NetUtils.DefaultUUID) {
+            node.function = function
+            workspace.graph.getFunction(function)?.nodes?.add(Property.UUID(node.uid))
+        }
         sendToUsersInWorkspace(workspaceId, new<NodeCreated> {
             this.node = node
         })
@@ -348,17 +484,6 @@ object ServerRuntime : Listener {
         for (user in usersInWorkspace) {
             server.send(packet, user)
         }
-//
-//        val usersNotInWorkspace = users.filter { (_, user) ->
-//            user.workspaceUid != workspaceId
-//        }.map { (_, user) ->
-//            user
-//        }.toMutableList().map { it.uid }.toTypedArray()
-
-//        val users =
-
-
-//            server.sendToAll(packet, *usersNotInWorkspace)
     }
 
 

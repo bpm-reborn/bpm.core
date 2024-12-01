@@ -1,32 +1,28 @@
 package bpm.client.runtime.windows
 
-import bpm.client.dockspace.DockPosition
-import bpm.client.dockspace.RootPanel
 import bpm.client.font.Fonts
 import bpm.client.render.panel.ConsolePanel
 import bpm.client.render.panel.PanelManager
 import bpm.client.render.panel.ProxiesPanel
 import bpm.client.render.panel.VariablesPanel
-import bpm.client.render.panels.Panels
 import bpm.client.runtime.ClientRuntime
 import bpm.client.utils.use
 import bpm.common.network.Client
 import bpm.common.network.Endpoint
+import bpm.common.network.NetUtils
 import bpm.common.network.listener
 import bpm.common.property.*
 import bpm.common.upstream.Schemas
 import bpm.common.utils.FontAwesome
 import bpm.common.utils.fmodf
 import bpm.common.workspace.graph.Edge
+import bpm.common.workspace.graph.Function
 import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
-import bpm.common.workspace.packets.EdgePropertyUpdate
+import bpm.common.workspace.packets.*
 import bpm.mc.links.WorldPos
 import imgui.*
-import imgui.flag.ImDrawFlags
-import imgui.flag.ImGuiMouseButton
-import imgui.flag.ImGuiMouseCursor
-import imgui.flag.ImGuiStyleVar
+import imgui.flag.*
 import imgui.type.ImString
 import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiGraphics
@@ -109,27 +105,125 @@ class CanvasGraphics(
     fun renderLinks(drawList: ImDrawList, links: Collection<Link>) {
         for (link in links) {
             val sourceEdge = window.workspace.getEdge(link.from) ?: continue
-            val sourceNode = window.workspace.getNode(sourceEdge.owner) ?: continue
             val targetEdge = window.workspace.getEdge(link.to) ?: continue
-            val targetNode = window.workspace.getNode(targetEdge.owner) ?: continue
 
-            val sourceBounds = context.getNodeBounds(sourceNode)
-            val targetBounds = context.getNodeBounds(targetNode)
+            // Get source and target owners (can be either Node or Function)
+            val sourceOwner = window.workspace.getNode(sourceEdge.owner)
+                ?: window.workspace.graph.getFunction(sourceEdge.owner)
+                ?: continue
 
-            val sourcePos = context.getEdgePosition(sourceNode, sourceEdge, sourceBounds)
-            val targetPos = context.getEdgePosition(targetNode, targetEdge, targetBounds)
+            val targetOwner = window.workspace.getNode(targetEdge.owner)
+                ?: window.workspace.graph.getFunction(targetEdge.owner)
+                ?: continue
 
-            val sourceColor = ImColor.rgba(sourceNode.color.x, sourceNode.color.y, sourceNode.color.z, 255)
-            val targetColor = ImColor.rgba(targetNode.color.x, targetNode.color.y, targetNode.color.z, 255)
-//            sourcePos.y -= 5f * context.zoom
-//            targetPos.y -= 5f * context.zoom
+            // Skip if source is in a minimized function
+            if (sourceOwner is Node) {
+                val function = window.workspace.graph.getFunction(sourceOwner.function)
+                if (function != null && function.minimized) {
+                    continue
+                }
+            }
+
+            // Skip if target is in a minimized function
+            if (targetOwner is Node) {
+                val function = window.workspace.graph.getFunction(targetOwner.function)
+                if (function != null && function.minimized) {
+                    continue
+                }
+            }
+
+            // Get appropriate bounds based on owner type
+            val sourceBounds = when (sourceOwner) {
+                is Node -> context.getNodeBounds(sourceOwner)
+                is Function -> context.getFunctionBounds(sourceOwner)
+                else -> continue
+            }
+
+            val targetBounds = when (targetOwner) {
+                is Node -> context.getNodeBounds(targetOwner)
+                is Function -> context.getFunctionBounds(targetOwner)
+                else -> continue
+            }
+
+            // Get edge positions
+            val sourcePos = when (sourceOwner) {
+                is Node -> context.getEdgePosition(sourceOwner, sourceEdge, sourceBounds)
+                is Function -> context.getEdgePosition(sourceOwner, sourceEdge, sourceBounds)
+                else -> continue
+            }
+
+            val targetPos = when (targetOwner) {
+                is Node -> context.getEdgePosition(targetOwner, targetEdge, targetBounds)
+                is Function -> context.getEdgePosition(targetOwner, targetEdge, targetBounds)
+                else -> continue
+            }
+
+            // Get colors based on owner type
+            val sourceColor = when (sourceOwner) {
+                is Node -> ImColor.rgba(
+                    sourceOwner.color.x,
+                    sourceOwner.color.y,
+                    sourceOwner.color.z,
+                    sourceOwner.color.w
+                )
+
+                is Function -> ImColor.rgba(
+                    sourceOwner.color.x,
+                    sourceOwner.color.y,
+                    sourceOwner.color.z,
+                    sourceOwner.color.w
+                )
+
+                else -> continue
+            }
+
+            val targetColor = when (targetOwner) {
+                is Node -> ImColor.rgba(
+                    targetOwner.color.x,
+                    targetOwner.color.y,
+                    targetOwner.color.z,
+                    targetOwner.color.w
+                )
+
+                is Function -> ImColor.rgba(
+                    targetOwner.color.x,
+                    targetOwner.color.y,
+                    targetOwner.color.z,
+                    targetOwner.color.w
+                )
+
+                else -> continue
+            }
+
+            // Draw appropriate link type
             if (sourceEdge.type == "exec" || targetEdge.type == "exec") {
-                drawExecLink(drawList, sourcePos, targetPos, sourceColor, targetColor, context.zoom, window.currentTime)
+                when (sourceOwner) {
+                    is Node -> drawExecLink(
+                        drawList,
+                        sourcePos,
+                        targetPos,
+                        sourceColor,
+                        targetColor,
+                        context.zoom,
+                        window.currentTime
+                    )
+
+                    is Function -> drawExecLink(
+                        drawList,
+                        targetPos,
+                        sourcePos,
+                        sourceColor,
+                        targetColor,
+                        context.zoom,
+                        window.currentTime
+                    )
+                }
+//                drawExecLink(drawList, sourcePos, targetPos, sourceColor, targetColor, context.zoom, window.currentTime)
             } else {
                 drawDataLink(drawList, sourcePos, targetPos, sourceColor, targetColor, context.zoom)
             }
 
-            // Hover effect
+            // Handle hover effects
             if (window.hoveredLink?.uid == link.uid || context.isLinkInSelectionBox(link)) {
                 val midX = (sourcePos.x + targetPos.x) / 2
                 val controlPoint1 = Vector2f(midX, sourcePos.y)
@@ -143,13 +237,13 @@ class CanvasGraphics(
                     controlPoint2.y,
                     targetPos.x,
                     targetPos.y,
-                    ImColor.rgba(69, 163, 230, 185), // Blue-ish highlight for hovered links
-                    4f * context.zoom, // Thicker line for hovered links
+                    ImColor.rgba(69, 163, 230, 185),
+                    4f * context.zoom,
                     50
                 )
             }
 
-            // Add visual indication for selected links
+            // Handle selection highlighting
             if (context.isLinkSelected(link)) {
                 val midX = (sourcePos.x + targetPos.x) / 2
                 val controlPoint1 = Vector2f(midX, sourcePos.y)
@@ -163,16 +257,349 @@ class CanvasGraphics(
                     controlPoint2.y,
                     targetPos.x,
                     targetPos.y,
-                    ImColor.rgba(255, 255, 0, 255), // Yellow highlight for selected links
-                    4f * context.zoom, // Thicker line for selected links
+                    ImColor.rgba(255, 255, 0, 255),
+                    4f * context.zoom,
                     50
                 )
             }
         }
     }
+    /**
+     * Renders all functions in the graph
+     */
+    fun renderFunctions(drawList: ImDrawList, functions: Collection<Function>) {
+        for (function in functions) {
+            val bounds = context.getFunctionBounds(function)
+
+            if (!function.minimized) {
+                // Render function background
+                drawList.addRectFilled(
+                    bounds.x,
+                    bounds.y,
+                    bounds.z,
+                    bounds.w,
+                    ImColor.rgba(function.color.x, function.color.y, function.color.z, function.color.w),
+                    10f * context.zoom
+                )
+
+                // Render function border
+                val borderColor = ImColor.rgba(80, 80, 80, 255)
+                drawList.addRect(
+                    bounds.x,
+                    bounds.y,
+                    bounds.z,
+                    bounds.w,
+                    borderColor,
+                    10f * context.zoom,
+                    ImDrawFlags.None,
+                    2f * context.zoom
+                )
+            }
+
+            // Render function header
+            val headerHeight = 30f * context.zoom
+            val headerBounds = Vector4f(bounds.x, bounds.y, bounds.z, bounds.y + headerHeight)
+
+            // Header background
+            drawList.addRectFilled(
+                headerBounds.x,
+                headerBounds.y,
+                headerBounds.z,
+                headerBounds.w,
+                ImColor.rgba(60, 60, 60, 255),
+                10f * context.zoom
+            )
+
+            // Function icon and title
+            val paddingX = 12f * context.zoom
+            val icon = function.icon.toChar().toString()
+            val iconSize = 24f * context.zoom
+
+            // Render icon
+            drawShadowedText(
+                drawList,
+                fontAwesome,
+                iconSize,
+                bounds.x + paddingX,
+                bounds.y + (headerHeight - iconSize) / 2,
+                ImColor.rgba(255, 255, 255, 255),
+                icon,
+                scale = 1f,
+                offsetY = 2f * context.zoom,
+                offsetX = 2f * context.zoom
+            )
+
+            // Icon separator line
+            drawList.addLine(
+                bounds.x + iconSize + paddingX * 1.5f,
+                headerBounds.y + 5f * context.zoom,
+                bounds.x + iconSize + paddingX * 1.5f,
+                headerBounds.w - 5f * context.zoom,
+                ImColor.rgba(100, 100, 100, 255),
+                2f * context.zoom
+            )
+
+            // Render title
+            headerFont.use {
+                drawShadowedText(
+                    drawList,
+                    headerFont,
+                    window.workspace.settings.fontHeaderSize.toFloat(),
+                    bounds.x + iconSize + paddingX * 2f,
+                    bounds.y + (headerHeight - window.workspace.settings.fontHeaderSize) / 2,
+                    ImColor.rgba(255, 255, 255, 255),
+                    function.name,
+                    scale = 1f,
+                    offsetX = 2f * context.zoom,
+                    offsetY = 2f * context.zoom
+                )
+            }
+
+            // Button dimensions
+            val buttonSize = 16f * context.zoom
+            val buttonPadding = 8f * context.zoom
+            val buttonSpacing = 4f * context.zoom
+
+            // Settings button
+            val settingsButtonX = headerBounds.z - (buttonSize + buttonPadding) * 2 - buttonSpacing
+            val settingsButtonY = headerBounds.y + (headerHeight - buttonSize) / 2
+            val settingsButtonBounds = Vector4f(
+                settingsButtonX,
+                settingsButtonY,
+                settingsButtonX + buttonSize,
+                settingsButtonY + buttonSize
+            )
+
+            // Minimize/maximize button
+            val minMaxButtonX = headerBounds.z - buttonSize - buttonPadding
+            val minMaxButtonY = headerBounds.y + (headerHeight - buttonSize) / 2
+            val minMaxButtonBounds = Vector4f(
+                minMaxButtonX,
+                minMaxButtonY,
+                minMaxButtonX + buttonSize,
+                minMaxButtonY + buttonSize
+            )
+
+            // Handle button interactions
+            val mousePos = ImGui.getMousePos()
+
+            // Settings button interaction
+            val isSettingsHovered = mousePos.x >= settingsButtonBounds.x && mousePos.x <= settingsButtonBounds.z &&
+                    mousePos.y >= settingsButtonBounds.y && mousePos.y <= settingsButtonBounds.w
+
+            if (isSettingsHovered) {
+                drawList.addRectFilled(
+                    settingsButtonBounds.x,
+                    settingsButtonBounds.y,
+                    settingsButtonBounds.z,
+                    settingsButtonBounds.w,
+                    ImColor.rgba(100, 100, 100, 255),
+                    4f * context.zoom
+                )
+
+                if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
+                    ImGui.openPopup("function_settings_${function.uid}")
+                }
+            }
+
+            // Render settings button icon
+            fontAwesome.use {
+                drawShadowedText(
+                    drawList,
+                    fontAwesome,
+                    buttonSize,
+                    settingsButtonBounds.x + 4.5f * context.zoom,
+                    settingsButtonBounds.y,
+                    ImColor.rgba(255, 255, 255, 255),
+                    FontAwesome.Gear,
+                    scale = 1f,
+                    offsetX = 1f * context.zoom,
+                    offsetY = 1f * context.zoom
+                )
+            }
+
+            // Minimize/maximize button interaction
+            val isMinMaxHovered = mousePos.x >= minMaxButtonBounds.x && mousePos.x <= minMaxButtonBounds.z &&
+                    mousePos.y >= minMaxButtonBounds.y && mousePos.y <= minMaxButtonBounds.w
+
+            if (isMinMaxHovered) {
+                drawList.addRectFilled(
+                    minMaxButtonBounds.x,
+                    minMaxButtonBounds.y,
+                    minMaxButtonBounds.z,
+                    minMaxButtonBounds.w,
+                    ImColor.rgba(100, 100, 100, 255),
+                    4f * context.zoom
+                )
+
+                if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
+                    function.minimized = !function.minimized
+                    Client.send(FunctionMinimized(function.uid, function.minimized))
+                }
+            }
+
+            // Render minimize/maximize button icon
+            fontAwesome.use {
+                drawShadowedText(
+                    drawList,
+                    fontAwesome,
+                    buttonSize,
+                    minMaxButtonBounds.x + if (!function.minimized) 4.5f * context.zoom else 3.5f * context.zoom,
+                    minMaxButtonBounds.y + if (function.minimized) 3f * context.zoom else 0f,
+                    ImColor.rgba(255, 255, 255, 255),
+                    if (function.minimized) FontAwesome.Plus else FontAwesome.Minus,
+                    scale = 1f,
+                    offsetX = 1f * context.zoom,
+                    offsetY = 1f * context.zoom
+                )
+            }
+
+            // Render settings popup
+            val popupFlags = ImGuiWindowFlags.AlwaysAutoResize or
+                    ImGuiWindowFlags.NoMove or
+                    ImGuiWindowFlags.NoResize
+
+            ImGui.setNextWindowPos(settingsButtonBounds.x, settingsButtonBounds.w + 5f)
+            renderFunctionSettingsPopup(drawList, function)
+
+            if (!function.minimized) {
+                // Only render edge indicators if not minimized
+                val edgeRadius = 4f * context.zoom
+
+                // Add any additional rendering for the expanded state
+            }
+
+
+        }
+    }
+
+    val outputNameBuffer = ImString(256)
+    val outputTypeBuffer = ImString(256)
+    val inputNameBuffer = ImString(256)
+    val inputTypeBuffer = ImString(256)
+
+    private fun renderFunctionSettingsPopup(drawList: ImDrawList, function: Function) {
+        val popupFlags = ImGuiWindowFlags.AlwaysAutoResize or
+                ImGuiWindowFlags.NoMove or
+                ImGuiWindowFlags.NoResize
+
+        if (ImGui.beginPopup("function_settings_${function.uid}", popupFlags)) {
+            ImGui.pushFont(bodyFont)
+
+            // Function name edit
+            val nameBuffer = ImString(256)
+            nameBuffer.set(function.name)
+            if (ImGui.inputText("Name", nameBuffer)) {
+                function.properties["name"] = Property.String(nameBuffer.get())
+                Client.send(FunctionNamed(function.uid, nameBuffer.get()))
+            }
+
+            // Color picker for function
+            val color = function.color
+            val backgroundColor = floatArrayOf(
+                color.x,
+                color.y,
+                color.z,
+                color.w
+            )
+
+            if (ImGui.colorEdit4("Background Color", backgroundColor)) {
+                function.color = Vector4f(
+                    backgroundColor[0],
+                    backgroundColor[1],
+                    backgroundColor[2],
+                    backgroundColor[3]
+                )
+                Client.send(FunctionColored(function.uid, function.color))
+            }
+
+            ImGui.separator()
+
+            // Add Input button
+            if (ImGui.button("Add Input", -1f, 0f)) {
+                ImGui.openPopup("add_input_${function.uid}")
+            }
+
+            // Add Output button
+            if (ImGui.button("Add Output", -1f, 0f)) {
+                ImGui.openPopup("add_output_${function.uid}")
+            }
+
+            // Render Add Input popup
+            if (ImGui.beginPopup("add_input_${function.uid}")) {
+
+                ImGui.text("Add Input Edge")
+                ImGui.separator()
+
+                ImGui.inputText("Name##input", inputNameBuffer)
+                ImGui.inputText("Type##input", inputTypeBuffer)
+
+                if (ImGui.button("Add", -1f, 0f)) {
+                    if (inputNameBuffer.get().isNotEmpty() && inputTypeBuffer.get().isNotEmpty()) {
+                        val edge = Edge(
+                            Property.Object {
+                                "name" to Property.String(inputNameBuffer.get())
+                                "type" to Property.String(inputTypeBuffer.get())
+                                "direction" to Property.String("input")
+                            }
+                        )
+                        Client.send(FunctionEdgeCreated(function.uid, edge))
+                        ImGui.closeCurrentPopup()
+                    }
+                }
+
+                ImGui.endPopup()
+            }
+
+            // Render Add Output popup
+            if (ImGui.beginPopup("add_output_${function.uid}")) {
+
+
+                ImGui.text("Add Output Edge")
+                ImGui.separator()
+
+                ImGui.inputText("Name##output", outputNameBuffer)
+                ImGui.inputText("Type##output", outputTypeBuffer)
+
+                if (ImGui.button("Add", -1f, 0f)) {
+                    if (outputNameBuffer.get().isNotEmpty() && outputTypeBuffer.get().isNotEmpty()) {
+                        val edge = Edge(
+                            Property.Object {
+                                "name" to Property.String(outputNameBuffer.get())
+                                "type" to Property.String(outputTypeBuffer.get())
+                                "direction" to Property.String("output")
+                            }
+                        )
+                        Client.send(FunctionEdgeCreated(function.uid, edge))
+                        ImGui.closeCurrentPopup()
+                    }
+                }
+
+                ImGui.endPopup()
+            }
+
+            ImGui.separator()
+
+            if (ImGui.button("Delete Function", -1f, 0f)) {
+                Client.send(FunctionDeleted(function.uid))
+                ImGui.closeCurrentPopup()
+            }
+
+            ImGui.popFont()
+            ImGui.endPopup()
+        }
+    }
+
 
     fun renderNodes(drawList: ImDrawList, nodes: Collection<Node>) {
         for (node in nodes) {
+            if (node.function != NetUtils.DefaultUUID) {
+                val function = window.workspace.graph.getFunction(node.function)
+                if (function != null && function.minimized) {
+                    continue
+                }
+            }
+
             val nodeBounds = context.getNodeBounds(node)
             val headerBounds = context.getHeaderBounds(node)
             val rawColor: Vector4i = node.color
@@ -183,6 +610,13 @@ class CanvasGraphics(
             renderEdges(drawList, node, nodeBounds)
 //            nodeBounds.y -= 5f * context.zoom
             context.handleNode(node, nodeBounds, headerBounds)
+            context.handleFunctionDrag()
+        }
+
+        for (function in window.workspace.graph.functions) {
+            if (!function.minimized) {
+                renderEdges(drawList, function, context.getFunctionBounds(function))
+            }
         }
 
         renderToolTips()
@@ -376,6 +810,33 @@ class CanvasGraphics(
         }
     }
 
+    private fun renderEdges(drawList: ImDrawList, func: Function, nodeBounds: Vector4f) {
+        val edges = window.workspace.graph.getEdges(func.uid)
+        val inputEdges = edges.filter { it.direction == "input" }
+        val outputEdges = edges.filter { it.direction == "output" }
+
+        val edgeSpacing = 20f * context.zoom
+        val headerHeight = 30f * context.zoom
+        val edgeStartY = nodeBounds.y + headerHeight  // Start at the header divider line
+        val textPadding = 12f * context.zoom
+        val iconSize = 24f * context.zoom
+
+        // Render input edges - position after the icon and title
+        inputEdges.forEachIndexed { index, edge ->
+            val yPos = edgeStartY + index * edgeSpacing
+            val xPos = nodeBounds.x + iconSize + textPadding * 2.5f  // Position after icon and text
+            renderEdge(drawList, func, edge, nodeBounds, Vector2f(xPos, yPos), true)
+        }
+
+        // Render output edges - position before the minimize button
+        outputEdges.forEachIndexed { index, edge ->
+            val yPos = edgeStartY + index * edgeSpacing
+            val xPos = nodeBounds.z - iconSize - textPadding * 4f  // Position before the buttons
+            renderEdge(drawList, func, edge, nodeBounds, Vector2f(xPos, yPos), false)
+        }
+    }
+
+
     private fun getEdgeColor(type: String): Int {
         // Compute hash of the input string
         val hash = type.hashCode()
@@ -517,6 +978,123 @@ class CanvasGraphics(
             )
 
 //            renderTooltip(edge.description)
+
+            if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
+                context.startEdgeDrag(node, edge)
+            }
+        }
+    }
+
+    private fun renderEdge(
+        drawList: ImDrawList,
+        node: Function,
+        edge: Edge,
+        nodeBounds: Vector4f,
+        pos: Vector2f,
+        isInput: Boolean
+    ) {
+        val color = getEdgeColor(edge.type)
+        val edgeRadius = 4f * context.zoom
+        val isConnected = window.workspace.graph.links.any { it.from == edge.uid || it.to == edge.uid }
+        val iconSize = 24f * context.zoom
+        val textPadding = 12f * context.zoom
+
+        // Positioning relative to the text
+        val labelWidth = bodyFont.use { ImGui.calcTextSize(edge.name).x }
+        val inputWidth = 60f * context.zoom
+        val spacing = 5f * context.zoom
+        val totalWidth = labelWidth + inputWidth + spacing
+
+        // Adjust position based on input/output
+        val edgeP = context.getEdgePosition(node, edge, nodeBounds)
+        val xPos = edgeP.x
+        val yPos = edgeP.y
+
+        // Draw edge connector
+        if (edge.type == "exec" && (edge.name == "exec_in" || edge.name == "exec_out" || edge.name == "exec")) {
+            val triangleSize = 8f * context.zoom
+            val triangleX = if (isInput) {
+                xPos - 2.5f * context.zoom
+            } else {
+                xPos - triangleSize - spacing
+            }
+            val triangleY = yPos - triangleSize / 2
+            drawList.addTriangleFilled(
+                triangleX,
+                triangleY,
+                triangleX + triangleSize,
+                triangleY + triangleSize / 2,
+                triangleX,
+                triangleY + triangleSize,
+                ImColor.rgba(255, 255, 255, 255)
+            )
+        } else {
+            // Draw circle for data edges
+            if (isConnected) {
+                drawList.addCircleFilled(xPos, yPos, edgeRadius, color)
+            } else {
+                drawList.addCircle(xPos, yPos, edgeRadius, color, 12, 1.5f * context.zoom)
+            }
+
+            // Render edge label
+            val textY = (yPos - ImGui.getTextLineHeight() / 2) - 3f * context.zoom
+            val labelPadding = 1f * context.zoom
+            val labelX = if (isInput) {
+                xPos - labelWidth - spacing * 2
+            } else {
+                xPos + spacing * 2
+            }
+
+            // Background for text
+            drawList.addRectFilled(
+                labelX - labelPadding,
+                textY - labelPadding,
+                labelX + labelWidth + labelPadding,
+                textY + ImGui.getTextLineHeight() + labelPadding,
+                ImColor.rgba(40, 40, 40, 200),
+                2f * context.zoom
+            )
+
+            // Text
+            drawList.addText(
+                bodyFont,
+                window.workspace.settings.fontSize.toFloat(),
+                labelX,
+                textY,
+                ImColor.rgba(220, 220, 220, 255),
+                edge.name.replace("_", " ")
+            )
+
+            // Render input field if not connected
+            if (!isConnected) {
+                val inputX = if (isInput) {
+                    labelX - inputWidth - spacing
+                } else {
+                    labelX + labelWidth + spacing
+                }
+                renderEdgeInput(drawList, edge, inputX, textY, inputWidth * 0.66f)
+            }
+        }
+
+        // Handle hover and interaction
+        val mousePos = ImGui.getMousePos()
+        val edgePos = context.getEdgePosition(node, edge, nodeBounds)
+        //visualize the edge position with a circle
+//        drawList.addCircle(edgePos.x, edgePos.y, edgeRadius, ImColor.rgba(255, 255, 255, 200), 12, 1.5f * context.zoom)
+        if (isPointOverRect(
+                Vector2f(mousePos.x, mousePos.y),
+                Vector4f(edgePos.x - 10, edgePos.y - 10, edgePos.x + 10, edgePos.y + 10)
+            )
+        ) {
+            renderTooltip(edge.description)
+            drawList.addCircle(
+                edgePos.x,
+                edgePos.y,
+                edgeRadius + 2f * context.zoom,
+                ImColor.rgba(255, 255, 255, 200),
+                12,
+                1.5f * context.zoom
+            )
 
             if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
                 context.startEdgeDrag(node, edge)
@@ -1185,27 +1763,48 @@ class CanvasGraphics(
     }
 
 
-    fun renderEdgeDrag(drawList: ImDrawList, draggedEdge: Pair<Node, Edge>?, dragStartPos: Vector2f?) {
+    fun renderEdgeDrag(drawList: ImDrawList, draggedEdge: Pair<Any, Edge>?, dragStartPos: Vector2f?) {
         if (draggedEdge != null && dragStartPos != null) {
             val (sourceNode, sourceEdge) = draggedEdge
-            val nodeBounds = context.getNodeBounds(sourceNode)
-            val sourcePos = context.getEdgePosition(sourceNode, sourceEdge, nodeBounds)
-            val mousePos = ImGui.getMousePos()
+            if (sourceNode is Node) {
+                val nodeBounds = context.getNodeBounds(sourceNode)
+                val sourcePos = context.getEdgePosition(sourceNode, sourceEdge, nodeBounds)
+                val mousePos = ImGui.getMousePos()
 
-            // Draw the dragging line
-            drawList.addBezierCubic(
-                sourcePos.x,
-                sourcePos.y,
-                sourcePos.x + 50f * context.zoom,
-                sourcePos.y,
-                mousePos.x - 50f * context.zoom,
-                mousePos.y,
-                mousePos.x,
-                mousePos.y,
-                ImColor.rgba(255, 255, 255, 200),
-                2f * context.zoom,
-                20
-            )
+                // Draw the dragging line
+                drawList.addBezierCubic(
+                    sourcePos.x,
+                    sourcePos.y,
+                    sourcePos.x + 50f * context.zoom,
+                    sourcePos.y,
+                    mousePos.x - 50f * context.zoom,
+                    mousePos.y,
+                    mousePos.x,
+                    mousePos.y,
+                    ImColor.rgba(255, 255, 255, 200),
+                    2f * context.zoom,
+                    20
+                )
+            } else if (sourceNode is Function) {
+                val nodeBounds = context.getFunctionBounds(sourceNode)
+                val sourcePos = context.getEdgePosition(sourceNode, sourceEdge, nodeBounds)
+                val mousePos = ImGui.getMousePos()
+
+                // Draw the dragging line
+                drawList.addBezierCubic(
+                    sourcePos.x,
+                    sourcePos.y,
+                    sourcePos.x + 50f * context.zoom,
+                    sourcePos.y,
+                    mousePos.x - 50f * context.zoom,
+                    mousePos.y,
+                    mousePos.x,
+                    mousePos.y,
+                    ImColor.rgba(255, 255, 255, 200),
+                    2f * context.zoom,
+                    20
+                )
+            }
         }
     }
 

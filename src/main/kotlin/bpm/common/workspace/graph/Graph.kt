@@ -25,7 +25,11 @@ class Graph(
     /**
      * The variables that are contained within the graph.
      */
-    variables: PropertyList = Property.List()
+    variables: PropertyList = Property.List(),
+    /**
+     * Functions that are contained within the graph.
+     */
+    functions: PropertyList = Property.List(),
 ) {
 
     /**
@@ -73,8 +77,12 @@ class Graph(
      */
     private val linkMap: ConcurrentMap<UUID, Link> = ConcurrentHashMap()
 
+    // Add to existing properties
+    private val functionMap: ConcurrentMap<UUID, Function> = ConcurrentHashMap()
+
+
     init {
-        Serializer.initGraph(nodes, edges, links, this, variables)
+        Serializer.initGraph(nodes, edges, links, this, variables, functions)
     }
 
 
@@ -94,6 +102,9 @@ class Graph(
      * Immutable ref to the variables map.
      */
     val variables: Map<String, Property<*>> get() = variableMap
+
+    // Add to existing public properties
+    val functions: Collection<Function> get() = functionMap.values
 
     /**
      * Adds a node to the system.
@@ -122,6 +133,19 @@ class Graph(
     fun addEdge(owner: Node, edge: Edge) {
         edge.owner = owner.uid
         owner.edgeIds.add(Property.UUID(edge.uid))
+        edgeMap[edge.uid] = edge
+        val ownerEdges = nodeEdgeMap.getOrPut(owner.uid) { mutableListOf() }
+        ownerEdges.add(edge.uid)
+    }
+
+    fun addEdge(owner: Function, edge: Edge) {
+        edge.owner = owner.uid
+        val isInput = edge.direction == "input"
+        if (isInput) {
+            owner.inputs.add(Property.UUID(edge.uid))
+        } else {
+            owner.outputs.add(Property.UUID(edge.uid))
+        }
         edgeMap[edge.uid] = edge
         val ownerEdges = nodeEdgeMap.getOrPut(owner.uid) { mutableListOf() }
         ownerEdges.add(edge.uid)
@@ -207,6 +231,61 @@ class Graph(
 
 
     /**
+     * Creates a new function from a collection of nodes and their connections.
+     *
+     * @param nodes The nodes to include in the function
+     * @return The created function
+     */
+    // Update the createFunction method to use the initial bounds calculation
+    fun createFunction(nodes: Collection<Node>): Function {
+        val function = Function()
+        function.nodes.addAll(nodes.map { Property.UUID(it.uid) })
+        // Find all edges that connect to nodes outside the function
+        nodes.forEach { node ->
+            node.function = function.uid
+        }
+
+        // Calculate initial bounds with full padding
+        var minX = Float.POSITIVE_INFINITY
+        var minY = Float.POSITIVE_INFINITY
+        var maxX = Float.NEGATIVE_INFINITY
+        var maxY = Float.NEGATIVE_INFINITY
+
+        nodes.forEach { node ->
+            minX = minOf(minX, node.x)
+            minY = minOf(minY, node.y)
+            maxX = maxOf(maxX, node.x + node.width)
+            maxY = maxOf(maxY, node.y + node.height)
+        }
+
+        val paddingX = 20f
+        val paddingY = 40f
+        function.x = minX - paddingX
+        function.y = minY - paddingY
+        function.width = (maxX - minX) + (paddingX * 2)
+        function.height = (maxY - minY) + (paddingY * 2)
+
+        // Store the function
+        functionMap[function.uid] = function
+        return function
+    }
+
+
+    /**
+     * Removes a function and optionally restores its nodes to the graph
+     */
+    fun removeFunction(uid: UUID, restoreNodes: Boolean = true): Function? {
+        val function = functionMap.remove(uid) ?: return null
+        return function
+    }
+
+    /**
+     * Gets a function by its UUID
+     */
+    fun getFunction(uid: UUID): Function? = functionMap[uid]
+
+
+    /**
      * Retrieves the link associated with the given unique identifier.
      *
      * @param uid The unique identifier of the link.
@@ -259,6 +338,15 @@ class Graph(
         nodeEdgeMap.clear()
         linkMap.clear()
         variableMap.clear()
+        functionMap.clear()
+    }
+
+    fun addFunction(function: Function) {
+        functionMap[function.uid] = function
+    }
+
+    fun getFunctionByName(functionName: String): Function? {
+        return functionMap.values.firstOrNull { it.name == functionName }
     }
 
 
@@ -277,9 +365,10 @@ class Graph(
             connections: PropertyList,
             graph: Graph,
             variables: PropertyList,
+            functions: PropertyList,
         ) {
             for (value in nodes) {
-                logger.debug { "Adding node ${value.castOr<PropertyMap> { error("Failed to get node") }["uid"].get()} to graph, with value of $value" }
+//                logger.debug { "Adding node ${value.castOr<PropertyMap> { error("Failed to get node") }["uid"].get()} to graph, with value of $value" }
                 val node = Node(value as PropertyMap)
                 graph.addNode(node)
 
@@ -293,30 +382,43 @@ class Graph(
 
             }
 
+            for (value in functions) {
+//                logger.info { "Adding function ${value.cast<PropertyMap>()["uid"].get()} to graph, with value of $value" }
+                val function = Function(value as PropertyMap)
+                graph.functionMap[function.uid] = function
+            }
+
             for (value in edges) {
-                logger.debug { "Adding edge ${value.cast<PropertyMap>()["uid"].get()} to graph, with value of $value" }
+//                logger.debug { "Adding edge ${value.cast<PropertyMap>()["uid"].get()} to graph, with value of $value" }
                 val ownerid = value.cast<PropertyMap>()["owner"].cast<Property.UUID>()
                 val owner = graph.getNode(ownerid.get())
                 if (owner == null) {
-                    //Not an error, it just hasn't been processed yet so lets queue it up
-                    queuedEdges.getOrPut(ownerid.get()) { mutableListOf() }.add(Edge(value as PropertyMap))
+                    val func = graph.getFunction(ownerid.get())
+                    if (func == null) {
+                        //Not an error, it just hasn't been processed yet so lets queue it up
+                        queuedEdges.getOrPut(ownerid.get()) { mutableListOf() }.add(Edge(value as PropertyMap))
+                        logger.warn { "Failed to find owner for edge ${value.cast<PropertyMap>()["uid"].get()}" }
+                        continue
+                    }
+                    graph.addEdge(func, Edge(value as PropertyMap))
                     continue
                 }
                 graph.addEdge(owner, Edge(value as PropertyMap))
             }
 
             for (value in connections) {
-                logger.info { "Adding connection ${value.cast<PropertyMap>()["uid"].get()} to graph, with value of $value" }
+//                logger.info { "Adding connection ${value.cast<PropertyMap>()["uid"].get()} to graph, with value of $value" }
                 graph.addLink(Link(value as PropertyMap))
             }
 
             for (value in variables) {
-                logger.info { "Adding variable ${value.cast<PropertyMap>()["name"].get()} to graph, with value of $value" }
+//                logger.info { "Adding variable ${value.cast<PropertyMap>()["name"].get()} to graph, with value of $value" }
                 val map = value.cast<PropertyMap>()
                 val name = map["name"].cast<Property.String>().get()
                 val prop = map["value"]
                 graph.addVariable(name, prop)
             }
+
         }
         /**
          * Deserializes the contents of the Buffer and returns an instance of type T.
@@ -328,6 +430,7 @@ class Graph(
             val edges = Serial.read<PropertyList>(buffer)
             val connections = Serial.read<PropertyList>(buffer)
             val variables = Serial.read<PropertyList>(buffer)
+            val functions = Serial.read<PropertyList>(buffer)
             if (nodes == null) {
                 logger.warn { "Failed to read nodes in to graph from buffer!" }
                 throw Exception("Failed to read nodes in to graph from buffer!")
@@ -344,7 +447,11 @@ class Graph(
                 logger.warn { "Failed to read variables in to graph from buffer!" }
                 throw Exception("Failed to read variables in to graph from buffer!")
             }
-            return Graph(nodes, edges, connections, variables)
+            if (functions == null) {
+                logger.warn { "Failed to read functions in to graph from buffer!" }
+                throw Exception("Failed to read functions in to graph from buffer!")
+            }
+            return Graph(nodes, edges, connections, variables, functions)
         }
         /**
          * Serializes the provided value into the buffer.
@@ -375,6 +482,12 @@ class Graph(
                 variableList.add(obj)
             }
             Serial.write(buffer, variableList)
+
+            val functionList = Property.List()
+            value.functionMap.forEach {
+                functionList.add(it.value.properties)
+            }
+            Serial.write(buffer, functionList)
         }
     }
 

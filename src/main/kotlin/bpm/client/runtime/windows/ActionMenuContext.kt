@@ -12,6 +12,7 @@ import bpm.client.utils.handleUniversalTextInput
 import bpm.common.utils.FontAwesome
 import bpm.client.utils.use
 import bpm.common.network.Client
+import bpm.common.network.NetUtils
 import bpm.common.property.Property
 import bpm.common.property.PropertyMap
 import bpm.common.property.cast
@@ -20,9 +21,11 @@ import bpm.common.upstream.Schemas
 import bpm.common.type.NodeLibrary
 import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
+import bpm.common.workspace.packets.FunctionCreateRequest
 import bpm.common.workspace.packets.LinkDeleteRequest
 import bpm.common.workspace.packets.NodeDeleteRequest
 import org.joml.Vector2f
+import org.joml.Vector4f
 import java.util.*
 import kotlin.math.max
 
@@ -138,7 +141,7 @@ object CustomActionMenu {
             nodeCount == 1 && linkCount == 0 -> "Selected: 1 node (${selectedNodes.first().name})"
             nodeCount == 0 && linkCount == 1 -> "Selected: 1 link"
             nodeCount > 1 && linkCount == 0 -> "Selected: $nodeCount nodes"
-            nodeCount == 0 && linkCount > 1 -> "Selected: $linkCount links"
+            nodeCount == 0 -> "Selected: $linkCount links"
             nodeCount == 1 && linkCount == 1 -> "Selected: 1 node and 1 link"
             else -> "Selected: $nodeCount nodes and $linkCount links"
         }
@@ -173,8 +176,39 @@ object CustomActionMenu {
             if (renderActionButton(drawList, "Paste     (Ctrl+V)", FontAwesome.Paste, yPos)) {
                 pasteNodes()
             }
+            yPos += 40f
+        }
+        //Create a function from sellection
+
+        //Only show if none of the selected nodes have a function already
+        val hasFunction = selectedNodes.any { it.function != NetUtils.DefaultUUID }
+        if (!hasFunction && renderActionButton(drawList, "Create Function", FontAwesome.Plus, yPos)) {
+            createFunction()
         }
 
+    }
+
+    private fun createFunction() {
+        val selectionBounds = canvasCtx.getLastSelectionBounds()
+        if (selectionBounds == null || !canvasCtx.hasValidSelection()) {
+            // No valid selection bounds available
+            return
+        }
+
+        // Get all nodes and links within the selection
+        val nodesInSelection = canvasCtx.getNodesInLastSelection()
+        val linksInSelection = canvasCtx.getLinksInLastSelection()
+
+        if (nodesInSelection.isEmpty()) {
+            return
+        }
+
+        val function = ClientRuntime.workspace?.graph?.createFunction(nodesInSelection) ?: return
+        //Update all the nodes to have the function UUID, the server handles this silently as well
+        for (node in nodesInSelection) {
+            node.function = function.uid
+        }
+        canvasCtx.client.send(FunctionCreateRequest(function))
 
     }
 
@@ -541,8 +575,8 @@ object CustomActionMenu {
             bodyFont, 14f, menuPosition.x + 40f + depth * 20f, yOffset + 8f, textColor, node.name
         )
 
-        if (isHovered && ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
-            createNode(Vector2f(ImGui.getMousePos().x, ImGui.getMousePos().y), node.nodeType)
+        if (isHovered && ImGui.isMouseClicked(ImGuiMouseButton.Left) && initialMousePos != null) {
+            createNode(Vector2f(initialMousePos!!.x, initialMousePos!!.y), node.nodeType)
             close()
         }
     }
@@ -614,8 +648,7 @@ object CustomActionMenu {
         } else {
             nodeLibrary.count {
                 it.nodeTypeName.contains(searchText, ignoreCase = true) || it.group.contains(
-                    searchText,
-                    ignoreCase = true
+                    searchText, ignoreCase = true
                 )
             } * 30f
         }
@@ -934,17 +967,6 @@ object CustomActionMenu {
         canvasCtx.createNodeAndLink(position, nodeType)
     }
 
-    private fun calculateCursorPosition(xOffset: Float): Int {
-        var position = 0
-        var currentWidth = 0f
-        bodyFont.use {
-            while (position < searchText.length && currentWidth < xOffset) {
-                currentWidth += ImGui.calcTextSize(searchText[position].toString()).x
-                position++
-            }
-        }
-        return position
-    }
 
     private fun updateAnimation() {
         val deltaTime = ImGui.getIO().deltaTime
@@ -1006,13 +1028,10 @@ object CustomActionMenu {
     var isInitialOpen = true
     private val selectedNodes = mutableSetOf<Node>()
     private val selectedLinks = mutableSetOf<Link>()
+    private var initialMousePos: Vector2f? = null
 
     fun open(
-        position: ImVec2,
-        isNodeMenu: Boolean,
-        rebuild: Boolean = true,
-        nodes: Set<Node>,
-        links: Set<Link>
+        position: ImVec2, isNodeMenu: Boolean, rebuild: Boolean = true, nodes: Set<Node>, links: Set<Link>
     ) {
         if (rebuild) {
             buildFolderStructure()
@@ -1026,7 +1045,7 @@ object CustomActionMenu {
             return
         }
         isOpen = true
-
+        initialMousePos = Vector2f(position.x, position.y)
         // Calculate content size
         val contentSize = calculateContentSize()
 
@@ -1075,6 +1094,22 @@ object CustomActionMenu {
     private fun buildFolderStructure() {
         folderStructure = mutableListOf()
         val rootFolder = FolderItem("Root")
+
+        ClientRuntime.workspace?.graph?.functions?.forEach { function ->
+            val folder = rootFolder.items.filterIsInstance<FolderItem>().find { it.name == function.name }
+            if (folder != null) {
+                val item = NodeItem(function.name, "Functions")
+                item.nodeIcon = FontAwesome.Cube
+                folder.items.add(item)
+            } else {
+                rootFolder.items.add(
+                    FolderItem(
+                        function.name, mutableListOf(NodeItem(function.name, "Functions"))
+                    )
+                )
+            }
+        }
+
         nodeLibrary.forEach { nodeType ->
             val folder = rootFolder.items.filterIsInstance<FolderItem>().find { it.name == nodeType.group }
             if (nodeType.group != "Base") {

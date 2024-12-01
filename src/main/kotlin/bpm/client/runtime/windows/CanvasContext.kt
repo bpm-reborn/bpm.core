@@ -9,6 +9,7 @@ import bpm.common.logging.KotlinLogging
 import bpm.common.network.Client
 import bpm.common.network.Endpoint
 import bpm.common.network.Listener
+import bpm.common.network.NetUtils
 import bpm.common.packets.Packet
 import bpm.common.packets.internal.Time
 import bpm.common.property.Property
@@ -20,6 +21,7 @@ import bpm.common.type.NodeType
 import bpm.common.utils.contains
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.graph.Edge
+import bpm.common.workspace.graph.Function
 import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.graph.User
@@ -31,6 +33,8 @@ import org.joml.Vector2f
 import org.joml.Vector4f
 import java.util.*
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 class CanvasContext : Listener {
 
@@ -53,16 +57,23 @@ class CanvasContext : Listener {
     private var selectedEdge: Pair<Node, Edge>? = null
     private val selectedNodeIds = mutableSetOf<UUID>()
     private val selectedLinkIds = mutableSetOf<UUID>()
+
     private val nodesInSelectionBox = mutableSetOf<UUID>()
     private val linksInSelectionBox = mutableSetOf<UUID>()
     val selectedNodes get() = selectedNodeIds.mapNotNull(workspace::getNode)
     val selectedLinks get() = selectedLinkIds.mapNotNull(workspace::getLink)
+    private var lastSelectionBounds: Pair<Vector2f, Vector2f>? = null
+    private var hasValidSelectionBounds = false
+
 
     private val headerFamily get() = Fonts.getFamily("Inter")["Bold"]
     private val headerFont get() = headerFamily[workspace.settings.fontHeaderSize]
     private val bodyFamily get() = Fonts.getFamily("Inter")["Regular"]
     private val bodyFont get() = bodyFamily[workspace.settings.fontSize]
-    private val fontAwesomeFamily get() = Fonts.getFamily("Fa")["Regular"]
+
+    private var resizingFunction: Function? = null
+    private var resizeStartPos: Vector2f? = null
+    private var initialFunctionSize: Vector2f? = null
 
     internal var isLinking = false
 
@@ -72,9 +83,12 @@ class CanvasContext : Listener {
     private var isDraggingGroup = false
     private val groupDragOffset = mutableMapOf<UUID, Vector2f>()
     private var draggedSourceEdge: Pair<Node, Edge>? = null
-    var draggedEdge: Pair<Node, Edge>? = null
+    var draggedEdge: Pair<Any, Edge>? = null
     var dragStartPos: Vector2f? = null
-
+    private var draggedFunction: Function? = null
+    private var functionDragOffset: Vector2f = Vector2f()
+    private var hoveredFunctionHeader: UUID? = null
+    private val nodeOffsets = mutableMapOf<UUID, Vector2f>()
     var hoveredTitleBar: UUID? = null
     var hoveredPin: Pair<UUID, Edge>? = null
 
@@ -104,6 +118,14 @@ class CanvasContext : Listener {
             workspace.settings.zoom = value
         }
 
+    private fun isOverFunctionResizeHandle(function: Function, mousePos: Vector2f): Boolean {
+        val bounds = getFunctionBounds(function)
+        val handleSize = 10f * zoom
+
+        // Check if mouse is in bottom-right corner
+        return mousePos.x >= bounds.z - handleSize && mousePos.x <= bounds.z &&
+                mousePos.y >= bounds.w - handleSize && mousePos.y <= bounds.w
+    }
 
     fun handleNode(node: Node, nodeBounds: Vector4f, headerBounds: Vector4f) {
         if (isLinking) return
@@ -118,6 +140,7 @@ class CanvasContext : Listener {
     fun updateHoverState(mousePos: Vector2f) {
         hoveredTitleBar = null
         hoveredPin = null
+        updateFunctionHoverState(mousePos)
 
         for (node in workspace.graph.nodes) {
             val nodeBounds = getNodeBounds(node)
@@ -127,13 +150,6 @@ class CanvasContext : Listener {
                 return
             }
 
-//            for (edge in workspace.graph.getEdges(node)) {
-//                val edgeBounds = getEdgePosition(node, edge, nodeBounds)
-//                if (isPointOverEdge(mousePos, edgeBounds)) {
-//                    hoveredPin = Pair(node.uid, edge)
-//                    return
-//                }
-//            }
         }
     }
 
@@ -154,12 +170,19 @@ class CanvasContext : Listener {
         }
     }
 
-    fun notifications() {
-
-    }
 
     fun getHoverCursor(): Int {
+        val mousePos = Vector2f(ImGui.getMousePos().x, ImGui.getMousePos().y)
+
+        // Check if mouse is over any function's resize handle
+        workspace.graph.functions.forEach { function ->
+            if (isOverFunctionResizeHandle(function, mousePos)) {
+                return ImGuiMouseCursor.Hand
+            }
+        }
+
         return when {
+            hoveredFunctionHeader != null -> ImGuiMouseCursor.Hand
             hoveredTitleBar != null && !isDraggingNode -> ImGuiMouseCursor.Hand
             isDraggingNode -> ImGuiMouseCursor.None
             hoveredPin != null -> ImGuiMouseCursor.ResizeAll
@@ -189,15 +212,23 @@ class CanvasContext : Listener {
                     val selectedNode = runtime.workspace!!.getNode(selectedNodeId)
                     if (selectedNode != null) {
                         val offset = groupDragOffset[selectedNodeId] ?: Vector2f()
-                        selectedNode.x = if (isShiftDown) snapToGrid(mx - offset.x) else mx - offset.x
-                        selectedNode.y = if (isShiftDown) snapToGrid(my - offset.y) else my - offset.y
+                        val newX = if (isShiftDown) snapToGrid(mx - offset.x) else mx - offset.x
+                        val newY = if (isShiftDown) snapToGrid(my - offset.y) else my - offset.y
+
+                        val constrainedPos = constrainNodeToFunction(selectedNode, newX, newY)
+                        selectedNode.x = constrainedPos.x
+                        selectedNode.y = constrainedPos.y
                         sendMovePacket(selectedNode)
                     }
                 }
             } else {
                 // Move only the dragged node
-                node.x = if (isShiftDown) snapToGrid(mx - dragOffset.x) else mx - dragOffset.x
-                node.y = if (isShiftDown) snapToGrid(my - dragOffset.y) else my - dragOffset.y
+                val newX = if (isShiftDown) snapToGrid(mx - dragOffset.x) else mx - dragOffset.x
+                val newY = if (isShiftDown) snapToGrid(my - dragOffset.y) else my - dragOffset.y
+
+                val constrainedPos = constrainNodeToFunction(node, newX, newY)
+                node.x = constrainedPos.x
+                node.y = constrainedPos.y
                 sendMovePacket(node)
             }
         }
@@ -209,9 +240,6 @@ class CanvasContext : Listener {
             isDraggingGroup = false
             groupDragOffset.clear()
             wasDraggingNode = true
-
-            // We're not unselecting nodes here anymore
-            // unselectAllNodes()
         }
     }
 
@@ -268,6 +296,110 @@ class CanvasContext : Listener {
         )
     }
 
+    fun getFunctionBounds(function: Function, headerPadding: Float = 30f): Vector4f {
+        val functionPos = convertToScreenCoordinates(Vector2f(function.x, function.y))
+        val functionSize = convertToScreenSize(Vector2f(function.width, function.height))
+        val padding = headerPadding * zoom
+        return Vector4f(
+            functionPos.x - padding / 2f,
+            functionPos.y - padding - 2 * zoom,
+            functionPos.x + functionSize.x,
+            (functionPos.y + functionSize.y) - 5 * zoom,
+        )
+    }
+
+    fun getFunctionHeaderBounds(function: Function): Vector4f {
+        return headerFont.use {
+            val functionPos = workspace.convertPosition(function.x, function.y)
+            val functionSize = workspace.convertSize(function.width, function.height)
+            val titleSize = ImGui.calcTextSize(function.name)
+            val titleHeight = titleSize.y
+            val titleX = functionPos.x - 8 * zoom
+            val titleY = ((functionPos.y - titleHeight / 2) - 8 * zoom) - 15f * zoom
+
+            Vector4f(titleX, titleY, functionPos.x + functionSize.x, titleY + titleHeight)
+        }
+    }
+
+    fun updateFunctionHoverState(mousePos: Vector2f) {
+        hoveredFunctionHeader = null
+
+        for (function in workspace.graph.functions) {
+            val headerBounds = getFunctionHeaderBounds(function)
+            if (headerBounds.contains(mousePos.x, mousePos.y)) {
+                hoveredFunctionHeader = function.uid
+                return
+            }
+        }
+    }
+
+    private fun calculateNodeOffsets(function: Function) {
+        nodeOffsets.clear()
+        function.nodes.forEach { nodeRef ->
+            val node = workspace.getNode(nodeRef.get()) ?: return@forEach
+            nodeOffsets[node.uid] = Vector2f(node.x - function.x, node.y - function.y)
+        }
+    }
+
+    fun handleFunctionDrag() {
+        val mousePos = ImGui.getMousePos()
+        val mx = mousePos.x / workspace.settings.zoom
+        val my = mousePos.y / workspace.settings.zoom
+
+        // Start dragging
+        if (hoveredFunctionHeader != null && ImGui.isMouseClicked(ImGuiMouseButton.Left) && draggedFunction == null) {
+            val function = workspace.graph.getFunction(hoveredFunctionHeader!!) ?: return
+            draggedFunction = function
+            functionDragOffset.set(mx - function.x, my - function.y)
+            calculateNodeOffsets(function)
+        }
+
+        // Continue dragging
+        if (draggedFunction != null && ImGui.isMouseDown(ImGuiMouseButton.Left)) {
+            val isShiftDown = Platform.isKeyDown(ClientRuntime.Key.LEFT_SHIFT) ||
+                    Platform.isKeyDown(ClientRuntime.Key.RIGHT_SHIFT)
+
+            val newX = if (isShiftDown) snapToGrid(mx - functionDragOffset.x) else mx - functionDragOffset.x
+            val newY = if (isShiftDown) snapToGrid(my - functionDragOffset.y) else my - functionDragOffset.y
+
+            val deltaX = newX - draggedFunction!!.x
+            val deltaY = newY - draggedFunction!!.y
+
+            // Update function position
+            draggedFunction!!.x = newX
+            draggedFunction!!.y = newY
+
+            // Update all child nodes maintaining their relative positions
+            draggedFunction!!.nodes.forEach { nodeRef ->
+                val node = workspace.getNode(nodeRef.get()) ?: return@forEach
+                val offset = nodeOffsets[node.uid] ?: return@forEach
+
+                val newNodeX = newX + offset.x
+                val newNodeY = newY + offset.y
+
+                node.x = newNodeX
+                node.y = newNodeY
+
+                // Send node move packet for each child node
+                sendMovePacket(node)
+            }
+
+            // Send function move packet
+            val packet = FunctionMoved(
+                draggedFunction!!.uid,
+                newX,
+                newY
+            )
+            client.send(packet)
+        }
+
+        // End dragging
+        if (!ImGui.isMouseDown(ImGuiMouseButton.Left)) {
+            draggedFunction = null
+            nodeOffsets.clear()
+        }
+    }
+
     fun getHeaderBounds(node: Node): Vector4f {
         return headerFont.use {
             val nodePos = workspace.convertPosition(node.x, node.y)
@@ -283,15 +415,53 @@ class CanvasContext : Listener {
 
     private fun isLinkInSelection(link: Link, topLeft: Vector2f, bottomRight: Vector2f): Boolean {
         val sourceEdge = workspace.graph.getEdge(link.from) ?: return false
-        val sourceNode = workspace.getNode(sourceEdge.owner) ?: return false
         val targetEdge = workspace.graph.getEdge(link.to) ?: return false
-        val targetNode = workspace.getNode(targetEdge.owner) ?: return false
 
-        val sourceBounds = getEdgeBounds(sourceNode, sourceEdge)
-        val targetBounds = getEdgeBounds(targetNode, targetEdge)
+        // Get source and target owners (can be either Node or Function)
+        val sourceOwner = workspace.getNode(sourceEdge.owner)
+            ?: workspace.graph.getFunction(sourceEdge.owner)
+            ?: return false
 
-        val startPos = Vector2f(sourceBounds.x, sourceBounds.y)
-        val endPos = Vector2f(targetBounds.x, targetBounds.y)
+        val targetOwner = workspace.getNode(targetEdge.owner)
+            ?: workspace.graph.getFunction(targetEdge.owner)
+            ?: return false
+
+        // Skip if either end is in a minimized function
+        if (sourceOwner is Node) {
+            val function = workspace.graph.getFunction(sourceOwner.function)
+            if (function?.minimized == true) return false
+        }
+
+        if (targetOwner is Node) {
+            val function = workspace.graph.getFunction(targetOwner.function)
+            if (function?.minimized == true) return false
+        }
+
+        // Get appropriate bounds based on owner type
+        val sourceBounds = when (sourceOwner) {
+            is Node -> getNodeBounds(sourceOwner)
+            is Function -> getFunctionBounds(sourceOwner)
+            else -> return false
+        }
+
+        val targetBounds = when (targetOwner) {
+            is Node -> getNodeBounds(targetOwner)
+            is Function -> getFunctionBounds(targetOwner)
+            else -> return false
+        }
+
+        // Get edge positions
+        val startPos = when (sourceOwner) {
+            is Node -> getEdgePosition(sourceOwner, sourceEdge, sourceBounds)
+            is Function -> getEdgePosition(sourceOwner, sourceEdge, sourceBounds)
+            else -> return false
+        }
+
+        val endPos = when (targetOwner) {
+            is Node -> getEdgePosition(targetOwner, targetEdge, targetBounds)
+            is Function -> getEdgePosition(targetOwner, targetEdge, targetBounds)
+            else -> return false
+        }
 
         val midX = (startPos.x + endPos.x) / 2
         val controlPoint1 = Vector2f(midX, startPos.y)
@@ -323,13 +493,65 @@ class CanvasContext : Listener {
     }
 
     fun handleSelection(isPropertyWindowHovered: Boolean) {
-        if (isLinking || isPropertyWindowHovered) return
+        if (isLinking || isPropertyWindowHovered || draggedFunction != null) return
 
-        val mousePos = ImGui.getMousePos()
+        val mousePos = Vector2f(ImGui.getMousePos().x, ImGui.getMousePos().y)
         val isLeftClickPressed = ImGui.isMouseClicked(ImGuiMouseButton.Left)
         val isLeftClickReleased = ImGui.isMouseReleased(ImGuiMouseButton.Left)
         val isLeftClickDragging = ImGui.isMouseDragging(ImGuiMouseButton.Left)
         val isCtrlPressed = Platform.isKeyDown(ClientRuntime.Key.LEFT_CONTROL)
+
+        // Check for function resize start
+        if (isLeftClickPressed && resizingFunction == null) {
+            workspace.graph.functions.forEach { function ->
+                if (isOverFunctionResizeHandle(function, mousePos)) {
+                    resizingFunction = function
+                    resizeStartPos = mousePos
+                    initialFunctionSize = Vector2f(function.width, function.height)
+                    return
+                }
+            }
+        }
+
+        // Handle function resizing
+        if (resizingFunction != null) {
+            if (isLeftClickDragging) {
+                val startPos = resizeStartPos!!
+                val initialSize = initialFunctionSize!!
+                val delta = Vector2f(
+                    mousePos.x - startPos.x,
+                    mousePos.y - startPos.y
+                )
+
+                // Convert delta to world space
+                val worldDelta = Vector2f(
+                    delta.x / zoom,
+                    delta.y / zoom
+                )
+
+                // Calculate minimum sizes
+                val minWidth = 100f  // Minimum width
+                val minHeight = 100f // Minimum height
+
+                // Apply new size with minimum constraints
+                resizingFunction!!.width = maxOf(initialSize.x + worldDelta.x, minWidth)
+                resizingFunction!!.height = maxOf(initialSize.y + worldDelta.y, minHeight)
+            }
+
+            if (isLeftClickReleased) {
+                //Send resize packet
+                val packet = FunctionResized(
+                    resizingFunction!!.uid,
+                    resizingFunction!!.width,
+                    resizingFunction!!.height
+                )
+                client.send(packet)
+                resizingFunction = null
+                resizeStartPos = null
+                initialFunctionSize = null
+                return
+            }
+        }
 
         if (isLeftClickPressed && !isDraggingNode) {
             val clickedOnNode = workspace.graph.nodes.any { node ->
@@ -382,6 +604,8 @@ class CanvasContext : Listener {
             selectionStart = null
             selectionEnd = null
         }
+
+
     }
 
     private fun updateNodesInSelectionBox() {
@@ -415,13 +639,21 @@ class CanvasContext : Listener {
         }
     }
 
-    private fun updateFinalSelection() {
+    fun updateFinalSelection() {
         if (selectionStart == null || selectionEnd == null) return
 
-        val topLeft = Vector2f(minOf(selectionStart!!.x, selectionEnd!!.x), minOf(selectionStart!!.y, selectionEnd!!.y))
-        val bottomRight = Vector2f(
-            maxOf(selectionStart!!.x, selectionEnd!!.x), maxOf(selectionStart!!.y, selectionEnd!!.y)
+        val topLeft = Vector2f(
+            minOf(selectionStart!!.x, selectionEnd!!.x),
+            minOf(selectionStart!!.y, selectionEnd!!.y)
         )
+        val bottomRight = Vector2f(
+            maxOf(selectionStart!!.x, selectionEnd!!.x),
+            maxOf(selectionStart!!.y, selectionEnd!!.y)
+        )
+
+        // Store the last selection bounds
+        lastSelectionBounds = Pair(topLeft, bottomRight)
+        hasValidSelectionBounds = true
 
         if (!Platform.isKeyDown(ClientRuntime.Key.LEFT_CONTROL)) {
             clearSelection()
@@ -430,7 +662,6 @@ class CanvasContext : Listener {
         workspace.graph.nodes.forEach { node ->
             if (nodesInSelectionBox.contains(node.uid)) {
                 selectedNodeIds.add(node.uid)
-                //node.selected = true
             }
         }
         nodesInSelectionBox.clear()
@@ -446,13 +677,61 @@ class CanvasContext : Listener {
     private fun clearSelection() {
         selectedNodeIds.clear()
         selectedLinkIds.clear()
-        //workspace.graph.nodes.forEach { it.selected = false }
+//        hasValidSelectionBounds = false
+//        lastSelectionBounds = null
     }
 
     private fun findLinkUnderMouse(mousePos: Vector2f): Link? {
-        return workspace.graph.links.find { link ->
-            isMouseOverLink(link, mousePos)
+        // First check links connected to nodes within functions
+        for (function in workspace.graph.functions) {
+            if (function.minimized) continue
+
+            // Get all nodes within this function
+            val nodesInFunction = function.nodes.mapNotNull { workspace.getNode(it.get()) }
+
+            // Check links connected to these nodes
+            for (node in nodesInFunction) {
+                val links = workspace.graph.links.filter { link ->
+                    val sourceEdge = workspace.getEdge(link.from)
+                    val targetEdge = workspace.getEdge(link.to)
+
+                    (sourceEdge?.owner == node.uid || targetEdge?.owner == node.uid)
+                }
+
+                for (link in links) {
+                    if (isMouseOverLink(link, mousePos)) {
+                        return link
+                    }
+                }
+            }
+
+            // Check links connected to the function itself
+            val functionLinks = workspace.graph.links.filter { link ->
+                val sourceEdge = workspace.getEdge(link.from)
+                val targetEdge = workspace.getEdge(link.to)
+
+                (sourceEdge?.owner == function.uid || targetEdge?.owner == function.uid)
+            }
+
+            for (link in functionLinks) {
+                if (isMouseOverLink(link, mousePos)) {
+                    return link
+                }
+            }
         }
+
+        // Then check remaining links (outside functions)
+        return workspace.graph.links
+            .filter { link ->
+                val sourceEdge = workspace.getEdge(link.from)
+                val targetEdge = workspace.getEdge(link.to)
+                val sourceNode = sourceEdge?.owner?.let { workspace.getNode(it) }
+                val targetNode = targetEdge?.owner?.let { workspace.getNode(it) }
+
+                // Only consider links where at least one end is not in a function
+                sourceNode?.function == NetUtils.DefaultUUID || targetNode?.function == NetUtils.DefaultUUID
+            }
+            .find { link -> isMouseOverLink(link, mousePos) }
     }
 
     private fun getBezierPoint(p0: Vector2f, p1: Vector2f, p2: Vector2f, p3: Vector2f, t: Float): Vector2f {
@@ -468,20 +747,82 @@ class CanvasContext : Listener {
         )
     }
 
+    // Add a method to get the last selection bounds
+    fun getLastSelectionBounds(): Pair<Vector2f, Vector2f>? {
+        return if (hasValidSelectionBounds) lastSelectionBounds else null
+    }
+
+    // Method to check if there's a valid selection with bounds
+    fun hasValidSelection(): Boolean {
+        return hasValidSelectionBounds && lastSelectionBounds != null
+    }
+
+    // Add a method to get all nodes within the last selection bounds
+    fun getNodesInLastSelection(): List<Node> {
+        val bounds = lastSelectionBounds ?: return emptyList()
+        return workspace.graph.nodes.filter { node ->
+            isNodeInSelection(node, bounds.first, bounds.second)
+        }
+    }
+
+    // Add a method to get all links within the last selection bounds
+    fun getLinksInLastSelection(): List<Link> {
+        val bounds = lastSelectionBounds ?: return emptyList()
+        return workspace.graph.links.filter { link ->
+            isLinkInSelection(link, bounds.first, bounds.second)
+        }
+    }
 
     fun isMouseOverLink(link: Link, mousePos: Vector2f): Boolean {
-        val sourceEdge = workspace.graph.getEdge(link.from) ?: return false
-        val sourceNode = workspace.getNode(sourceEdge.owner) ?: return false
-        val targetEdge = workspace.graph.getEdge(link.to) ?: return false
-        val targetNode = workspace.getNode(targetEdge.owner) ?: return false
+        val sourceEdge = workspace.getEdge(link.from) ?: return false
+        val targetEdge = workspace.getEdge(link.to) ?: return false
 
-        val sourceBounds = getNodeBounds(sourceNode)
-        val targetBounds = getNodeBounds(targetNode)
+        // Get source and target owners (can be either Node or Function)
+        val sourceOwner = workspace.getNode(sourceEdge.owner)
+            ?: workspace.graph.getFunction(sourceEdge.owner)
+            ?: return false
 
-//        val startPos = Vector2f(sourceBounds.x, sourceBounds.y)
-//        val endPos = Vector2f(targetBounds.x, targetBounds.y)
-        val startPos = getEdgePosition(sourceNode, sourceEdge, sourceBounds)
-        val endPos = getEdgePosition(targetNode, targetEdge, targetBounds)
+        val targetOwner = workspace.getNode(targetEdge.owner)
+            ?: workspace.graph.getFunction(targetEdge.owner)
+            ?: return false
+
+        // Skip if either end is in a minimized function
+        if (sourceOwner is Node) {
+            val function = workspace.graph.getFunction(sourceOwner.function)
+            if (function?.minimized == true) return false
+        }
+
+        if (targetOwner is Node) {
+            val function = workspace.graph.getFunction(targetOwner.function)
+            if (function?.minimized == true) return false
+        }
+
+        // Get appropriate bounds based on owner type
+        val sourceBounds = when (sourceOwner) {
+            is Node -> getNodeBounds(sourceOwner)
+            is Function -> getFunctionBounds(sourceOwner)
+            else -> return false
+        }
+
+        val targetBounds = when (targetOwner) {
+            is Node -> getNodeBounds(targetOwner)
+            is Function -> getFunctionBounds(targetOwner)
+            else -> return false
+        }
+
+        // Get edge positions
+        val startPos = when (sourceOwner) {
+            is Node -> getEdgePosition(sourceOwner, sourceEdge, sourceBounds)
+            is Function -> getEdgePosition(sourceOwner, sourceEdge, sourceBounds)
+            else -> return false
+        }
+
+        val endPos = when (targetOwner) {
+            is Node -> getEdgePosition(targetOwner, targetEdge, targetBounds)
+            is Function -> getEdgePosition(targetOwner, targetEdge, targetBounds)
+            else -> return false
+        }
+
         val midX = (startPos.x + endPos.x) / 2
         val controlPoint1 = Vector2f(midX, startPos.y)
         val controlPoint2 = Vector2f(midX, endPos.y)
@@ -551,7 +892,16 @@ class CanvasContext : Listener {
             nodeMovePacket.y = node.y
             runtime.client.send(nodeMovePacket)
             lastSent = Time.now
-//            logger.info { "Sent move packet for node ${node.uid}" }
+
+
+            // After sending the move packet, check if this node is part of a function
+            // and update the function bounds if necessary
+//            workspace.graph.functions.forEach { function ->
+//                if (function.nodes.any { it.uid == node.uid }) {
+//                    workspace.graph.updateFunctionBoundsIfNeeded(function, node)
+//                }
+//            }
+
         }
     }
 
@@ -650,6 +1000,40 @@ class CanvasContext : Listener {
         }
     }
 
+    private fun constrainNodeToFunction(node: Node, newX: Float, newY: Float): Vector2f {
+        // Find if this node belongs to any function
+        val parentFunction = workspace.graph.functions.find { it.nodes.any { n -> n.get() == node.uid } }
+            ?: return Vector2f(newX, newY)
+
+        // Get both bounds in screen space
+        val oldNodeBounds = getNodeBounds(node)
+        val functionBounds = getFunctionBounds(parentFunction)
+
+        // Convert the new position to screen space for comparison
+        val newScreenPos = convertToScreenCoordinates(Vector2f(newX, newY))
+
+        // Calculate node dimensions in screen space
+        val nodeWidth = oldNodeBounds.z - oldNodeBounds.x
+        val nodeHeight = oldNodeBounds.w - oldNodeBounds.y
+
+        // Calculate constraints in screen space
+        val minScreenX = functionBounds.x + 40 * zoom
+        val minScreenY = functionBounds.y + 70 * zoom
+        val maxScreenX = functionBounds.z - nodeWidth - 10 * zoom
+        val maxScreenY = functionBounds.w - nodeHeight + 15 * zoom
+        val minX = min(minScreenX, maxScreenX)
+        val minY = min(minScreenY, maxScreenY)
+        val maxX = max(minScreenX, maxScreenX)
+        val maxY = max(minScreenY, maxScreenY)
+        // Constrain in screen space
+        val constrainedScreenX = newScreenPos.x.coerceIn(minX, maxX)
+        val constrainedScreenY = newScreenPos.y.coerceIn(minY, maxY)
+
+        // Convert back to world coordinates
+        return convertToWorldCoordinates(Vector2f(constrainedScreenX, constrainedScreenY))
+    }
+
+
     fun deleteSelected() {
         if (selectedNodeIds.isEmpty() || selectedLinkIds.isEmpty() && selectionStart != null && selectionEnd != null) {
             collectSelectedNodes()
@@ -690,6 +1074,13 @@ class CanvasContext : Listener {
             node.x = packet.x
             node.y = packet.y
             logger.info { "Moved node: ${packet.uid}" }
+
+//            workspace.graph.functions.forEach { function ->
+//                if (function.nodes.any { it.uid == node.uid }) {
+//                    workspace.graph.updateFunctionBoundsIfNeeded(function, node)
+//                }
+//            }
+
         } else if (packet is UserConnectedToWorkspace) {
             packet.users.forEach { user ->
                 connectedUsers[user.uid] = user
@@ -698,6 +1089,17 @@ class CanvasContext : Listener {
         } else if (packet is NodeCreated) {
             val node = packet.node
             processNewNode(node)
+
+            if (node.function != NetUtils.DefaultUUID) {
+                val function = workspace.graph.getFunction(node.function)
+                if (function != null) {
+                    workspace.graph.getFunction(node.function)?.nodes?.add(Property.UUID(node.uid))
+                }
+            }
+
+            //If the node is within a function,
+            //update the function bounds to include the new node
+
 
             // Check if this node creation was initiated by dragging an edge
             if (pendingNodeCreation != null && pendingNodeCreation?.nodeType == "${node.type}/${node.name}") {
@@ -740,8 +1142,45 @@ class CanvasContext : Listener {
         } else if (packet is VariableUpdated) {
             workspace.updateVariable(packet.variableName, packet.property["value"])
             logger.info { "Received variable updated: ${packet.variableName}" }
-        }
+        } else if (packet is FunctionCreated) {
+            workspace.graph.addFunction(packet.function)
+        } else if (packet is FunctionResized) {
+            val function = workspace.graph.getFunction(packet.uid) ?: return
+            function.width = packet.width
+            function.height = packet.height
+        } else if (packet is FunctionMoved) {
+            val function = workspace.graph.getFunction(packet.uid) ?: return
+            val deltaX = packet.x - function.x
+            val deltaY = packet.y - function.y
 
+            // Update function position
+            function.x = packet.x
+            function.y = packet.y
+
+            // Update all child nodes
+            function.nodes.forEach { nodeRef ->
+                val node = workspace.getNode(nodeRef.get()) ?: return@forEach
+                node.x += deltaX
+                node.y += deltaY
+            }
+        } else if (packet is FunctionMinimized) {
+            val function = workspace.graph.getFunction(packet.uid) ?: return
+            function.minimized = packet.minimized
+        } else if (packet is FunctionNamed) {
+            val function = workspace.graph.getFunction(packet.uid) ?: return
+            function.name = packet.newName
+        } else if (packet is FunctionColored) {
+            val function = workspace.graph.getFunction(packet.uid) ?: return
+            function.color = packet.newColor
+        } else if (packet is FunctionDeleted) {
+            workspace.graph.removeFunction(packet.uid)
+        } else if (packet is FunctionEdgeCreated) {
+            val function = workspace.graph.getFunction(packet.uid) ?: return
+            workspace.addEdge(function, packet.edge)
+        } else if (packet is NodeEdgeCreated) {
+            val node = workspace.getNode(packet.uid) ?: return
+            workspace.addEdge(node, packet.edge)
+        }
     }
 
     fun start(node: Node, edge: Edge) {
@@ -805,35 +1244,60 @@ class CanvasContext : Listener {
         }
     }
 
-    private fun findEdgeUnderMouse(): Pair<Node, Edge>? {
+
+    private fun findEdgeUnderMouse(): Pair<Any, Edge>? {
         val mousePos = ImGui.getMousePos()
+
+        // Check function edges first
+        for (function in workspace.graph.functions) {
+            if (function.minimized) continue
+
+            val functionBounds = getFunctionBounds(function)
+            val edges = workspace.graph.getEdges(function.uid)
+            val inputEdges = edges.filter { it.direction == "input" }
+            val outputEdges = edges.filter { it.direction == "output" }
+
+            // Check function input edges
+            inputEdges.forEach { edge ->
+                val edgePos = getEdgePosition(function, edge, functionBounds)
+                if (isPointOverEdge(Vector2f(mousePos.x, mousePos.y), edgePos)) {
+                    return Pair(function, edge)
+                }
+            }
+
+            // Check function output edges
+            outputEdges.forEach { edge ->
+                val edgePos = getEdgePosition(function, edge, functionBounds)
+                if (isPointOverEdge(Vector2f(mousePos.x, mousePos.y), edgePos)) {
+                    return Pair(function, edge)
+                }
+            }
+        }
+
+        // Then check node edges
         for (node in workspace.graph.nodes) {
             val nodeBounds = getNodeBounds(node)
             val edges = workspace.graph.getEdges(node)
             val inputEdges = edges.filter { it.direction == "input" }
             val outputEdges = edges.filter { it.direction == "output" }
 
-            val edgeSpacing = 20f * zoom
-            val edgeStartY = nodeBounds.y + 30f * zoom
-
-            // Check input edges
-            inputEdges.forEachIndexed { index, edge ->
-                val yPos = edgeStartY + index * edgeSpacing
-                val edgePos = Vector2f(nodeBounds.x - 10f * zoom, yPos)
+            // Check node input edges
+            inputEdges.forEach { edge ->
+                val edgePos = getEdgePosition(node, edge, nodeBounds)
                 if (isPointOverEdge(Vector2f(mousePos.x, mousePos.y), edgePos)) {
                     return Pair(node, edge)
                 }
             }
 
-            // Check output edges
-            outputEdges.forEachIndexed { index, edge ->
-                val yPos = edgeStartY + index * edgeSpacing
-                val edgePos = Vector2f(nodeBounds.z + 10f * zoom, yPos)
+            // Check node output edges
+            outputEdges.forEach { edge ->
+                val edgePos = getEdgePosition(node, edge, nodeBounds)
                 if (isPointOverEdge(Vector2f(mousePos.x, mousePos.y), edgePos)) {
                     return Pair(node, edge)
                 }
             }
         }
+
         return null
     }
 
@@ -845,9 +1309,22 @@ class CanvasContext : Listener {
         // Prevent connecting edges of the same direction (input to input or output to output)
         if (sourceEdge.direction == targetEdge.direction) return false
 
-        // Prevent connecting edges from the same node
-        if (sourceEdge.owner == targetEdge.owner) return false
+        // If either is "any" type and both are not exec, it's valid
+        if (sourceEdge.type == "any" && targetEdge.type != "exec" || targetEdge.type == "any" && sourceEdge.type != "exec") {
+            return true
+        }
 
+        // If the source is from a function's output, it should only connect to node inputs
+        val sourceIsFunction = workspace.graph.functions.any { it.uid == sourceEdge.owner }
+        if (sourceIsFunction && sourceEdge.direction == "output" && targetEdge.direction != "input") {
+            return false
+        }
+
+        // If the target is a function's input, it should only connect to node outputs
+        val targetIsFunction = workspace.graph.functions.any { it.uid == targetEdge.owner }
+        if (targetIsFunction && targetEdge.direction == "input" && sourceEdge.direction != "output") {
+            return false
+        }
 
         //If source and edge aren't exec, and the target already has a link, it's invalid
         if (sourceEdge.type != "exec" && targetEdge.type != "exec" && workspace.graph.links
@@ -856,10 +1333,6 @@ class CanvasContext : Listener {
             return false
         }
 
-        // If either is "any" type and both are not exec, it's valid
-        if (sourceEdge.type == "any" && targetEdge.type != "exec" || targetEdge.type == "any" && sourceEdge.type != "exec") {
-            return true
-        }
         //Early return if the types are the same
         if (sourceEdge.type == targetEdge.type) return true
 
@@ -869,6 +1342,7 @@ class CanvasContext : Listener {
         //Returns true if any of the source types are in the target types
         return sourceTypes.any { it in targetTypes }
     }
+
 
     private fun createLink(sourceNode: Node, sourceEdge: Edge, targetNode: Node, targetEdge: Edge) {
         val link = configured<Link> {
@@ -899,21 +1373,57 @@ class CanvasContext : Listener {
         val dragStartPos = dragStartPos
 
         if (draggedEdge != null && dragStartPos != null) {
-            val (sourceNode, sourceEdge) = draggedEdge
-
             val mousePos = ImGui.getMousePos()
 
             if (ImGui.isMouseReleased(ImGuiMouseButton.Left)) {
-                val targetEdge = findEdgeUnderMouse()
-                if (targetEdge != null) {
-                    val (targetNode, targetEdgeObj) = targetEdge
-                    if (canConnect(sourceEdge, targetEdgeObj)) {
-                        createLink(sourceNode, sourceEdge, targetNode, targetEdgeObj)
+                val targetEdgePair = findEdgeUnderMouse()
+                if (targetEdgePair != null) {
+                    val (targetOwner, targetEdgeObj) = targetEdgePair
+
+                    when (draggedEdge.first) {
+                        is Node -> {
+                            when (targetOwner) {
+                                is Node -> createLink(
+                                    draggedEdge.first as Node,
+                                    draggedEdge.second,
+                                    targetOwner,
+                                    targetEdgeObj
+                                )
+
+                                is Function -> createFunctionLink(
+                                    draggedEdge.first as Node,
+                                    draggedEdge.second,
+                                    targetOwner,
+                                    targetEdgeObj
+                                )
+                            }
+                        }
+
+                        is Function -> {
+                            when (targetOwner) {
+                                is Node -> createFunctionLink(
+                                    targetOwner,
+                                    targetEdgeObj,
+                                    draggedEdge.first as Function,
+                                    draggedEdge.second
+                                )
+
+                                is Function -> {
+                                    // Optionally handle function-to-function connections if needed
+                                    logger.warn { "Function to function connections are not supported" }
+                                }
+                            }
+                        }
                     }
                 } else {
                     // Open action menu with compatible nodes when dropped over empty space
-                    draggedSourceEdge = Pair(sourceNode, sourceEdge)
-                    openActionMenuWithCompatibleNodes(sourceEdge, Vector2f(mousePos.x, mousePos.y))
+                    draggedSourceEdge = when (val source = draggedEdge.first) {
+                        is Node -> Pair(source, draggedEdge.second)
+                        else -> null
+                    }
+                    draggedSourceEdge?.let {
+                        openActionMenuWithCompatibleNodes(draggedEdge.second, Vector2f(mousePos.x, mousePos.y))
+                    }
                 }
                 this.draggedEdge = null
                 this.dragStartPos = null
@@ -922,9 +1432,45 @@ class CanvasContext : Listener {
         }
     }
 
+    private fun createFunctionLink(node: Node, nodeEdge: Edge, function: Function, functionEdge: Edge) {
+        val link = configured<Link> {
+            if (nodeEdge.direction == "output" && functionEdge.direction == "input") {
+                "owner" to node.uid
+                "from" to nodeEdge.uid
+                "to" to functionEdge.uid
+            } else {
+                "owner" to node.uid
+                "from" to functionEdge.uid
+                "to" to nodeEdge.uid
+            }
+        }
+
+        client.send(LinkCreateRequest(link))
+    }
+
     fun createNodeAndLink(position: Vector2f, nodeType: String) {
         val worldPos = convertToWorldCoordinates(position)
         val createRequest = NodeCreateRequest(nodeType, worldPos)
+
+        //If the node position is within a function body, we need to add it to the function
+        val function = workspace.graph.functions.find { function ->
+            val functionBounds = getFunctionBounds(function)
+            val functionPos = convertToScreenCoordinates(Vector2f(function.x, function.y))
+            val functionSize = convertToScreenSize(Vector2f(function.width, function.height))
+            val functionScreenBounds = Vector4f(
+                functionPos.x,
+                functionPos.y,
+                functionPos.x + functionSize.x,
+                functionPos.y + functionSize.y
+            )
+            functionScreenBounds.contains(position.x, position.y)
+        }
+
+
+        if (function != null && !function.minimized) {
+            createRequest.function = function.uid
+        }
+
         client.send(createRequest)
 
         // Store the create request to link it later when we receive the node creation confirmation
@@ -954,9 +1500,23 @@ class CanvasContext : Listener {
         }
     }
 
-    fun startEdgeDrag(node: Node, edge: Edge) {
-        draggedEdge = Pair(node, edge)
-        val edgeBounds = getEdgeBounds(node, edge)
+    fun startEdgeDrag(owner: Any, edge: Edge) {
+        draggedEdge = Pair(owner, edge)
+        val edgeBounds = when (owner) {
+            is Node -> getEdgeBounds(owner, edge)
+            is Function -> {
+                val functionBounds = getFunctionBounds(owner)
+                Vector4f().apply {
+                    val pos = getEdgePosition(owner, edge, functionBounds)
+                    x = pos.x
+                    y = pos.y
+                    z = pos.x
+                    w = pos.y
+                }
+            }
+
+            else -> return
+        }
         dragStartPos = Vector2f(edgeBounds.x, edgeBounds.y)
         isLinking = true
     }
@@ -972,6 +1532,19 @@ class CanvasContext : Listener {
         val yPos = edgeStartY + index * edgeSpacing
         val xPos = if (edge.direction == "input") nodeBounds.x - 10f * zoom else nodeBounds.z + 10f * zoom
 
+        return Vector2f(xPos, yPos)
+    }
+
+    fun getEdgePosition(func: Function, edge: Edge, nodeBounds: Vector4f): Vector2f {
+        val edgeSpacing = 20f * zoom
+        val edgeStartY = nodeBounds.y + 50f * zoom  // Start below the header
+
+        val edges = workspace.graph.getEdges(func.uid)
+        val edgesOfSameDirection = edges.filter { it.direction == edge.direction }
+        val index = edgesOfSameDirection.indexOf(edge)
+
+        val yPos = edgeStartY + index * edgeSpacing
+        val xPos = if (edge.direction == "input") nodeBounds.x + 8f * zoom else nodeBounds.z - 8f * zoom
         return Vector2f(xPos, yPos)
     }
 

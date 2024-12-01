@@ -162,6 +162,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
          */
         graphics.renderBackground(drawList, bounds) {
             graphics.drawGrid(drawList, position, bounds, context.zoom)
+            graphics.renderFunctions(drawList, workspace.graph.functions)
             graphics.renderLinks(drawList, workspace.graph.links)
             graphics.renderNodes(drawList, workspace.graph.nodes)
             graphics.renderEdgeDrag(drawList, context.draggedEdge, context.dragStartPos)
