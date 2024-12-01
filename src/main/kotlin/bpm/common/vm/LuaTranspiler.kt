@@ -24,6 +24,11 @@ object LuaTranspiler {
 
     fun generateLuaScript(workspace: Workspace): String {
         nodeDependencies.clear()
+        //Update the function types
+        val schemas = listener<Schemas>(Endpoint.Side.SERVER)
+        workspace.graph.functions.forEach { func ->
+            schemas.updateFunctionType(workspace, func)
+        }
         val nodes = topologicalSort(workspace, workspace.graph.nodes)
         val edges = workspace.graph.edges
         val tokens = tokenizer.tokenize(nodes, edges)
@@ -532,117 +537,71 @@ object LuaTranspiler {
             codeBuilder: StringBuilder,
             indent: String
         ) {
+            // Get the function reference node and the actual function it references
             val functionNode = workspace.graph.getNode(UUID.fromString(function.id)) ?: return
-            val actualFunction = workspace.graph.getFunction(functionNode.function) ?: return
+            val actualFunction = workspace.graph.getFunction(functionNode["func_ref"].cast<Property.UUID>().get()) ?: return
 
-            // Handle input edges connected to this function instance
-            workspace.graph.getEdges(functionNode)
-                .filter { it.direction == "input" && it.type != "exec" }
-                .forEach { inputEdge ->
-                    // Find if this input is connected to something
-                    val sourceLink = workspace.graph.links.find { it.to == inputEdge.uid }
+            // Get all edges from both the function reference and actual function
+            val referenceEdges = workspace.graph.getEdges(functionNode)
+            val functionEdges = workspace.graph.getEdges(actualFunction.uid)
+
+            // Map data inputs
+            val dataInputs = functionEdges.filter { it.direction == "input" && it.type != "exec" }
+            dataInputs.forEach { functionInput ->
+                val referenceInput = referenceEdges.find { it.name == functionInput.name && it.direction == "input" }
+                if (referenceInput != null) {
+                    // Find if this input has a connection
+                    val sourceLink = workspace.graph.links.find { it.to == referenceInput.uid }
                     if (sourceLink != null) {
                         val sourceEdge = workspace.graph.getEdge(sourceLink.from)
                         if (sourceEdge != null) {
                             val sourceNode = workspace.graph.getNode(sourceEdge.owner)
                             if (sourceNode != null) {
-                                // Get value from the connected node's output
                                 val sourceFunctionName = sanitizeName("${sourceNode.name}_${sourceNode.uid}")
                                 val sourceOutputKey = "${sourceFunctionName}_${sanitizeName(sourceEdge.name)}"
-                                codeBuilder.append("${indent}local ${sanitizeName(inputEdge.name)} = globalOutputs['$sourceOutputKey']\n")
-
-                                // Call any value nodes connected to inputs
-                                if (!hasExecInput(sourceNode, workspace)) {
-                                    codeBuilder.append("${indent}$sourceFunctionName()\n")
-                                }
+                                codeBuilder.append("${indent}local ${functionInput.name} = globalOutputs['$sourceOutputKey']\n")
                             }
                         }
                     } else {
-                        // Use default value if not connected
-                        val defaultValue = getDefaultValue(inputEdge)
-                        codeBuilder.append("${indent}local ${sanitizeName(inputEdge.name)} = $defaultValue\n")
+                        // Use default value from the reference node's edge if no connection
+                        val defaultValue = getDefaultValue(referenceInput)
+                        codeBuilder.append("${indent}local ${functionInput.name} = $defaultValue\n")
                     }
                 }
+            }
 
-            // Pass through values from inputs to outputs
-            workspace.graph.getEdges(functionNode)
-                .filter { it.direction == "output" && it.type != "exec" }
-                .forEach { outputEdge ->
-                    // Find corresponding input edge on the function implementation
-                    val functionInputEdge = workspace.graph.getEdges(actualFunction.uid)
-                        .find { it.direction == "input" && it.name == outputEdge.name }
+            // Call the function implementation
+            val functionName = sanitizeName("${actualFunction.name}_${actualFunction.uid}")
+            codeBuilder.append("${indent}local result = $functionName()\n")
 
-                    if (functionInputEdge != null) {
-                        val funcName = sanitizeName("${functionNode.name}_${functionNode.uid}")
-                        val outputKey = "${funcName}_${sanitizeName(outputEdge.name)}"
-                        val inputName = sanitizeName(functionInputEdge.name)
-                        codeBuilder.append("${indent}globalOutputs['$outputKey'] = $inputName\n")
-                    }
+            // Map data outputs
+            val dataOutputs = functionEdges.filter { it.direction == "output" && it.type != "exec" }
+            dataOutputs.forEach { functionOutput ->
+                val referenceOutput = referenceEdges.find { it.name == functionOutput.name && it.direction == "output" }
+                if (referenceOutput != null) {
+                    val outputKey = "${sanitizeName("${function.originalName}_${function.id}")}_${sanitizeName(referenceOutput.name)}"
+                    val functionOutputKey = "${sanitizeName("${actualFunction.name}_${actualFunction.uid}")}_${sanitizeName(functionOutput.name)}"
+                    codeBuilder.append("${indent}globalOutputs['$outputKey'] = globalOutputs['$functionOutputKey']\n")
                 }
+            }
 
-            // Handle contained nodes in the function
-            workspace.graph.getEdges(actualFunction.uid)
-                .filter { it.direction == "input" && it.type == "exec" }
-                .forEach { execInputEdge ->
-                    // Handle exec flow by following connection links
-                    val execLink = workspace.graph.links.find { it.to == execInputEdge.uid }
-                    if (execLink != null) {
-                        val sourceEdge = workspace.graph.getEdge(execLink.from)
-                        if (sourceEdge != null) {
-                            val sourceNode = workspace.graph.getNode(sourceEdge.owner)
-                            if (sourceNode != null) {
-                                // Call source node
-                                val sourceFuncName = sanitizeName("${sourceNode.name}_${sourceNode.uid}")
-                                codeBuilder.append("${indent}$sourceFuncName()\n")
-                            }
+            // Handle execution flow
+            val execOutputs = referenceEdges.filter { it.direction == "output" && it.type == "exec" }
+            execOutputs.forEach { execOutput ->
+                val connectedLinks = workspace.graph.links.filter { it.from == execOutput.uid }
+                connectedLinks.forEach { link ->
+                    val targetEdge = workspace.graph.getEdge(link.to)
+                    if (targetEdge != null) {
+                        val targetNode = workspace.graph.getNode(targetEdge.owner)
+                        if (targetNode != null) {
+                            val targetFunctionName = sanitizeName("${targetNode.name}_${targetNode.uid}")
+                            codeBuilder.append("${indent}-- Execute ${execOutput.name}\n")
+                            codeBuilder.append("${indent}$targetFunctionName()\n")
                         }
                     }
                 }
-
-            // Handle execution outputs
-            workspace.graph.getEdges(functionNode)
-                .filter { it.direction == "output" && it.type == "exec" }
-                .forEach { execEdge ->
-                    val targetLinks = workspace.graph.links.filter { it.from == execEdge.uid }
-                    targetLinks.forEach { link ->
-                        val targetEdge = workspace.graph.getEdge(link.to)
-                        if (targetEdge != null) {
-                            val targetNode = workspace.graph.getNode(targetEdge.owner)
-                            if (targetNode != null) {
-                                val targetFuncName = sanitizeName("${targetNode.name}_${targetNode.uid}")
-                                codeBuilder.append("${indent}$targetFuncName()\n")
-                            }
-                        }
-                    }
-                }
+            }
         }
-
-//
-//        private fun generateFunctionInstanceBody(
-//            function: IRFunction,
-//            workspace: Workspace,
-//            codeBuilder: StringBuilder,
-//            indent: String
-//        ) {
-//            val functionNode = workspace.graph.getNode(UUID.fromString(function.id)) ?: return
-//            val actualFunction = workspace.graph.getFunction(functionNode.function) ?: return
-//
-//            val edges = actualFunction.inputs.mapNotNull { workspace.getEdge(it.get()) }.toSet()
-//            // Get linked edges
-//            val linkedEdges = edges.mapNotNull {
-//                workspace.graph.links.find { link -> link.from == it.uid }
-//            }
-//
-//            val otherEdges = linkedEdges.mapNotNull { link ->
-//                workspace.graph.getEdge(link.to)
-//            }
-//
-//            val linkedNodes = otherEdges.mapNotNull { edge ->
-//                workspace.graph.getNode(edge.owner)
-//            }
-//
-//
-//        }
 
 
         private fun hasExecInput(node: Node, workspace: Workspace): Boolean {

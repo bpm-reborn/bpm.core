@@ -439,29 +439,42 @@ object ServerRuntime : Listener {
         }
 
         val schema = listener<Schemas>(Endpoint.Side.SERVER).library[nodeType] ?: run {
-            logger.warn { "Failed to create node: $nodeType. Unknown type." }
             //Try to create from function
             if (nodeType.startsWith("Functions/")) {
                 val functionName = nodeType.removePrefix("Functions/")
-
                 val func = workspace.graph.getFunctionByName(functionName) ?: run {
                     logger.warn { "Failed to create node: $nodeType. Function not found." }
                     return
                 }
-
-                val nodeInstance = listener<Schemas>(Endpoint.Side.SERVER).createFromFunction(workspace, func, position)
+                val schemas = listener<Schemas>(Endpoint.Side.SERVER)
+                val type = schemas.updateFunctionType(workspace, func)
+                val nodeInstance = schemas.createFromType(workspace, type, position)
                 nodeInstance.height = 100f
                 nodeInstance.width = 200f
-                nodeInstance.function = func.uid
+                nodeInstance["func_ref"] = Property.UUID(func.uid)
                 sendToUsersInWorkspace(workspaceId, new<NodeCreated> {
                     this.node = nodeInstance
                 })
+                return
             }
+            logger.warn { "Failed to create node: $nodeType. Unknown type." }
             return
         }
 
 
         val node = listener<Schemas>(Endpoint.Side.SERVER).createFromType(workspace, schema, position)
+        if (nodeType.startsWith("Functions/")) {
+            //find function id
+            val name = nodeType.removePrefix("Functions/")
+            val func = workspace.graph.getFunctionByName(name) ?: run {
+                logger.warn { "Failed to create node: $nodeType. Function not found." }
+                return
+            }
+            listener<Schemas>(Endpoint.Side.SERVER).updateFunctionType(workspace, func)
+            node["func_ref"] = Property.UUID(func.uid)
+            node.height = 100f
+            node.width = 200f
+        }
         if (function != NetUtils.DefaultUUID) {
             node.function = function
             workspace.graph.getFunction(function)?.nodes?.add(Property.UUID(node.uid))
