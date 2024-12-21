@@ -452,7 +452,7 @@ object ServerRuntime : Listener {
                 val nodeInstance = listener<Schemas>(Endpoint.Side.SERVER).createFromFunction(workspace, func, position)
                 nodeInstance.height = 100f
                 nodeInstance.width = 200f
-                nodeInstance.function = func.uid
+                nodeInstance["func_ref"] = Property.UUID(func.uid)
                 sendToUsersInWorkspace(workspaceId, new<NodeCreated> {
                     this.node = nodeInstance
                 })
@@ -522,6 +522,7 @@ object ServerRuntime : Listener {
         }
 
         openedWorkspaces[sendTo] = workspaceId
+        workspace.nodeLibrary = listener<Schemas>(Endpoint.Side.SERVER).library
         val user = User(sendTo, null, workspaceId)
         logger.debug { "Client '$sendTo' Opened workspace: $workspaceId, $user" }
         server.send(new<WorkspaceLoad> {
@@ -537,7 +538,6 @@ object ServerRuntime : Listener {
                 this.workspaceSettings = workspaceSettings
             }, sendTo)
         }
-
     }
 
     private fun notifyUsersOfWorkspace(sendTo: UUID) {

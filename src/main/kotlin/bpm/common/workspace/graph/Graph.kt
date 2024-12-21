@@ -349,6 +349,25 @@ class Graph(
         return functionMap.values.firstOrNull { it.name == functionName }
     }
 
+    fun copy(): Graph {
+        val nodes = Property.List()
+        val edges = Property.List()
+        val connections = Property.List()
+        val variables = Property.List()
+        val functions = Property.List()
+        nodeMap.values.forEach { nodes.add(it.properties) }
+        edgeMap.values.forEach { edges.add(it.properties) }
+        linkMap.values.forEach { connections.add(it.properties) }
+        variableMap.forEach { (name, value) ->
+            val obj = Property.Object()
+            obj["name"] = Property.String(name)
+            obj["value"] = value
+            variables.add(obj)
+        }
+        functionMap.values.forEach { functions.add(it.properties) }
+        return Graph(nodes, edges, connections, variables, functions)
+    }
+
 
     object Serializer : Serialize<Graph>(Graph::class) {
 

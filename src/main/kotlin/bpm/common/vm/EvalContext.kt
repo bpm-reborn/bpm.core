@@ -1,6 +1,8 @@
 package bpm.common.vm
 
 import bpm.common.logging.KotlinLogging
+import bpm.common.vm.compiliation.LuaTranspiler
+import bpm.common.vm.transpiler.LuaGenerator
 import bpm.common.workspace.Workspace
 import party.iroiro.luajava.*
 import party.iroiro.luajava.luajit.LuaJit
@@ -38,7 +40,7 @@ object EvalContext {
         functionGroups.clear()
 
         return try {
-            val compiledSource = LuaTranspiler.generateLuaScript(workspace)
+            val compiledSource = LuaGenerator.generate(workspace)
             logger.debug { "Compiled Lua script: $compiledSource" }
 
             val result = lua.eval(compiledSource)[0]
@@ -196,36 +198,4 @@ object EvalContext {
         override fun toString(): String = message
     }
 
-//
-//    fun callFunction(workspace: Workspace, groupName: String, vararg args: Any?): Result {
-//        val functionGroups = workspaceFunctionGroups[workspace.uid] ?: return InvalidWorkspace(
-//            workspace.uid
-//        )
-//        val group = functionGroups[groupName] ?: return GroupNotFound(groupName)
-//        val results = mutableSetOf<Result>()
-//        for ((functionName, function) in group) {
-//            try {
-//                val result = function.call(*args)
-//                results.add(Success(result, functionName))
-//            } catch (e: LuaException) {
-//                results.add(RuntimeError(e.message ?: "Unknown error", e.stackTrace, functionName))
-//            }
-//        }
-//        return GroupResult(groupName, results.toList())
-//    }
-//
-//    fun callAllFunctions(workspace: Workspace, vararg args: Any?): Result {
-//        val functionGroups = workspaceFunctionGroups[workspace.uid] ?: return InvalidWorkspace(
-//            workspace.uid
-//        )
-//        val results = mutableSetOf<Result>()
-//        for ((groupName, group) in functionGroups) {
-//            results.add(callFunction(workspace, groupName, *args))
-//        }
-//        return GroupResult("All", results.toList())
-//    }
-//
-//    fun close() {
-//        lua.close()
-//    }
 }

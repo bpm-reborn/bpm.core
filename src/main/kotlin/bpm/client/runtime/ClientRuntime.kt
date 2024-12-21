@@ -269,7 +269,7 @@ object ClientRuntime : Listener {
             }
             canvasWindow?.close()
             canvasWindow?.open()
-            logger.debug { "Received workspace load response: $packet" }
+            logger.debug { "Received workspace load response: ${packet.workspace?.uid}" }
         }
 
         is WorkspaceSettingsLoad -> {

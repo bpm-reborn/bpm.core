@@ -28,7 +28,7 @@ import java.util.UUID
  */
 data class Workspace(
     val graph: Graph,
-    val nodeLibrary: NodeLibrary,
+    var nodeLibrary: NodeLibrary,
     val workspaceName: String,
     val users: MutableMap<UUID, User>,
     val description: String = "Default Workspace",

@@ -1,5 +1,6 @@
 package bpm.common.utils
 
+import java.util.UUID
 import kotlin.math.max
 
 fun <T : Any> List<T>.toFormattedString(maxElementsPerLine: Int = this.size / 5): String {
@@ -75,3 +76,8 @@ fun <T : Any> List<T>.toFormattedString(maxElementsPerLine: Int = this.size / 5)
     builder.append("\n")
     return builder.toString()
 }
+
+private val regex = Regex("[^a-zA-Z0-9_]")
+
+fun String.sanitize(): String =
+    this.replace(regex, "_")

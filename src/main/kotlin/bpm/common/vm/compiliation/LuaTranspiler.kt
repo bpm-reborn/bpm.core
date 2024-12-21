@@ -1,16 +1,13 @@
-package bpm.common.vm
+package bpm.common.vm.compiliation
 
 import bpm.Bpm
 import bpm.server.lua.LuaBuiltin
 import bpm.common.logging.KotlinLogging
-import bpm.common.network.Endpoint
-import bpm.common.network.listener
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.graph.Edge
 import bpm.common.workspace.graph.Node
 import bpm.common.property.Property
 import bpm.common.property.cast
-import bpm.common.upstream.Schemas
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -48,86 +45,6 @@ object LuaTranspiler {
 
         nodes.forEach { if (!visited.contains(it.uid)) visit(it) }
         return sorted.reversed()
-    }
-
-    private class Tokenizer {
-
-        private lateinit var input: String
-        private var position: Int = 0
-
-        fun tokenize(nodes: Collection<Node>, edges: Collection<Edge>): List<Token> {
-            val tokens = mutableListOf<Token>()
-
-            nodes.forEach { node ->
-                tokens.add(Token(TokenType.NODE_START, node.uid.toString()))
-                tokens.addAll(tokenizeNodeSource(node))
-                tokens.add(Token(TokenType.NODE_END, node.uid.toString()))
-            }
-
-            edges.forEach { edge ->
-                tokens.add(Token(TokenType.EDGE, edge.uid.toString()))
-            }
-
-            return tokens
-        }
-
-        private fun tokenizeNodeSource(node: Node): List<Token> {
-            val nodeTemplate = listener<Schemas>(Endpoint.Side.SERVER).library["${node.type}/${node.name}"]
-            if (nodeTemplate == null) {
-                logger.error { "Node template not found for ${node.type}/${node.name}" }
-                return emptyList()
-            }
-
-            val hasOverride = node.properties.contains("override")
-            val hasSource = nodeTemplate.properties.contains("source")
-            if (!hasSource && !hasOverride) {
-                logger.error { "Node template does not contain source for ${node.type}/${node.name}" }
-                return emptyList()
-            }
-            val sourceTemplate = if (hasOverride) node["override"].cast<Property.String>()
-                .get() else nodeTemplate["source"].cast<Property.String>().get()
-            input = sourceTemplate
-            position = 0
-            val tokens = mutableListOf<Token>()
-
-            while (position < input.length) {
-                when {
-                    input.startsWith("\${", position) -> tokens.add(tokenizeExpression())
-                    else -> tokens.add(tokenizeLiteral())
-                }
-            }
-            return tokens
-        }
-
-        private fun tokenizeExpression(): Token {
-            position += 2 // Skip "${" prefix
-            val start = position
-            var braceCount = 1
-
-            while (position < input.length && braceCount > 0) {
-                when (input[position]) {
-                    '{' -> braceCount++
-                    '}' -> braceCount--
-                }
-                position++
-            }
-
-            if (braceCount > 0) throw IllegalStateException("Unmatched brace in expression")
-
-            val content = input.substring(start, position - 1)
-            return Token(TokenType.EXPRESSION, content)
-        }
-
-        private fun tokenizeLiteral(): Token {
-            val start = position
-            while (position < input.length && !input.startsWith(
-                    "\${", position
-                )
-            ) {
-                position++
-            }
-            return Token(TokenType.LITERAL, input.substring(start, position))
-        }
     }
 
     private class Parser {
@@ -182,177 +99,6 @@ object LuaTranspiler {
 
                 else -> ASTNode.GenericExpression(expression)
             }
-        }
-    }
-
-    private class IRGenerator {
-
-        fun generate(ast: AST, workspace: Workspace): IR {
-            val ir = IR()
-
-            // Process variables
-            workspace.graph.variables.forEach { (name, property) ->
-                ir.variables[name] = when (property) {
-                    is Property.String -> IRValue.String(multiLineString(property.get()))
-                    is Property.Int -> IRValue.Int(property.get())
-                    is Property.Float -> IRValue.Float(property.get())
-                    is Property.Boolean -> IRValue.Boolean(property.get())
-                    else -> IRValue.Null
-                }
-            }
-
-            // Process nodes
-            ast.nodes.forEach { node ->
-                val function = generateFunction(node, workspace)
-                ir.functions.add(function)
-            }
-
-            // Resolve dependencies
-            resolveDependencies(ir.functions, workspace)
-
-            // Process edges
-            ast.edges.forEach { edge ->
-                ir.edges.add(IREdge(edge.id))
-            }
-
-            return ir
-        }
-
-        private fun resolveDependencies(functions: List<IRFunction>, workspace: Workspace) {
-            functions.forEach { function ->
-                function.body.forEach { statement ->
-                    when (statement) {
-                        is IRStatement.NodeReference -> {
-                            val referencedFunction = functions.find { it.id == statement.name }
-                            if (referencedFunction != null && !function.dependencies.contains(referencedFunction)) {
-                                function.dependencies.add(referencedFunction)
-                            }
-                        }
-
-                        is IRStatement.ExecReference -> {
-                            val referencedFunction = functions.find { it.id == statement.name }
-                            if (referencedFunction != null && !function.dependencies.contains(referencedFunction)) {
-                                function.dependencies.add(referencedFunction)
-                            }
-                        }
-
-                        is IRStatement.OutputAssignment -> {
-                            val outputEdge = workspace.graph.getEdges(workspace.graph.getNode(UUID.fromString(function.id))!!)
-                                .find { it.name == statement.name && it.direction == "output" }
-                            if (outputEdge != null) {
-                                val targetNodes = getTargetNodes(workspace, outputEdge)
-                                targetNodes.forEach { targetNode ->
-                                    val targetFunction = functions.find { it.id == targetNode.uid.toString() }
-                                    if (targetFunction != null && !function.dependencies.contains(targetFunction)) {
-                                        function.dependencies.add(targetFunction)
-                                    }
-                                }
-                            }
-                        }
-                        // Ignore other statement types
-                        else -> {}
-                    }
-                }
-            }
-        }
-
-        private fun multiLineString(input: String): String {
-            val lines = input.split("\n")
-            return if (lines.size > 1) {
-                val formattedLines = lines.mapIndexed { index, line ->
-                    if (index == lines.lastIndex) {
-                        "\"$line\""
-                    } else {
-                        "\"$line\\n\" .."
-                    }
-                }
-                formattedLines.joinToString("\n    ")
-            } else {
-                "\"$input\""
-            }
-        }
-
-
-        private fun getTargetNodes(workspace: Workspace, edge: Edge): List<Node> {
-            val connectedLinks = workspace.graph.links.filter { it.from == edge.uid }
-            return connectedLinks.mapNotNull { link ->
-                val targetEdge = workspace.graph.getEdge(link.to)
-                targetEdge?.let { workspace.graph.getNode(it.owner) }
-            }
-        }
-
-        private fun generateFunction(node: ASTNode.NodeDeclaration, workspace: Workspace): IRFunction {
-            val actualNode = workspace.graph.getNode(UUID.fromString(node.id)) ?: return IRFunction(
-                id = node.id,
-                originalName = "UnknownNode",
-                nodeType = "Unknown",
-                inputEdges = emptyList(),
-                inputConnections = emptyMap(),
-                outputEdges = emptyMap()
-            )
-
-            val inputEdges = workspace.graph.getEdges(actualNode)
-                .filter { it.direction == "input" && it.type != "exec" }.map { it.name }
-
-            val inputConnections = workspace.graph.getEdges(actualNode)
-                .filter { it.direction == "input" && it.type != "exec" }.mapNotNull { edge ->
-                    val sourceNode = getSourceNode(workspace, edge)
-                    if (sourceNode != null) {
-                        edge.name to Pair(sourceNode.uid.toString(), sourceNode.name)
-                    } else null
-                }.toMap()
-
-            val outputEdges = workspace.graph.getEdges(actualNode)
-                .filter { it.direction == "output" && it.type == "exec" }.associate { edge ->
-                    edge.name to getTargetNodes(workspace, edge).map { Pair(it.uid.toString(), it.name) }
-                }
-
-            val function = IRFunction(
-                id = node.id,
-                originalName = actualNode.name,
-                nodeType = actualNode.type,
-                inputEdges = inputEdges,
-                inputConnections = inputConnections,
-                outputEdges = outputEdges
-            )
-
-            node.children.forEach { child ->
-                when (child) {
-                    is ASTNode.Literal -> function.body.add(IRStatement.Literal(child.value))
-                    is ASTNode.NodeReference -> {
-                        if (child.name !in inputEdges) {
-                            function.body.add(IRStatement.NodeReference(child.name))
-                        }
-                    }
-
-                    is ASTNode.ExecReference -> function.body.add(IRStatement.ExecReference(child.name))
-                    is ASTNode.VarReference -> function.body.add(IRStatement.VarReference(child.name))
-                    is ASTNode.LambdaReference -> function.body.add(IRStatement.LambdaReference(child.name))
-                    is ASTNode.JavaImport -> function.body.add(IRStatement.JavaImport(child.name))
-                    is ASTNode.SetupBlock -> function.setupBlocks.add(child.content.removePrefix("{").removeSuffix("}"))
-                    is ASTNode.GenericExpression -> function.body.add(IRStatement.GenericExpression(child.content))
-                    is ASTNode.OutputAssignment -> function.body.add(
-                        IRStatement.OutputAssignment(
-                            child.name,
-                            child.value
-                        )
-                    )
-
-                    else -> {} // Ignore other node types
-                }
-            }
-
-            return function
-        }
-
-        private fun getSourceNode(workspace: Workspace, edge: Edge): Node? {
-            val connectedLink = workspace.graph.links.find { it.to == edge.uid }
-            return if (connectedLink != null) {
-                val sourceEdge = workspace.graph.getEdge(connectedLink.from)
-                if (sourceEdge != null) {
-                    workspace.graph.getNode(sourceEdge.owner)
-                } else null
-            } else null
         }
     }
 
@@ -617,33 +363,6 @@ object LuaTranspiler {
                 }
         }
 
-//
-//        private fun generateFunctionInstanceBody(
-//            function: IRFunction,
-//            workspace: Workspace,
-//            codeBuilder: StringBuilder,
-//            indent: String
-//        ) {
-//            val functionNode = workspace.graph.getNode(UUID.fromString(function.id)) ?: return
-//            val actualFunction = workspace.graph.getFunction(functionNode.function) ?: return
-//
-//            val edges = actualFunction.inputs.mapNotNull { workspace.getEdge(it.get()) }.toSet()
-//            // Get linked edges
-//            val linkedEdges = edges.mapNotNull {
-//                workspace.graph.links.find { link -> link.from == it.uid }
-//            }
-//
-//            val otherEdges = linkedEdges.mapNotNull { link ->
-//                workspace.graph.getEdge(link.to)
-//            }
-//
-//            val linkedNodes = otherEdges.mapNotNull { edge ->
-//                workspace.graph.getNode(edge.owner)
-//            }
-//
-//
-//        }
-
 
         private fun hasExecInput(node: Node, workspace: Workspace): Boolean {
             return workspace.graph.getEdges(node)
@@ -694,17 +413,6 @@ object LuaTranspiler {
             }
         }
 
-        private fun getOutputEdge(function: IRFunction): Edge? {
-            return workspace.graph.getEdges(workspace.graph.getNode(UUID.fromString(function.id))!!)
-                .find { it.direction == "output" && it.type != "exec" }
-        }
-
-
-        private fun getSourceEdge(workspace: Workspace, targetEdge: Edge): Edge? {
-            val connectedLink = workspace.graph.links.find { it.to == targetEdge.uid }
-            return connectedLink?.let { workspace.graph.getEdge(it.from) }
-        }
-
         private fun getDefaultValue(edge: Edge): String {
             val value = edge.value
             if (value.isEmpty) return "nil"
@@ -744,17 +452,6 @@ object LuaTranspiler {
             return sourceEdge.name
         }
 
-        private fun getSourceNode(workspace: Workspace, edge: Edge): Node? {
-            val connectedLink = workspace.graph.links.find { it.to == edge.uid }
-                ?: workspace.graph.links.find { it.from == edge.uid }
-            return if (connectedLink != null) {
-                val sourceEdge = workspace.graph.getEdge(connectedLink.from)
-                if (sourceEdge != null) {
-                    workspace.graph.getNode(sourceEdge.owner)
-                } else null
-            } else null
-        }
-
         private fun generateEventHandlers(ir: IR, codeBuilder: StringBuilder) {
             codeBuilder.append("-- Event Handlers\n")
             codeBuilder.append("return {\n")
@@ -765,39 +462,6 @@ object LuaTranspiler {
             codeBuilder.append("}\n")
         }
 
-
-        private fun generateDependentFunctionCalls(
-            functionId: String,
-            codeBuilder: StringBuilder,
-            indent: String,
-            visitedFunctions: MutableSet<String>,
-            ir: IR
-        ) {
-            if (functionId in visitedFunctions) return
-            visitedFunctions.add(functionId)
-
-            functionCalls[functionId]?.forEach { calledFunctionId ->
-                val calledFunction = ir.functions.find { it.id == calledFunctionId }
-                if (calledFunction != null) {
-                    val calledFunctionName = sanitizeName("${calledFunction.originalName}_${calledFunction.id}")
-                    codeBuilder.append("$indent$calledFunctionName()\n")
-                    generateDependentFunctionCalls(calledFunctionId, codeBuilder, indent, visitedFunctions, ir)
-                }
-            }
-        }
-
-//        private fun generateMainExecution(ir: IR, codeBuilder: StringBuilder) {
-//            codeBuilder.append("-- Main Execution\n")
-//            codeBuilder.append("setup()\n")
-//            codeBuilder.append("return {\n")
-//            ir.functions.filter { it.nodeType == "Events" }.forEach { function ->
-//                val functionName = sanitizeName("${function.originalName}_${function.id}")
-//                codeBuilder.append("${indent}${function.originalName} = {\n")
-//                codeBuilder.append("$indent$indent$functionName\n")
-//                codeBuilder.append("$indent},\n")
-//            }
-//            codeBuilder.append("}\n")
-//        }
 
         private fun generateValue(value: IRValue): String {
             return when (value) {
@@ -812,73 +476,7 @@ object LuaTranspiler {
 
         private fun sanitizeName(name: String): String = name.replace(Regex("[^a-zA-Z0-9_]"), "_")
     }
-    // Data classes and enums
-    data class Token(val type: TokenType, val value: String)
-    enum class TokenType { NODE_START, NODE_END, EDGE, EXPRESSION, LITERAL }
-    sealed class IROutputTemplate {
-        data class VariableAssignment(val variableName: String, val value: String) : IROutputTemplate()
-        data class ExecCall(val execName: String) : IROutputTemplate()
-    }
 
-    class AST {
-
-        val nodes = mutableListOf<ASTNode.NodeDeclaration>()
-        val edges = mutableListOf<ASTNode.EdgeDeclaration>()
-    }
-
-    sealed class ASTNode { data class NodeDeclaration(
-        val id: String, val children: MutableList<ASTNode> = mutableListOf()
-    ) : ASTNode()
-
-        data class EdgeDeclaration(val id: String) : ASTNode()
-        data class Literal(val value: String) : ASTNode()
-        data class NodeReference(val name: String) : ASTNode()
-        data class ExecReference(val name: String) : ASTNode()
-        data class VarReference(val name: String) : ASTNode()
-        data class LambdaReference(val name: String) : ASTNode()
-        data class JavaImport(val name: String) : ASTNode()
-        data class SetupBlock(val content: String) : ASTNode()
-        data class GenericExpression(val content: String) : ASTNode()
-        data class OutputAssignment(val name: String, val value: String) : ASTNode()
-    }
-
-    class IR {
-
-        val variables = mutableMapOf<String, IRValue>()
-        val functions = mutableListOf<IRFunction>()
-        val edges = mutableListOf<IREdge>()
-    }
-
-    data class IRFunction(
-        val id: String,
-        val originalName: String,
-        val nodeType: String,
-        val inputEdges: List<String>,
-        val inputConnections: Map<String, Pair<String, String>>,
-        val outputEdges: Map<String, List<Pair<String, String>>>,
-        val body: MutableList<IRStatement> = mutableListOf(),
-        val setupBlocks: MutableSet<String> = mutableSetOf(),
-        val dependencies: MutableList<IRFunction> = mutableListOf()
-    )
-
-    data class IREdge(val id: String)
-
-    sealed class IRValue { data class String(val value: kotlin.String) : IRValue()
-        data class Int(val value: kotlin.Int) : IRValue()
-        data class Float(val value: kotlin.Float) : IRValue()
-        data class Boolean(val value: kotlin.Boolean) : IRValue()
-        object Null : IRValue()
-    }
-
-    sealed class IRStatement { data class Literal(val value: String) : IRStatement()
-        data class NodeReference(val name: String) : IRStatement()
-        data class ExecReference(val name: String) : IRStatement()
-        data class VarReference(val name: String) : IRStatement()
-        data class LambdaReference(val name: String) : IRStatement()
-        data class JavaImport(val name: String) : IRStatement()
-        data class GenericExpression(val content: String) : IRStatement()
-        data class OutputAssignment(val name: String, val value: String) : IRStatement()
-    }
     // Helper functions
-    private fun sanitizeName(name: String): String = name.replace(Regex("[^a-zA-Z0-9_]"), "_")
+     fun sanitizeName(name: String): String = name.replace(Regex("[^a-zA-Z0-9_]"), "_")
 }

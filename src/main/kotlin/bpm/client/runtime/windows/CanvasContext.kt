@@ -1439,7 +1439,7 @@ class CanvasContext : Listener {
                 "from" to nodeEdge.uid
                 "to" to functionEdge.uid
             } else {
-                "owner" to node.uid
+                "owner" to function.uid
                 "from" to functionEdge.uid
                 "to" to nodeEdge.uid
             }

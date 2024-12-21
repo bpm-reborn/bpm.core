@@ -2,8 +2,9 @@ package bpm.server.lua
 
 import bpm.common.bootstrap.BpmIO
 import bpm.common.logging.KotlinLogging
-import bpm.common.vm.LuaTranspiler
 import bpm.common.vm.EvalContext
+import bpm.common.vm.compiliation.LuaTranspiler
+import bpm.common.vm.transpiler.LuaGenerator
 import bpm.common.workspace.Workspace
 import party.iroiro.luajava.Lua
 import party.iroiro.luajava.value.RefLuaValue

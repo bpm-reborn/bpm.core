@@ -110,7 +110,7 @@ open class BasePipeBlock(properties: Properties) : Block(properties), IBlockExte
         var newState = currentState.setValue(PROXY, false) // Reset proxy state
         var connections = mutableListOf<Direction>()
 
-        for (direction in Direction.values()) {
+        for (direction in Direction.entries) {
             val canConnect = canConnectTo(level, pos, direction)
             if (canConnect) {
                 connections.add(direction)

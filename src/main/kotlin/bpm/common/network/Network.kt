@@ -50,8 +50,6 @@ object Network {
      */
     fun register(packet: KClass<out Packet>): Network = register(packet) { packet.instantiate }
 
-
-
     /**
      * Registers a packet type with a packet supplier function in the packet registry.
      *
