@@ -3,6 +3,7 @@ package bpm.common.bootstrap
 import bpm.Bpm
 import bpm.Bpm.LOGGER
 import bpm.client.docs.Docs
+import bpm.client.render.inventory.BlockCache
 import bpm.client.render.world.EnderLinkProjectileRenderer
 import bpm.client.render.world.QuantumRenderer
 import bpm.client.render.world.SharedQuantumRenderer
@@ -47,14 +48,20 @@ import net.minecraft.client.renderer.RenderType
 import net.minecraft.client.renderer.ShaderInstance
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.server.level.ServerLevel
+import net.minecraft.server.packs.resources.PreparableReloadListener
+import net.minecraft.server.packs.resources.ResourceManager
+import net.minecraft.util.profiling.ProfilerFiller
+import net.neoforged.fml.ModWorkManager
 import net.neoforged.neoforge.client.event.*
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent
+import net.neoforged.neoforge.event.AddReloadListenerEvent
 import net.neoforged.neoforge.event.tick.ServerTickEvent
 import org.apache.logging.log4j.Level
 import thedarkcolour.kotlinforforge.neoforge.forge.FORGE_BUS
 import thedarkcolour.kotlinforforge.neoforge.forge.runForDist
 import java.io.IOException
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createInstance
 
@@ -118,6 +125,7 @@ class Bootstrap(
         FORGE_BUS.addListener(::onLevelLoad)
         //Server setup, should be done on client too for single player
         modBus.addListener(::onCommonSetup)
+        FORGE_BUS.addListener(::onResourceReload)
     }
 
     private fun onRegisterPayloads(event: RegisterPayloadHandlersEvent) {
@@ -126,6 +134,22 @@ class Bootstrap(
 
     private fun registerRegistries(bus: IEventBus) {
         registriesList.forEach { it.register(bus) }
+    }
+
+    private fun onResourceReload(event: AddReloadListenerEvent) {
+        event.addListener { preparationBarrier, resourceManager, preparationsProfiler, reloadProfiler, backgroundExecutor, gameExecutor ->
+            CompletableFuture.runAsync({
+                preparationsProfiler.startTick()
+                preparationsProfiler.push("BlockCache initialization")
+                BlockCache.initialize()
+                preparationsProfiler.pop()
+                preparationsProfiler.endTick()
+            }, backgroundExecutor)
+                .thenCompose { preparationBarrier.wait(null) }
+                .thenAcceptAsync({
+                    // Only do game-thread specific work here if needed
+                }, gameExecutor)
+        }
     }
 
     private fun registerSerializers() {

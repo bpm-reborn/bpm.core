@@ -39,6 +39,11 @@ configurations.libraries {
     transitive = true
 }
 
+configurations {
+    runtimeClasspath.extendsFrom localRuntime
+}
+
+
 //minecraft.accessTransformers.file rootProject.file('src/main/resources/META-INF/accesstransformer.cfg')
 //minecraft.accessTransformers.entry public net.minecraft.client.Minecraft textureManager # textureManager
 
@@ -88,13 +93,25 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 
 repositories {
-    // NeoForged MDK includes mavenLocal by default
     mavenLocal()
-    // REQUIRED for using Kotlin for Forge
+
+    maven {
+        url "https://cursemaven.com"
+    }
     maven {
         name = 'Kotlin for Forge'
         url = 'https://thedarkcolour.github.io/KotlinForForge/'
         content { includeGroup "thedarkcolour" }
+    }
+    maven {
+        // location of a maven mirror for JEI files, as a fallback
+        name = "ModMaven"
+        url = "https://modmaven.dev"
+    }
+    maven {
+        // location of the maven that hosts JEI files since January 2023
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
     }
 }
 configurations.configureEach {
@@ -167,6 +184,12 @@ dependencies {
     testImplementation 'org.mockito.kotlin:mockito-kotlin:5.2.1'
     testImplementation 'io.mockk:mockk:1.13.10'
     testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5:2.0.10'
+
+//
+//    compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
+//    compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
+//    // We add the full version to localRuntime, not runtimeOnly, so that we do not publish a dependency on it
+//    localRuntime "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.

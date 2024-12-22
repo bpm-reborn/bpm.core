@@ -1,11 +1,16 @@
 package bpm.client.runtime.windows
 
 import bpm.client.font.Fonts
+import bpm.client.render.inventory.BlockCache
+import bpm.client.render.inventory.BlockListModal
+import bpm.client.render.inventory.BlockSelectionScreen
+import bpm.client.render.inventory.FilterScreen
 import bpm.client.render.panel.ConsolePanel
 import bpm.client.render.panel.PanelManager
 import bpm.client.render.panel.ProxiesPanel
 import bpm.client.render.panel.VariablesPanel
 import bpm.client.runtime.ClientRuntime
+import bpm.client.utils.renderButton
 import bpm.client.utils.use
 import bpm.common.network.Client
 import bpm.common.network.Endpoint
@@ -54,13 +59,6 @@ class CanvasGraphics(
             addPanel(ProxiesPanel)
             addPanel(ConsolePanel)
         }
-//
-//    val dockspace = RootPanel()
-//        .apply {
-//            addChild(Panels.Links, DockPosition.LEFT).apply {
-//                addChild(Panels.Variables, DockPosition.BOTTOM)
-//            }
-//        }
 
     private val recordedDrawCalls = mutableListOf<(gfx: GuiGraphics) -> Unit>()
     private val headerFamily get() = Fonts.getFamily("Inter")["Bold"]
@@ -93,7 +91,25 @@ class CanvasGraphics(
     fun renderPanels(drawList: ImDrawList) {
 //        dockspace.render(drawList)
         panels.renderPanels(drawList)
+        FilterScreen.render(this)
 
+        //Set position to top right of screen
+        val pos = Vector2f(ImGui.getIO().displaySize.x - 100f, 10f)
+        if (renderButton(
+                drawList,
+                "Add Block",
+                pos.x,
+                pos.y,
+                90f,
+                30f,
+                ImColor.rgba(100, 100, 100, 255),
+                ImColor.rgba(150, 150, 150, 255)
+            )
+        ) {
+            FilterScreen.show{ filter ->
+                println("Added filter $filter")
+            }
+        }
     }
 
 
@@ -1870,6 +1886,7 @@ class CanvasGraphics(
         this.gfx = gfx
         recordedDrawCalls.forEach { it(gfx) }
         panels.renderPanelsPost(gfx, bounds)
+        FilterScreen.renderPost(gfx, this)
         recordedDrawCalls.clear()
         this.gfx = null //Reset the gfx to null after rendering the panels
     }
@@ -1903,9 +1920,8 @@ class CanvasGraphics(
         poseStack.pushPose()
         poseStack.translate(adjustedPos.x.toDouble(), adjustedPos.y.toDouble(), 0.0)
         poseStack.scale(adjustedScale.x / 16f, adjustedScale.y / 16f, adjustedScale.z / 16f)
-        poseStack.translate(0.0, 3.5, 100.0)
+        poseStack.translate(0.0, 3.5, 0.0)  // Reduced z-translation to 50 instead of 100
         graphics.renderItem(itemStack, 0, 0)
-
         poseStack.popPose()
     }
 

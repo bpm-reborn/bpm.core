@@ -320,7 +320,7 @@ object ClientRuntime : Listener {
     private fun initializeFonts() {
         try {
             Fonts.register("Inter", 8..50)
-            Fonts.register("Minecraft", 8..50, "Title", "Body")
+            Fonts.register("Minecraft", 8..50, "Bold", "Regular")
             Fonts.register(
                 "Fa",
                 24..84,

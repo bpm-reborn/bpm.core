@@ -297,5 +297,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
             Vector2f(size.x, size.y)
         )
     }
+
+
 }
 
