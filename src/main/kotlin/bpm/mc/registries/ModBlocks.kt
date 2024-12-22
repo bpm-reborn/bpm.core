@@ -14,7 +14,7 @@ import net.neoforged.neoforge.registries.DeferredRegister
 
 object ModBlocks : ModRegistry<Block> {
 
-    override val registry = DeferredRegister.createBlocks(Bpm.ID)
+    override val registry: DeferredRegister.Blocks = DeferredRegister.createBlocks(Bpm.ID)
 
     val ENDER_CONTROLLER by register {
         registry.registerBlock(

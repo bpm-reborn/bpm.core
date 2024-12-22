@@ -54,6 +54,66 @@ class NodeLibrary(private val directory: Path? = null) : Iterable<NodeTypeMeta> 
     }
 
     /**
+     * Adds a new NodeType to the library
+     * @param nodeType The NodeType to add
+     * @return True if added successfully, false if type already exists
+     */
+    fun addType(nodeType: NodeType): Boolean {
+        val meta = nodeType.meta
+        if (registerNodes.containsKey(meta.nodeTypeName)) {
+            log.warn { "Node type ${meta.nodeTypeName} already exists in library" }
+            return false
+        }
+
+        parsedNodes[meta] = nodeType
+        registerNodes[meta.nodeTypeName] = meta
+        log.info { "Added node type: ${meta.nodeTypeName}" }
+        return true
+    }
+
+    /**
+     * Removes a NodeType from the library by its type name
+     * @param typeName The full name of the type to remove (e.g. "Functions/MyFunction")
+     * @return True if removed successfully, false if type not found
+     */
+    fun removeType(typeName: String): Boolean {
+        val meta = registerNodes.remove(typeName) ?: return false
+        parsedNodes.remove(meta)
+        log.info { "Removed node type: $typeName" }
+        return true
+    }
+
+    /**
+     * Updates an existing NodeType in the library
+     * @param typeName The name of the type to update
+     * @param nodeType The new NodeType data
+     * @return True if updated successfully, false if type not found
+     */
+    fun updateType(typeName: String, nodeType: NodeType): Boolean {
+        val oldMeta = registerNodes[typeName] ?: return false
+
+        // Remove old entries
+        registerNodes.remove(typeName)
+        parsedNodes.remove(oldMeta)
+
+        // Add new entries
+        val newMeta = nodeType.meta
+        parsedNodes[newMeta] = nodeType
+        registerNodes[newMeta.nodeTypeName] = newMeta
+
+        log.info { "Updated node type: $typeName -> ${newMeta.nodeTypeName}" }
+        return true
+    }
+    /**
+     * Checks if a type exists in the library
+     * @param typeName The name of the type to check
+     * @return True if type exists
+     */
+    fun hasType(typeName: String): Boolean {
+        return registerNodes.containsKey(typeName)
+    }
+
+    /**
      * Loads node types from the given property list.
      *
      * @param properties the property list containing node type information

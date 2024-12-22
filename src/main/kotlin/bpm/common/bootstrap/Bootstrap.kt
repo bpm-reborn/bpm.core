@@ -69,6 +69,7 @@ class Bootstrap(
     private val builtIns = mutableListOf<LuaBuiltin>()
     private val ourResults = results.fromPackages("noderspace", "bpm")
     private val isRunning get() = Client.isRunning()
+
     /**
      * The entry point for the bootstrap.
      */
@@ -110,7 +111,6 @@ class Bootstrap(
             modBus.addListener(::onRegisterEntityRenderers)
             Minecraft.getInstance()
         }, serverTarget = {
-
             "server"
         })
         FORGE_BUS.addListener(::onServerTick)
@@ -151,7 +151,6 @@ class Bootstrap(
     }
 
     private fun registerPackets() = packetsList.forEach(Network::register)
-
 
     private fun onRegisterClientReloadListeners(event: RegisterClientReloadListenersEvent) {
         event.registerReloadListener { pPreparationBarrier, _, _, _, pBackgroundExecutor, pGameExecutor ->

@@ -34,7 +34,7 @@ class EnderProxyBlock(properties: Properties) : BasePipeBlock(properties) {
         var shape = Shapes.empty()
         val baseShape = makeShape(if (collision) 0.65f else 1.0f)
 
-        for (direction in Direction.values()) {
+        for (direction in Direction.entries) {
             if (state.getValue(getPropertyForDirection(direction))) {
                 val rotatedShape = rotateShape(baseShape, direction.opposite)
                 //If we are computing the collision shape, we need to shrink the shape slightly

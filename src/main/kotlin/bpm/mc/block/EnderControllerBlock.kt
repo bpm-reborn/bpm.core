@@ -31,7 +31,6 @@ import java.util.*
 
 
 class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), EntityBlock {
-
     private val shape = Shapes.box(3 / 16.0, 3 / 16.0, 3 / 16.0, 13 / 16.0, 13 / 16.0, 13 / 16.0)
     private val logger = KotlinLogging.logger { }
 

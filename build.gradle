@@ -158,6 +158,15 @@ dependencies {
     jarJar('party.iroiro.luajava:luajava:4.0.2')
     libraries('org.eclipse.jgit:org.eclipse.jgit:7.0.0.202409031743-r')
     jarJar('org.eclipse.jgit:org.eclipse.jgit:7.0.0.202409031743-r')
+
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+    testImplementation 'org.mockito:mockito-core:5.11.0'
+    testImplementation 'org.mockito.kotlin:mockito-kotlin:5.2.1'
+    testImplementation 'io.mockk:mockk:1.13.10'
+    testImplementation 'org.jetbrains.kotlin:kotlin-test-junit5:2.0.10'
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -182,6 +191,16 @@ tasks.withType(ProcessResources).configureEach {
 
     filesMatching(['META-INF/neoforge.mods.toml']) {
         expand replaceProperties
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+
+    // Optional but recommended test configuration
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat = 'full'
     }
 }
 

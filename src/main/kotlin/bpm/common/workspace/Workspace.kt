@@ -9,6 +9,7 @@ import bpm.common.serial.Serial
 import bpm.common.serial.Serialize
 import bpm.common.type.NodeLibrary
 import bpm.common.workspace.graph.*
+import bpm.common.workspace.graph.Function
 import net.neoforged.fml.loading.FMLPaths
 import org.joml.Vector2f
 import java.nio.file.Path
@@ -27,7 +28,7 @@ import java.util.UUID
  */
 data class Workspace(
     val graph: Graph,
-    val nodeLibrary: NodeLibrary,
+    var nodeLibrary: NodeLibrary,
     val workspaceName: String,
     val users: MutableMap<UUID, User>,
     val description: String = "Default Workspace",
@@ -122,6 +123,10 @@ data class Workspace(
     }
 
     fun addEdge(owner: Node, edge: Edge) {
+        graph.addEdge(owner, edge)
+    }
+
+    fun addEdge(owner: Function, edge: Edge) {
         graph.addEdge(owner, edge)
     }
 

@@ -1,6 +1,7 @@
 package bpm.common.workspace.graph
 
 import bpm.common.memory.Buffer
+import bpm.common.network.NetUtils
 import bpm.common.property.*
 import bpm.common.serial.Serial
 import bpm.common.serial.Serialize
@@ -111,6 +112,12 @@ data class Node(override val properties: PropertyMap = Property.Object()) : Prop
      */
     val values: List<PropertyLiteral<*>> by properties delegate { emptyList() }
 
+    /**
+     * Represents a function UUID.
+     *
+     * By default it's set to [NetUtils.DefaultUUID] - this means that if no function is provided, the default value will be used.
+     */
+    var function: UUID by properties delegate { NetUtils.DefaultUUID }
 
     /**
      * Sets the value of a property with the given name.
@@ -131,10 +138,6 @@ data class Node(override val properties: PropertyMap = Property.Object()) : Prop
      */
     operator fun get(name: String): Property<*> {
         return properties[name]
-    }
-
-    infix fun getProperty(s: String): Property<*> {
-        return properties[s]
     }
 
 
