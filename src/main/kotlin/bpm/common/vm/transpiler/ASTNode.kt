@@ -6,8 +6,11 @@ sealed interface ASTNode {
     data class WorkspaceAST(
         val uid: String,
         val nodes: List<Node>,
-        val builtIns: List<String> // List of built-in class names
-    )
+        val builtIns: List<Pair<String, String>> // List of built-in class names
+    ) {
+
+        fun findNode(id: String): ASTNode.Node? = nodes.find { it.id == id }
+    }
 
     // A node in the workspace
     data class Node(
@@ -24,6 +27,7 @@ sealed interface ASTNode {
         val name: String,
         val type: String,
         val sourceNodeId: String? = null,
+        val sourceNodeName: String? = null,
         val sourceEdgeName: String? = null,
         val defaultValue: String? = null
     )
@@ -37,7 +41,8 @@ sealed interface ASTNode {
 
         data class Target(
             val nodeId: String,
-            val inputName: String
+            val inputName: String,
+            val nodeName: String? = null,
         )
     }
 

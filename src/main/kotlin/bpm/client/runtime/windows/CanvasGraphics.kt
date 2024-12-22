@@ -146,16 +146,23 @@ class CanvasGraphics(
             }
 
             // Get edge positions
-            val sourcePos = when (sourceOwner) {
+            var sourcePos = when (sourceOwner) {
                 is Node -> context.getEdgePosition(sourceOwner, sourceEdge, sourceBounds)
                 is Function -> context.getEdgePosition(sourceOwner, sourceEdge, sourceBounds)
                 else -> continue
             }
 
-            val targetPos = when (targetOwner) {
+            var targetPos = when (targetOwner) {
                 is Node -> context.getEdgePosition(targetOwner, targetEdge, targetBounds)
                 is Function -> context.getEdgePosition(targetOwner, targetEdge, targetBounds)
                 else -> continue
+            }
+
+            //If the source owner is a function, we flip the source and target positions
+            if (sourceOwner is Function && sourceEdge.direction == "input") {
+                val temp = sourcePos
+                sourcePos = targetPos
+                targetPos = temp
             }
 
             // Get colors based on owner type

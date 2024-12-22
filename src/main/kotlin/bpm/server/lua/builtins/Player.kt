@@ -1,5 +1,6 @@
-package bpm.server.lua
+package bpm.server.lua.builtins
 
+import bpm.server.lua.LuaBuiltin
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
 import net.neoforged.neoforge.server.ServerLifecycleHooks

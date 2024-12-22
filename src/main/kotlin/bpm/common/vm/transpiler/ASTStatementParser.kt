@@ -17,7 +17,7 @@ class ASTStatementParser(private val library: NodeLibrary) {
 
     companion object {
 
-        private val EXPRESSION_REGEX = Regex("""\$\{(.*?)}""")
+        private val EXPRESSION_REGEX = Regex("""\$\{(.*?)}""", RegexOption.DOT_MATCHES_ALL)
     }
 
     /**
@@ -57,30 +57,40 @@ class ASTStatementParser(private val library: NodeLibrary) {
      */
     private fun parseSourceContent(source: String): List<ASTNode.Statement> {
         val statements = mutableListOf<ASTNode.Statement>()
-        var lastIndex = 0
+        val chars = source.toCharArray()
+        var i = 0
+        var currentContent = StringBuilder()
 
-        // Find all expressions in the source using regex
-        EXPRESSION_REGEX.findAll(source).forEach { matchResult ->
-            // Add any literal content before the expression
-            if (matchResult.range.first > lastIndex) {
-                val literalContent = source.substring(lastIndex, matchResult.range.first)
-                if (literalContent.isNotBlank()) {
-                    statements.add(ASTNode.Statement.Literal(literalContent.trim()))
+        while (i < chars.size) {
+            when {
+                chars[i] == '$' && i + 1 < chars.size && chars[i + 1] == '{' -> {
+                    // Handle any accumulated literal content
+                    if (currentContent.isNotEmpty()) {
+                        val content = currentContent.toString().trim()
+                        if (content.isNotEmpty()) {
+                            statements.add(ASTNode.Statement.Literal(content))
+                        }
+                        currentContent.clear()
+                    }
+
+                    // Parse expression
+                    i += 2 // Skip ${
+                    val expressionContent = parseUntilClosingBrace(chars, i)
+                    i += expressionContent.length + 1 // +1 for closing }
+                    parseExpression(expressionContent.trim())?.let { statements.add(it) }
+                }
+                else -> {
+                    currentContent.append(chars[i])
+                    i++
                 }
             }
-
-            // Parse the expression content
-            val expressionContent = matchResult.groupValues[1].trim()
-            parseExpression(expressionContent)?.let { statements.add(it) }
-
-            lastIndex = matchResult.range.last + 1
         }
 
-        // Add any remaining literal content
-        if (lastIndex < source.length) {
-            val remaining = source.substring(lastIndex)
-            if (remaining.isNotBlank()) {
-                statements.add(ASTNode.Statement.Literal(remaining.trim()))
+        // Handle any remaining literal content
+        if (currentContent.isNotEmpty()) {
+            val content = currentContent.toString().trim()
+            if (content.isNotEmpty()) {
+                statements.add(ASTNode.Statement.Literal(content))
             }
         }
 
@@ -88,36 +98,54 @@ class ASTStatementParser(private val library: NodeLibrary) {
     }
 
     /**
+     * Parses content until finding the matching closing brace, handling nested braces.
+     */
+    private fun parseUntilClosingBrace(chars: CharArray, startIndex: Int): String {
+        val content = StringBuilder()
+        var braceCount = 1
+        var i = startIndex
+
+        while (i < chars.size) {
+            when (chars[i]) {
+                '{' -> braceCount++
+                '}' -> {
+                    braceCount--
+                    if (braceCount == 0) {
+                        return content.toString()
+                    }
+                }
+            }
+            content.append(chars[i])
+            i++
+        }
+
+        // If we get here, there was no matching closing brace
+        throw IllegalStateException("No matching closing brace found")
+    }
+
+    /**
      * Parses an individual expression into an AST statement.
      */
     private fun parseExpression(expression: String): ASTNode.Statement? {
         return when {
-            // Node reference (e.g., NODE.someNodeId)
             expression.startsWith("NODE.") -> {
                 val nodeId = expression.substringAfter("NODE.")
                 ASTNode.Statement.NodeReference(nodeId)
             }
-
-            // Execution flow (e.g., EXEC.targetNodeId)
             expression.startsWith("EXEC.") -> {
                 val targetId = expression.substringAfter("EXEC.")
                 ASTNode.Statement.ExecFlow(targetId)
             }
-
-            // Variable reference (e.g., VARS.someVariable)
             expression.startsWith("VARS.") -> {
                 val varName = expression.substringAfter("VARS.")
                 ASTNode.Statement.VariableReference(varName)
             }
-
-            // Setup block (e.g., SETUP.{some code})
             expression.startsWith("SETUP.") -> {
                 val content = expression.substringAfter("SETUP.")
                 ASTNode.Statement.SetupBlock(content)
             }
-
-            // Output assignment (e.g., OUTPUT.name = value)
             expression.startsWith("OUTPUT.") -> {
+                // Split only on first = to preserve any = in the value part
                 val parts = expression.substringAfter("OUTPUT.").split("=", limit = 2)
                 if (parts.size == 2) {
                     ASTNode.Statement.OutputAssignment(
@@ -126,8 +154,7 @@ class ASTStatementParser(private val library: NodeLibrary) {
                     )
                 } else null
             }
-
-            else -> null // Unknown expression type
+            else -> null
         }
     }
 }

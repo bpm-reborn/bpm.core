@@ -1,10 +1,10 @@
-package bpm.server.lua
+package bpm.server.lua.builtins
 
 import bpm.client.render.panel.ConsolePanel
 import bpm.common.network.Network.new
 import bpm.common.network.Server
 import bpm.common.workspace.packets.NotifyMessage
-import org.joml.Vector4f
+import bpm.server.lua.LuaBuiltin
 
 object Notify : LuaBuiltin {
 

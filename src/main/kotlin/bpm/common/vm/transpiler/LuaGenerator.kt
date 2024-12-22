@@ -1,6 +1,5 @@
 package bpm.common.vm.transpiler
 
-import bpm.Bpm
 import bpm.common.utils.sanitize
 import bpm.common.workspace.Workspace
 
@@ -9,28 +8,29 @@ object LuaGenerator {
     private const val INDENT = "  "
     private var currentIndentLevel = 0
 
-    fun generate(workspace: Workspace): String = generateSource(workspace, ASTGenerator(workspace).generate())
+    fun generate(workspace: Workspace): String = generateSource(ASTGenerator(workspace).generate())
 
     /**
      * Generates Lua code from a list of AST nodes.
      */
-    private fun generateSource(workspace: Workspace, nodes: List<ASTNode.Node>): String = buildString {
+    private fun generateSource(workspaceAST: ASTNode.WorkspaceAST): String = buildString {
         currentIndentLevel = 0
 
         appendLineIndented("-- Generated Lua Code")
         appendLine()
 
+//        appendLineIndented("-- Random seed")
+//        appendLineIndented("math.randomseed(os.time())")
+
         // Generate workspace accessor
         appendLineIndented("-- Workspace Accessor")
-        appendLineIndented("local _Uid = \"${workspace.uid}\"")
+        appendLineIndented("local _Uid = \"${workspaceAST.uid}\"")
         appendLine()
 
-        //Generate built-in classes
-        val builtIns = Bpm.bootstrap.getBuiltIns()
+        // Generate built-in classes
         appendLineIndented("-- Built-in Classes")
-        builtIns.forEach { builtIn ->
-            val classPath = builtIn.javaClass.name
-            appendLineIndented("local ${builtIn.name} = java.import('$classPath')")
+        workspaceAST.builtIns.forEach { (builtInName, javaClass) ->
+            appendLineIndented("local $builtInName = java.import('${javaClass}')")
         }
         appendLine()
 
@@ -46,14 +46,14 @@ object LuaGenerator {
 
         appendLineIndented("-- Function forward Declarations")
         // Generate function declarations first to allow mutual recursion
-        nodes.forEach { node ->
+        workspaceAST.nodes.forEach { node ->
             appendLineIndented("local ${getFunctionName(node)}")
         }
         appendLine()
 
         // Generate function implementations
-        nodes.forEach { node ->
-            generateFunction(workspace, node, this)
+        workspaceAST.nodes.forEach { node ->
+            generateFunction(node, workspaceAST, this)
             appendLine()
         }
 
@@ -61,32 +61,31 @@ object LuaGenerator {
         appendLineIndented("-- Event Handlers")
         appendLineIndented("return {")
         indented {
-            nodes.filter { it.type == "Events" }.forEach { node ->
+            workspaceAST.nodes.filter { it.type == "Events" }.forEach { node ->
                 appendLineIndented("${node.name} = {${getFunctionName(node)}},")
             }
         }
         appendLineIndented("}")
     }
 
-    private fun generateFunction(workspace: Workspace, node: ASTNode.Node, builder: StringBuilder) {
+    private fun generateFunction(node: ASTNode.Node, ast: ASTNode.WorkspaceAST, builder: StringBuilder) {
         builder.apply {
             appendLineIndented("-- Node: ${node.name} (${node.id})")
             appendLineIndented("${getFunctionName(node)} = function()")
-            var hasInputs = false
+
             indented {
-                //If there's inputs, we add a comment
-                if (node.inputs.filterNot { it.type === "exec" }.isNotEmpty()) {
+                if (node.inputs.filterNot { it.type == "exec" }.isNotEmpty()) {
                     appendLineIndented("-------- Inputs --------")
-                    hasInputs = true
                 }
+
                 // Generate input assignments
                 node.inputs.filterNot { it.type == "exec" }.forEach { input ->
                     if (input.sourceNodeId != null && input.sourceEdgeName != null) {
-                        val sourceFuncName = getFunctionNameById(workspace, input.sourceNodeId)
-                        //If there's a source node and edge, we need to call it's function first
-                        appendLineIndented("$sourceFuncName()")
-                        //Then we can make use of the output from the source node
-                        appendLineIndented("local ${input.name} = outputs['${sourceFuncName}_${input.sourceEdgeName}']")
+                        val sourceNode = ast.findNode(input.sourceNodeId)
+                        if (sourceNode != null) {
+                            appendLineIndented("${getFunctionName(sourceNode)}()")
+                            appendLineIndented("local ${input.name} = outputs['${getFunctionName(sourceNode)}_${input.sourceEdgeName}']")
+                        }
                     } else if (input.defaultValue != null) {
                         appendLineIndented("local ${input.name} = ${input.defaultValue}")
                     } else {
@@ -95,36 +94,34 @@ object LuaGenerator {
                 }
 
                 if (node.statements.isNotEmpty()) {
-                    if (hasInputs) appendLine()
                     appendLineIndented("-------- Statements --------")
                 }
+                val uniqueExecutions = mutableSetOf<String>()
 
                 // Generate statements
                 node.statements.forEach { statement ->
                     when (statement) {
                         is ASTNode.Statement.Literal -> {
-
-                            //convert to lines, remove indent and empty lines, then add back the proper indent
-                            statement.value.lines().map { it.trim() }.filter { it.isNotEmpty() }.forEach {
-                                appendLineIndented(it)
-                            }
+                            statement.value.lines()
+                                .map { it.trim() }
+                                .filter { it.isNotEmpty() }
+                                .forEach { appendLineIndented(it) }
                         }
 
                         is ASTNode.Statement.NodeReference -> {
-                            appendLineIndented("${getFunctionNameById(workspace, statement.nodeId)}()")
+                            val targetNode = ast.findNode(statement.nodeId)
+                            appendLineIndented("${targetNode?.let { getFunctionName(it) }}()")
                         }
 
                         is ASTNode.Statement.ExecFlow -> {
-                            val ourEdgeId = statement.ourEdgeId
-
-                            //gets the nodes outputs for the given edge
-                            val ourEdges = node.outputs.find { it.name == ourEdgeId }?.targets ?: emptyList()
-                            val targetNodes = ourEdges.map { getFunctionNameById(workspace, it.nodeId) }
-                            //Call all the target nodes
-                            for (targetNode in targetNodes) {
-                                appendLineIndented("$targetNode()")
+                            val outputEdge = node.outputs.find { it.name == statement.ourEdgeId }
+                            outputEdge?.targets?.forEach { target ->
+                                val targetFunc = "${target.nodeName!!.sanitize()}_${target.nodeId.sanitize()}"
+                                if (targetFunc !in uniqueExecutions) {
+                                    uniqueExecutions.add(targetFunc)
+                                    appendLineIndented("$targetFunc()")
+                                }
                             }
-
                         }
 
                         is ASTNode.Statement.VariableReference -> {
@@ -146,15 +143,9 @@ object LuaGenerator {
         }
     }
 
+
     private fun getFunctionName(node: ASTNode.Node): String =
         "${node.name}_${node.id}".sanitize()
-
-    private fun getFunctionNameById(workspace: Workspace, nodeId: String): String {
-        val node = workspace.graph.getNode(java.util.UUID.fromString(nodeId))
-            ?: throw IllegalStateException("Node not found: $nodeId")
-        return "${node.name}_$nodeId".sanitize()
-    }
-
 
     private fun indented(block: () -> Unit) {
         currentIndentLevel++

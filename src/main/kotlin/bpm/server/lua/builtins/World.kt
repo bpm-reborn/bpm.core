@@ -1,7 +1,9 @@
-package bpm.server.lua
+package bpm.server.lua.builtins
 
 import bpm.client.render.panel.ConsolePanel
 import bpm.pipe.PipeNetwork
+import bpm.server.lua.LuaBuiltin
+import bpm.server.lua.Network
 import net.minecraft.core.BlockPos
 import net.minecraft.core.Direction
 import net.minecraft.core.particles.ParticleOptions
@@ -25,9 +27,8 @@ object World : LuaBuiltin {
         ServerLifecycleHooks.getCurrentServer() ?: throw IllegalStateException("Server not available")
     }
 
-    private val overworld by lazy {
+    private val overworld get() =
         server.getLevel(Level.OVERWORLD) ?: throw IllegalStateException("Overworld not available")
-    }
 
 
     @JvmStatic
@@ -46,6 +47,11 @@ object World : LuaBuiltin {
                 )
             )
         }
+    }
+
+    @JvmStatic
+    fun getTimeOfDay(): Long {
+        return overworld.dayTime
     }
 
     @JvmStatic
