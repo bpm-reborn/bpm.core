@@ -3,7 +3,6 @@ package bpm.server.lua
 import bpm.common.bootstrap.BpmIO
 import bpm.common.logging.KotlinLogging
 import bpm.common.vm.EvalContext
-import bpm.common.vm.compiliation.LuaTranspiler
 import bpm.common.vm.transpiler.LuaGenerator
 import bpm.common.workspace.Workspace
 import party.iroiro.luajava.Lua
@@ -26,7 +25,7 @@ class WorkspaceLuaContext(val workspace: Workspace, private val luaThread: Lua) 
         cleanup()
         BpmIO.saveWorkspace(workspace)
         workspace.needsRecompile = false
-        val compiledSource = LuaTranspiler.generateLuaScript(workspace)
+        val compiledSource = LuaGenerator.generate(workspace)
 
         try {
             val result = luaThread.eval(compiledSource)[0]

@@ -164,7 +164,7 @@ class Schemas(private val path: Path, private val side: Endpoint.Side) : Listene
         return edgesMap
     }
 
-    fun createFromFunction(workspace: Workspace, function: Function, position: Vector2f): Node {
+    private fun createFromFunction(workspace: Workspace, function: Function): NodeType {
         // Create NodeTypeMeta for the function
         val meta = NodeTypeMeta(
             name = function.name,
@@ -189,7 +189,41 @@ class Schemas(private val path: Path, private val side: Endpoint.Side) : Listene
                 "nodeTypeName" to Property.String("Functions/${function.name}")
             }
         })
-        return  createFromType(workspace, nodeType, position)
+
+        //Add source generation
+
+        library.add(nodeType)
+        return nodeType
+    }
+
+    //Update functions in the library
+    fun updateFunctionType(workspace: Workspace, function: Function): NodeType {
+        val nodeType = library["Functions/${function.name}"] ?: createFromFunction(workspace, function)
+        val edges = createFunctionEdges(workspace, function)
+        nodeType["edges"] = edges
+        val theme = nodeType["theme"] as Property.Object
+        theme["color"] = Property.Vec4f(function.color)
+        theme["width"] = Property.Float(function.width)
+        theme["height"] = Property.Float(function.height)
+        theme["icon"] = Property.Int(function.icon)
+        nodeType["source"] = Property.String(generateSource(workspace, function))
+
+        //Generate the source code
+        library.add(nodeType)//setter will update the type
+        return nodeType
+    }
+
+    private fun generateSource(workspace: Workspace, function: Function): String {
+        val inputs = workspace.graph.getEdges(function.uid).filter { it.direction == "input" }
+        val outputs = workspace.graph.getEdges(function.uid).filter { it.direction == "output" }
+
+        val builder = StringBuilder()
+        for (input in inputs.filter { it.type == "exec" }) {
+            builder.append("\${EXEC.${input.name}}")
+        }
+        builder.append("")
+
+        return builder.toString()
     }
 
 
