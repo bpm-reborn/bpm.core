@@ -1,11 +1,14 @@
 package bpm.common.vm.transpiler
 
 import bpm.Bpm
+import bpm.common.network.Endpoint
 import bpm.common.network.NetUtils
 import bpm.common.network.Network
+import bpm.common.network.listener
 import bpm.common.property.Property
 import bpm.common.property.cast
 import bpm.common.type.NodeLibrary
+import bpm.common.upstream.Schemas
 import bpm.common.utils.className
 import bpm.common.utils.sanitize
 import bpm.common.workspace.Workspace
@@ -15,7 +18,7 @@ import bpm.common.workspace.graph.Node
 import java.util.UUID
 
 class ASTGenerator(
-    private val workspace: Workspace, library: NodeLibrary = workspace.nodeLibrary
+    private val workspace: Workspace, library: NodeLibrary = listener<Schemas>(Endpoint.Side.SERVER).library
 ) {
 
     private val statementParser = ASTStatementParser(library)
@@ -37,12 +40,18 @@ class ASTGenerator(
 
         // Get built-in class names
         val builtIns = Bpm.bootstrap.getBuiltIns().map { it.name to it.className }
-
         return ASTNode.WorkspaceAST(
             uid = workspace.uid.toString(),
+            variables = generateVariables(),
             nodes = astNodes,
             builtIns = builtIns
         )
+    }
+
+    private fun generateVariables(): List<ASTNode.Variable> {
+        return workspace.graph.variables.map { (name, value) ->
+            ASTNode.Variable(name, value.toString())
+        }
     }
 
     /**

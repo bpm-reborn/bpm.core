@@ -29,8 +29,6 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
 
     private val titleFont = Fonts.getFamily("Inter")["Bold"]
     private val bodyFont = Fonts.getFamily("Inter")["Light"]
-    private val recordedDrawCall = mutableListOf<(gfx: GuiGraphics) -> Unit>()
-    private val unClippedRecordedDrawCalls = mutableListOf<(gfx: GuiGraphics) -> Unit>()
     private var draggedProxy: WorldPos? = null
     // Colors for gradients and accents
     private val gradientTopColor = ImColor.rgba(60, 60, 65, 255)      // Dark gray
@@ -73,23 +71,8 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
             Vector2f(size.x - 20f, 60f)
         )
         ImGui.dummy(0f, 70f)
-    }
 
-    override fun renderPost(gfx: GuiGraphics, scaledPos: Vector3f, scaledSize: Vector3f) {
-        val transformedPos = graphics.toScreenSpaceVector(scaledPos.x, scaledPos.y + 30f)
-        val transformedSize = graphics.toScreenSpaceVector(scaledSize.x, scaledSize.y)
-        gfx.enableScissor(
-            transformedPos.x.toInt(),
-            transformedPos.y.toInt(),
-            transformedSize.x.toInt() + transformedPos.x.toInt(),
-            transformedSize.y.toInt() + transformedPos.y.toInt()
-        )
-        recordedDrawCall.forEach { it(gfx) }
-        recordedDrawCall.clear()
-        gfx.disableScissor()
 
-        unClippedRecordedDrawCalls.forEach { it(gfx) }
-        unClippedRecordedDrawCalls.clear()
     }
 
     private fun renderProxy(
@@ -132,14 +115,15 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
         // Item rendering
         val itemSize = 32f
         val leftSpaceWidth = itemSize + 20f
-        (if (clipped) recordedDrawCall else unClippedRecordedDrawCalls).add {
-            graphics.renderBlockItem(
+
+
+        recordUnclipped {
+            renderBlockItem(
                 itemStack,
                 position.x + 5f,  // Added padding
                 position.y,
             )
         }
-
         // Vertical separator with gradient
         val separatorGradientTop = ImColor.rgba(120, 120, 140, 200)
         val separatorGradientBottom = ImColor.rgba(80, 80, 100, 150)

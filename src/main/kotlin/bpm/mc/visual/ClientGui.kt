@@ -1,7 +1,6 @@
 package bpm.mc.visual
 
 import bpm.client.render.panel.ConsolePanel
-import bpm.client.render.panel.PanelManager
 import bpm.client.runtime.ClientRuntime
 import imgui.ImGui
 import imgui.flag.ImGuiWindowFlags

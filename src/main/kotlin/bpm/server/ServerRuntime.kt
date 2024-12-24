@@ -234,7 +234,7 @@ object ServerRuntime : Listener {
                 val workspace = workspaces[users[from]?.workspaceUid ?: error("User not in workspace")]
                     ?: error("Workspace not found")
                 val type =
-                    if (packet.type == bpm.common.workspace.packets.NodeType.GetVariable) "Variables/Get Variable" else "Variables/Set Variable"
+                    if (packet.type == bpm.common.workspace.packets.NodeType.GetVariable) "Variable/Get" else "Variable/Set"
                 val library = listener<Schemas>(Endpoint.Side.SERVER).library
                 val nodeType = library[type] ?: error("Node type not found")
                 val edges = nodeType.properties["edges"] as? Property.Object ?: error("Edges not found")
@@ -535,7 +535,7 @@ object ServerRuntime : Listener {
         }
 
         openedWorkspaces[sendTo] = workspaceId
-        workspace.nodeLibrary = listener<Schemas>(Endpoint.Side.SERVER).library
+//        workspace.nodeLibrary = listener<Schemas>(Endpoint.Side.SERVER).library
         val user = User(sendTo, null, workspaceId)
         logger.debug { "Client '$sendTo' Opened workspace: $workspaceId, $user" }
         server.send(new<WorkspaceLoad> {

@@ -30,10 +30,11 @@ object EvalContext {
     }
 
     private fun initializeLuaState() {
+        //TODO: see if we can open only the math library
+        lua.openLibraries()
         lua.setExternalLoader(ClassPathLoader())
     }
 
-    @Synchronized
     fun eval(workspace: Workspace): Result {
         val functionGroups = workspaceFunctionGroups.computeIfAbsent(workspace.uid) { ConcurrentHashMap() }
         functionGroups.clear()
@@ -54,7 +55,10 @@ object EvalContext {
         }
     }
 
-    private fun processEvalResult(result: LuaValue, functionGroups: ConcurrentHashMap<String, MutableMap<String, LuaValue>>) {
+    private fun processEvalResult(
+        result: LuaValue,
+        functionGroups: ConcurrentHashMap<String, MutableMap<String, LuaValue>>
+    ) {
         if (result.type() == Lua.LuaType.TABLE) {
             for (groupKey in result.keys) {
                 val group = result.get(groupKey)

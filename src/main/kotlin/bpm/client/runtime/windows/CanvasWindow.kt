@@ -2,6 +2,12 @@ package bpm.client.runtime.windows
 
 import bpm.client.font.Fonts
 import bpm.client.render.IRender
+import bpm.client.render.panel.ConsolePanel
+import bpm.client.render.panel.DockspaceManager
+import bpm.client.render.panel.ProxiesPanel
+import bpm.client.render.panel.VariablesPanel
+import bpm.client.render.renderspace.Renderspace
+import bpm.client.render.renderspace.Split
 import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.Keyboard
 import bpm.client.utils.toVec2f
@@ -11,12 +17,11 @@ import bpm.common.workspace.Workspace
 import bpm.common.workspace.WorkspaceSettings
 import bpm.common.workspace.graph.Link
 import bpm.common.workspace.graph.Node
+import imgui.ImColor
+import imgui.ImDrawList
 import imgui.ImGui
 import imgui.ImVec2
-import imgui.flag.ImGuiButtonFlags
-import imgui.flag.ImGuiMouseButton
-import imgui.flag.ImGuiPopupFlags
-import imgui.flag.ImGuiWindowFlags
+import imgui.flag.*
 import net.minecraft.client.gui.GuiGraphics
 import org.joml.Vector2f
 import org.joml.Vector2i
@@ -38,9 +43,38 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     val graphics get() = context.graphics
     private val fontAwesomeFamily = Fonts.getFamily("Fa")["Regular"]
     private val fontAwesome get() = fontAwesomeFamily[workspace.settings.fontHeaderSize]
+    private val renderSpace = Renderspace("Dockspace").apply {
+        val root = addWindow("Canvas", this@CanvasWindow).apply {
+            noTitleBar = true
+        }
+        root.addWindow(
+            "Variables",
+            VariablesPanel,
+            splitDirection = Split.Direction.LEFT,
+            splitSize = 0.33f
+        ).apply {
+            noTitleBar = true
+        }
+        root.addWindow(
+            "Proxies",
+            ProxiesPanel,
+            splitDirection = Split.Direction.RIGHT,
+            splitSize = 0.5f
+        ).apply {
+            noTitleBar = true
+        }
+        root.addWindow(
+            "Console",
+            ConsolePanel,
+            splitDirection = Split.Direction.DOWN,
+            splitSize = 0.5f
+        ).apply {
+            noTitleBar = true
+        }
+    }
+
 
     private val selectionContextOverlay = SelectionContextOverlay(workspace)
-
 
     /**
      * Returns the bounds of the context settings as a 4D vector.
@@ -49,7 +83,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
      *
      * @return The bounds of the context settings as a 4D vector.
      */
-    private val bounds: Vector4f get() = workspace.settings.bounds
+    val bounds: Vector4f get() = workspace.settings.bounds
 
     /**
      * A private constant representing the offset vector.
@@ -109,57 +143,157 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
     private val lastSize = Vector2i()
 
+    fun process(gfx: GuiGraphics) {
+        ImGui.setNextWindowPos(0f, 0f)
+        ImGui.setNextWindowSize(ImGui.getIO().displaySize.x, 50f)
+        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 0f, 0f)
+        ImGui.pushStyleVar(ImGuiStyleVar.WindowRounding, 0f)
+        ImGui.begin(
+            "Navbar",
+            ImGuiWindowFlags.NoTitleBar or ImGuiWindowFlags.NoResize or ImGuiWindowFlags.NoMove or ImGuiWindowFlags.NoCollapse or ImGuiWindowFlags.NoScrollbar or ImGuiWindowFlags.NoScrollWithMouse or ImGuiWindowFlags.NoBringToFrontOnFocus
+                    or ImGuiWindowFlags.NoNavFocus or ImGuiWindowFlags.NoBackground
+        )
+        drawNavbar(ImGui.getWindowDrawList())
+        ImGui.end()
+        ImGui.popStyleVar(2)
+        renderSpace.process(gfx, graphics)
+    }
+
+    private fun drawNavbar(drawList: ImDrawList) {
+        val startPos = ImGui.getCursorScreenPos()
+        val size = ImVec2(ImGui.getIO().displaySize.x, 50f)
+        drawList.addRectFilled(
+            startPos.x,
+            startPos.y,
+            startPos.x + size.x, startPos.y + size.y,
+            ImColor.rgba(50, 50, 50, 255)
+        )
+
+
+        //Draw the play, stop, refresh, and focus/unfocus buttons
+        val buttonSize = 30f
+        val buttonPadding = 10f
+        val buttonStart = ImVec2(size.x - buttonSize - buttonPadding, startPos.y + buttonPadding)
+        val buttonStop = ImVec2(size.x - buttonSize * 2 - buttonPadding * 2, startPos.y + buttonPadding)
+        val buttonRefresh = ImVec2(size.x - buttonSize * 3 - buttonPadding * 3, startPos.y + buttonPadding)
+        val buttonFocus = ImVec2(size.x - buttonSize * 4 - buttonPadding * 4, startPos.y + buttonPadding)
+
+        drawList.addRectFilled(
+            buttonStart.x,
+            buttonStart.y,
+            buttonStart.x + buttonSize,
+            buttonStart.y + buttonSize,
+            ImColor.rgba(50, 50, 50, 255)
+        )
+        drawList.addRectFilled(
+            buttonStop.x,
+            buttonStop.y,
+            buttonStop.x + buttonSize,
+            buttonStop.y + buttonSize,
+            ImColor.rgba(50, 50, 50, 255)
+        )
+
+        drawList.addRectFilled(
+            buttonRefresh.x,
+            buttonRefresh.y,
+            buttonRefresh.x + buttonSize,
+            buttonRefresh.y + buttonSize,
+            ImColor.rgba(50, 50, 50, 255)
+        )
+
+        drawList.addRectFilled(
+            buttonFocus.x,
+            buttonFocus.y,
+            buttonFocus.x + buttonSize,
+            buttonFocus.y + buttonSize,
+            ImColor.rgba(50, 50, 50, 255)
+        )
+
+        val fontAwesome = fontAwesomeFamily[25]
+        drawList.addText(
+            fontAwesome,
+            25f,
+            buttonStart.x + 5f,
+            buttonStart.y,
+            ImColor.rgba(255, 255, 255, 255),
+            FontAwesome.Play
+        )
+        drawList.addText(
+            fontAwesome,
+            25f,
+            buttonStop.x + 5f,
+            buttonStop.y,
+            ImColor.rgba(255, 255, 255, 255),
+            FontAwesome.Stop
+        )
+        drawList.addText(
+            fontAwesome,
+            25f,
+            buttonRefresh.x + 5f,
+            buttonRefresh.y,
+            ImColor.rgba(255, 255, 255, 255),
+            FontAwesome.Rotate
+        )
+        drawList.addText(
+            fontAwesome,
+            25f,
+            buttonFocus.x + 5f,
+            buttonFocus.y,
+            ImColor.rgba(255, 255, 255, 255),
+            FontAwesome.Crosshairs
+        )
+
+
+        //Draw the title
+        val title = workspace.workspaceName
+        val titleSize = ImGui.calcTextSize(title)
+        val titleStart = ImVec2(startPos.x + 10f, startPos.y + 10f)
+        drawList.addText(
+            fontAwesome,
+            25f,
+            titleStart.x,
+            titleStart.y,
+            ImColor.rgba(255, 255, 255, 255),
+            title
+        )
+    }
+
+
     /**
      * Manage all the rendering related to the main canvas here.
      */
+
     override fun render(gfx: CanvasGraphics, guiGfx: GuiGraphics) {
-        val mainViewport = ImGui.getMainViewport()
-        ImGui.setNextWindowPos(mainViewport.posX, mainViewport.posY)
-        ImGui.setNextWindowSize(mainViewport.sizeX, mainViewport.sizeY)
-
-        ImGui.begin(
-            "Canvas",
-            ImGuiWindowFlags.NoTitleBar or ImGuiWindowFlags.NoResize or ImGuiWindowFlags.NoMove or ImGuiWindowFlags.NoScrollbar or ImGuiWindowFlags.NoScrollWithMouse or ImGuiWindowFlags.NoBringToFrontOnFocus or ImGuiWindowFlags.NoNavFocus
-        )
-        val drawList = ImGui.getWindowDrawList()
-
         val isActionMenuHovered = CustomActionMenu.isVisible() && CustomActionMenu.isHovered()
-
-
         setupCanvas()
 
-        shouldCancelActions = isActionMenuHovered || selectionContextOverlay.isHovered() || graphics.panels.isAnyDragged() || graphics.panels.isAnyHovered()
+        shouldCancelActions = isActionMenuHovered || selectionContextOverlay.isHovered()
 
-        if (!selectionContextOverlay.isHovered() && !shouldCancelActions) handleCanvas()
+        if (!selectionContextOverlay.isHovered() && !shouldCancelActions) {
+            handleCanvas()
+        }
 
         val mousePos = ImGui.getMousePos()
         val displaySize = ImGui.getIO().displaySize
 
-        if (lastSize.x != displaySize.x.toInt() || lastSize.y != displaySize.y.toInt()) {
-            lastSize.set(displaySize.x.toInt(), displaySize.y.toInt())
-            graphics.onResize(displaySize)
-        }
-
+        handleWindowResize(displaySize)
         updateAnimationTime()
         context.handleEdgeDragging()
         context.handleSelection(shouldCancelActions)
         handleHover()
         handleContextMenu()
 
-        // Update cursor based on hover state
         context.updateHoverState(Vector2f(mousePos.x, mousePos.y))
         ImGui.setMouseCursor(context.getHoverCursor())
-        buttons.forEach {
-            it.handleClick()
-        }
-        context.variablesMenu.update()
 
+        buttons.forEach { it.handleClick() }
+        context.variablesMenu.update()
         handleKeys()
 
+        // Render canvas content
         val foreground = ImGui.getForegroundDrawList()
-        /**
-         * Renders the background and the grids for the canvas
-         */
+        val drawList = ImGui.getWindowDrawList()
+
         graphics.renderBackground(drawList, bounds) {
             graphics.drawGrid(drawList, position, bounds, context.zoom)
             graphics.renderFunctions(drawList, workspace.graph.functions)
@@ -167,18 +301,33 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
             graphics.renderNodes(drawList, workspace.graph.nodes)
             graphics.renderEdgeDrag(drawList, context.draggedEdge, context.dragStartPos)
             graphics.renderSelectionBox(drawList)
-            buttons.forEach {
-                it.render(foreground)
-            }
+
+            buttons.forEach { it.render(foreground) }
             CustomActionMenu.render(foreground)
             graphics.renderMousePosText(drawList, bounds, mousePos.toVec2f)
             graphics.renderPanels(drawList)
             context.notificationManager.renderNotifications(drawList, displaySize)
         }
 
-        // Render the custom action menu
         context.wasDraggingNode = false
-        ImGui.end()
+//        }
+//        ImGui.end()
+//        ImGui.popStyleVar()
+
+        // Render the panels
+//        dockspaceManager.renderPanels()
+//        dockspaceManager.endDockspace()
+    }
+
+
+    private fun handleWindowResize(displaySize: ImVec2) {
+        if (lastSize.x != displaySize.x.toInt() || lastSize.y != displaySize.y.toInt()) {
+
+            val newSize = Vector2f(displaySize.x, displaySize.y)
+            val oldSize = Vector2f(lastSize.x.toFloat(), lastSize.y.toFloat())
+            renderSpace.onResize(oldSize, newSize)
+            lastSize.set(displaySize.x.toInt(), displaySize.y.toInt())
+        }
     }
 
 
@@ -191,7 +340,6 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
 
     fun close() {
         savedSettings[workspace.uid] = workspace.settings
-        this.position
         CustomActionMenu.close()
     }
 
@@ -302,7 +450,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
      * Used to update the scrolled offset of the canvas
      */
     private fun handleCanvas() {
-        if (shouldCancelActions) {
+        if (shouldCancelActions || !ImGui.isItemHovered()) {
             return
         }
         val isActive = ImGui.isItemActive() // Held

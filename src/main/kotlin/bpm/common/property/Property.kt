@@ -100,7 +100,7 @@ interface Property<T : Any> {
          */
         override fun set(value: Unit) = Unit
 
-        override fun toString(): kotlin.String = "NullProperty"
+        override fun toString(): kotlin.String = "nil"
 
     }
     /**
@@ -120,6 +120,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 4
         override fun copy(): Property<kotlin.Int> = Int(this())
+
+        override fun toString(): kotlin.String {
+            return get().toString()
+        }
     }
 
     /**
@@ -138,6 +142,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 8
         override fun copy(): Property<kotlin.Double> = Double(this())
+
+        override fun toString(): kotlin.String {
+            return get().toString()
+        }
     }
 
     /**
@@ -159,6 +167,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 4 + get().length
         override fun copy(): Property<kotlin.String> = String(this())
+
+        override fun toString(): kotlin.String {
+            return "\"${get()}\""
+        }
     }
 
     /**
@@ -166,8 +178,7 @@ interface Property<T : Any> {
      *
      * @property defaultValue The default value for the UUID property.
      */
-    class UUID(defaultValue: java.util.UUID = NetUtils.DefaultUUID) :
-        PropertyLiteral<java.util.UUID>(defaultValue) {
+    class UUID(defaultValue: java.util.UUID = NetUtils.DefaultUUID) : PropertyLiteral<java.util.UUID>(defaultValue) {
 
         /**
          * This variable represents the number of bytes.
@@ -176,6 +187,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 16
         override fun copy(): Property<java.util.UUID> = UUID(this())
+
+        override fun toString(): kotlin.String {
+            return "\"${get()}\""
+        }
     }
 
     /**
@@ -197,6 +212,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 1
         override fun copy(): Property<kotlin.Boolean> = Boolean(this())
+
+        override fun toString(): kotlin.String {
+            return get().toString()
+        }
     }
 
     /**
@@ -213,6 +232,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 8
         override fun copy(): Property<kotlin.Long> = Long(this())
+
+        override fun toString(): kotlin.String {
+            return get().toString()
+        }
     }
 
     /**
@@ -229,6 +252,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 4
         override fun copy(): Property<kotlin.Float> = Float(this())
+
+        override fun toString(): kotlin.String {
+            return get().toString()
+        }
     }
 
     /**
@@ -249,6 +276,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 2
         override fun copy(): Property<kotlin.Short> = Short(this())
+
+        override fun toString(): kotlin.String {
+            return get().toString()
+        }
     }
 
     /**
@@ -268,6 +299,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 1
         override fun copy(): Property<kotlin.Byte> = Byte(this())
+
+        override fun toString(): kotlin.String {
+            return get().toString()
+        }
     }
 
     /**
@@ -284,6 +319,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 1
         override fun copy(): Property<kotlin.Char> = Char(this())
+
+        override fun toString(): kotlin.String {
+            return get().toString()
+        }
     }
     /**
      * Represents a color property.
@@ -301,6 +340,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 8
         override fun copy(): Property<Vector2f> = Vec2f(this())
+
+        override fun toString(): kotlin.String {
+            return "{x=${get().x}, y=${get().y}}"
+        }
     }
     /**
      * A class representing a 3-dimensional vector of floats.
@@ -317,6 +360,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 12
         override fun copy(): Property<Vector3f> = Vec3f(this())
+
+        override fun toString(): kotlin.String {
+            return "{x=${get().x}, y=${get().y}, z=${get().z}}"
+        }
     }
     /**
      * Represents a 4-component vector in 3D space.
@@ -336,6 +383,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 16
         override fun copy(): Property<Vector4f> = Vec4f(this())
+
+        override fun toString(): kotlin.String {
+            return "{x=${get().x}, y=${get().y}, z=${get().z}, w=${get().w}}"
+        }
     }
 
     /**
@@ -354,6 +405,10 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 8
         override fun copy(): Property<Vector2i> = Vec2i(this())
+
+        override fun toString(): kotlin.String {
+            return "{x=${get().x}, y=${get().y}}"
+        }
     }
     /**
      * Represents a 3D vector of integers.
@@ -374,6 +429,9 @@ interface Property<T : Any> {
          */
         override val bytes: kotlin.Int = 12
         override fun copy(): Property<Vector3i> = Vec3i(this())
+        override fun toString(): kotlin.String {
+            return "{x=${get().x}, y=${get().y}, z=${get().z}}"
+        }
     }
     /**
      * Represents a 4-dimensional integer vector.
@@ -391,6 +449,9 @@ interface Property<T : Any> {
         override val bytes: kotlin.Int = 16
         override fun copy(): Property<Vector4i> = Vec4i(this())
 
+        override fun toString(): kotlin.String {
+            return "{x=${get().x}, y=${get().y}, z=${get().z}, w=${get().w}}"
+        }
     }
 
 
@@ -410,7 +471,7 @@ interface Property<T : Any> {
         }
 
         override fun toString(): kotlin.String {
-            return "ClassProperty(${get().simpleName})"
+            return get().name
         }
     }
     /**
@@ -477,6 +538,19 @@ interface Property<T : Any> {
                 return obj
             }
         }
+
+        override fun toString(): kotlin.String {
+            //Creates a lua table representation of the object
+            val table = properties.entries.joinToString(", ") { (key, value) ->
+                val valueString = when (value) {
+                    is Object -> value.toString()
+                    is List -> value.toString()
+                    else -> value.toString()
+                }
+                "$key = $valueString"
+            }
+            return "{$table}"
+        }
     }
 
     /**
@@ -496,7 +570,10 @@ interface Property<T : Any> {
         override val bytes: kotlin.Int = 4 + get().sumOf { it.bytes }
         override fun copy() = List(this().map { it.copy() }.toMutableList())
 
-        override fun toString(): kotlin.String = "ListProperty(${get()})"
+        override fun toString(): kotlin.String {
+            return properties.joinToString(", ", "[", "]")
+        }
+
         override fun equals(other: Any?): kotlin.Boolean {
             if (this === other) return true
             if (other !is List) return false
@@ -518,6 +595,7 @@ interface Property<T : Any> {
                 return list
             }
         }
+
 
     }
 
@@ -610,29 +688,19 @@ fun Property.Vec2i.toIntArray() = intArrayOf(get().x, get().y)
 
 
 fun Property.Vec4f.toVecColor(): Property.Vec4i = Property.Vec4i(
-    (get().x * 255).toInt(),
-    (get().y * 255).toInt(),
-    (get().z * 255).toInt(),
-    (get().w * 255).toInt()
+    (get().x * 255).toInt(), (get().y * 255).toInt(), (get().z * 255).toInt(), (get().w * 255).toInt()
 )
 
 fun Property.Vec3f.toVecColor(): Property.Vec3i = Property.Vec3i(
-    (get().x * 255).toInt(),
-    (get().y * 255).toInt(),
-    (get().z * 255).toInt()
+    (get().x * 255).toInt(), (get().y * 255).toInt(), (get().z * 255).toInt()
 )
 
 fun Property.Vec3i.toVecColor(): Property.Vec3f = Property.Vec3f(
-    (get().x / 255f),
-    (get().y / 255f),
-    (get().z / 255f)
+    (get().x / 255f), (get().y / 255f), (get().z / 255f)
 )
 
 fun Property.Vec4i.toVecColor(): Property.Vec4f = Property.Vec4f(
-    (get().x / 255f),
-    (get().y / 255f),
-    (get().z / 255f),
-    (get().w / 255f)
+    (get().x / 255f), (get().y / 255f), (get().z / 255f), (get().w / 255f)
 )
 
 //RRGGBBAA

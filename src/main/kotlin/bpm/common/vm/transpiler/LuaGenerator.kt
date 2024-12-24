@@ -35,16 +35,16 @@ object LuaGenerator {
         appendLine()
 
         // Generate global variables table
-        appendLineIndented("-- Global Variables")
-        appendLineIndented("local variables = {}")
+        appendLineIndented("-- Workspace Variables")
+        generateVariables(workspaceAST, this)
         appendLine()
 
         // Generate global outputs table for sharing data between nodes
-        appendLineIndented("-- Global Outputs")
+        appendLineIndented("-- Workspace Outputs")
         appendLineIndented("local outputs = {}")
         appendLine()
 
-        appendLineIndented("-- Function forward Declarations")
+        appendLineIndented("-- Forward Declarations for order independence")
         // Generate function declarations first to allow mutual recursion
         workspaceAST.nodes.forEach { node ->
             appendLineIndented("local ${getFunctionName(node)}")
@@ -66,6 +66,21 @@ object LuaGenerator {
             }
         }
         appendLineIndented("}")
+    }
+
+    private fun generateVariables(ast: ASTNode.WorkspaceAST, builder: StringBuilder) {
+        builder.apply {
+            appendLineIndented("local variables = {")
+            indented {
+                ast.variables.forEachIndexed { index, variable ->
+                    appendLineIndented("${variable.name} = ${variable.value}")
+                    if (index < ast.variables.size - 1) {
+                        append(",")
+                    }
+                }
+            }
+            appendLineIndented("}")
+        }
     }
 
     private fun generateFunction(node: ASTNode.Node, ast: ASTNode.WorkspaceAST, builder: StringBuilder) {

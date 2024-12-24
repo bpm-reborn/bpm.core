@@ -409,13 +409,13 @@ class VariablesMenu(private val canvasContext: CanvasContext) {
             baseFontSize = 20f,
             actions = listOf(
                 WheelAction("Get", FontAwesome.ArrowRight) {
-                    startNodeCreation(name, "Variables/Get Variable", Vector2f(mainMenuCenterX, mainMenuCenterY))
+                    startNodeCreation(name, "Variable/Get", Vector2f(mainMenuCenterX, mainMenuCenterY))
                 },
                 WheelAction("Cancel", FontAwesome.Xmark) {
                     // Do nothing, just close the sub-menu
                 },
                 WheelAction("Set", FontAwesome.ArrowLeft) {
-                    startNodeCreation(name, "Variables/Set Variable", Vector2f(mainMenuCenterX, mainMenuCenterY))
+                    startNodeCreation(name, "Variable/Set", Vector2f(mainMenuCenterX, mainMenuCenterY))
                 },
 
                 ),
@@ -637,7 +637,9 @@ class VariablesMenu(private val canvasContext: CanvasContext) {
             else -> return
         }
         Client {
-            it.send(VariableCreateRequest(name,
+            it.send(
+                VariableCreateRequest(
+                name,
                 Property.Object().apply {
                     this["type"] = Property.String(type)
                     this["value"] = property
@@ -705,11 +707,10 @@ class VariablesMenu(private val canvasContext: CanvasContext) {
 
             if (ImGui.isMouseClicked(0)) {
                 // Create the actual node on the first click
-                if (info.nodeType == "Variables/Get Variable") {
+                if (info.nodeType == "Variable/Get") {
                     canvasContext.createVariableNode(NodeType.GetVariable, info.position, info.name)
                 } else {
                     canvasContext.createVariableNode(NodeType.SetVariable, info.position, info.name)
-
                 }
 //                canvasContext.createNode(info.position, info.nodeType)
                 draggedNodeInfo = null
@@ -727,8 +728,8 @@ class VariablesMenu(private val canvasContext: CanvasContext) {
 
     private fun drawTemporaryNode(drawList: ImDrawList, info: DraggedNodeInfo) {
         val nodeColor = when (info.nodeType) {
-            "Variables/Get Variable" -> ImColor.rgba(46, 204, 113, 200)
-            "Variables/Set Variable" -> ImColor.rgba(231, 76, 60, 200)
+            "Variable/Get" -> ImColor.rgba(46, 204, 113, 200)
+            "Variable/Set" -> ImColor.rgba(231, 76, 60, 200)
             else -> ImColor.rgba(149, 165, 166, 200)
         }
 
@@ -750,7 +751,7 @@ class VariablesMenu(private val canvasContext: CanvasContext) {
         )
 
         // Draw node title
-        val title = if (info.nodeType == "Variables/Get Variable") "Get" else "Set"
+        val title = if (info.nodeType == "Variable/Get") "Get" else "Set"
         val titlePos = Vector2f(nodePos.x + 10, nodePos.y + 10)
         drawList.addText(titlePos.x, titlePos.y, ImColor.rgba(255, 255, 255, 255), "$title: ${info.name}")
 

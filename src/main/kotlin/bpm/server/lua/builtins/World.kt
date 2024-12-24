@@ -15,6 +15,7 @@ import net.minecraft.server.level.ServerLevel
 import net.minecraft.sounds.SoundSource
 import net.minecraft.world.entity.EntityType
 import net.minecraft.world.level.Level
+import net.minecraft.world.level.block.state.BlockState
 import net.minecraft.world.phys.AABB
 import net.neoforged.neoforge.items.IItemHandler
 import net.neoforged.neoforge.server.ServerLifecycleHooks
@@ -63,6 +64,11 @@ object World : LuaBuiltin {
         }
         val signal = state.getSignal(overworld, BlockPos(x, y, z), Direction.DOWN)
         return signal
+    }
+
+    @JvmStatic
+    fun getBlockState(x: Int, y: Int, z: Int): BlockState {
+        return overworld.getBlockState(BlockPos(x, y, z))
     }
 
     @JvmStatic

@@ -168,7 +168,6 @@ dependencies {
     jarJar("org.commonmark:commonmark:0.23.0")
     libraries('org.jsoup:jsoup:1.18.1')
     jarJar("org.jsoup:jsoup:1.18.1")
-
     libraries('party.iroiro.luajava:luajit:4.0.3-SNAPSHOT')
     jarJar('party.iroiro.luajava:luajit:4.0.3-SNAPSHOT')
     libraries('party.iroiro.luajava:luajava:4.0.2')

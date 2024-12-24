@@ -1,14 +1,8 @@
 package bpm.client.runtime.windows
 
 import bpm.client.font.Fonts
-import bpm.client.render.inventory.BlockCache
-import bpm.client.render.inventory.BlockListModal
-import bpm.client.render.inventory.BlockSelectionScreen
 import bpm.client.render.inventory.FilterScreen
-import bpm.client.render.panel.ConsolePanel
-import bpm.client.render.panel.PanelManager
-import bpm.client.render.panel.ProxiesPanel
-import bpm.client.render.panel.VariablesPanel
+import bpm.client.render.panels.Panels
 import bpm.client.runtime.ClientRuntime
 import bpm.client.utils.renderButton
 import bpm.client.utils.use
@@ -47,19 +41,11 @@ import kotlin.math.max
 
 class CanvasGraphics(
     private val window: CanvasWindow,
-    private val context: CanvasContext
+    val context: CanvasContext
 ) {
 
 
     private var gfx: GuiGraphics? = null
-
-    val panels = PanelManager(this)
-        .apply {
-            addPanel(VariablesPanel)
-            addPanel(ProxiesPanel)
-            addPanel(ConsolePanel)
-        }
-
     private val recordedDrawCalls = mutableListOf<(gfx: GuiGraphics) -> Unit>()
     private val headerFamily get() = Fonts.getFamily("Inter")["Bold"]
     private val headerFont get() = headerFamily[window.workspace.settings.fontHeaderSize]
@@ -77,7 +63,6 @@ class CanvasGraphics(
     private val minecraft = Minecraft.getInstance()
     private val guiScale get() = minecraft.window.guiScale
     private val retina get() = isMacos && minecraft.window.screenWidth.toFloat() * guiScale > 1500.0f
-    private val renderBufferSource get() = minecraft.renderBuffers().bufferSource()
 
 
     inline fun renderBackground(drawList: ImDrawList, clipBounds: Vector4f, crossinline body: () -> Unit) {
@@ -87,10 +72,14 @@ class CanvasGraphics(
         drawList.popClipRect()
     }
 
+    fun recordDrawCall(call: CanvasGraphics.(gfx: GuiGraphics) -> Unit) {
+        recordedDrawCalls.add { gfx ->
+            call(this, gfx)
+        }
+    }
+
 
     fun renderPanels(drawList: ImDrawList) {
-//        dockspace.render(drawList)
-        panels.renderPanels(drawList)
         FilterScreen.render(this)
 
         //Set position to top right of screen
@@ -106,15 +95,10 @@ class CanvasGraphics(
                 ImColor.rgba(150, 150, 150, 255)
             )
         ) {
-            FilterScreen.show{ filter ->
+            FilterScreen.show { filter ->
                 println("Added filter $filter")
             }
         }
-    }
-
-
-    fun onResize(displaySize: ImVec2?) {
-//        dockspace.onResize(displaySize?.x ?: 0f, displaySize?.y ?: 0f)
     }
 
 
@@ -986,7 +970,9 @@ class CanvasGraphics(
         // Check if the mouse is over the edge
 
         if (isPointOverRect(Vector2f(mousePos.x, mousePos.y), textBounds)) {
-            renderTooltip(edge.description)
+            drawTooltip(
+                FontAwesome.CircleInfo, "${edge.type} - ${edge.description}"
+            )
             /*}
             if (context.isPointOverEdge(Vector2f(mousePos.x, mousePos.y), pos)) {*/
 
@@ -1000,7 +986,6 @@ class CanvasGraphics(
                 1.5f * context.zoom
             )
 
-//            renderTooltip(edge.description)
 
             if (ImGui.isMouseClicked(ImGuiMouseButton.Left)) {
                 context.startEdgeDrag(node, edge)
@@ -1308,7 +1293,6 @@ class CanvasGraphics(
         )
 
         if (isProxy) {
-            //TODO: maybe we should do this only every few seconds and cache it?
             val blockPos = node.properties["value"].cast<Property.Object>()
             val worldPos = cachedWorldPos.getOrPut(blockPos) {
                 val x = blockPos["x"].cast<Property.Int>().get()
@@ -1325,47 +1309,29 @@ class CanvasGraphics(
                 val blockState = level.getBlockState(worldPos.pos)
                 val block = blockState.block
                 val itemStack = ItemStack(block)
-                val displayName = itemStack.displayName
-                val text = displayName.string
-//                    drawList.addText(
-//                        bodyFont,
-//                        14f * context.zoom,
-//                        adjustedBounds.x + 10f * context.zoom,
-//                        adjustedBounds.y + 20f * context.zoom,
-//                        ImColor.rgba(255, 255, 255, 255),
-//                        text
-//                    )
+                //render the block
+                val width = ImGui.getWindowWidth()
+                val height = ImGui.getWindowHeight()
+                val pos = ImGui.getWindowPos()
+                val transformedPos = toScreenSpaceVector(pos.x, pos.y)
+                val transformedSize = toScreenSpaceVector(width, height - 30f) //Accounts for footer
+
                 recordedDrawCalls.add {
+                    gfx!!.enableScissor(
+                        transformedPos.x.toInt() + 5,
+                        transformedPos.y.toInt() + 5,
+                        (transformedSize.x + transformedPos.x - 5).toInt(),
+                        (transformedSize.y + transformedPos.y + 10).toInt()
+                    )
                     renderBlockItem(
                         itemStack,
                         adjustedBounds.x + 10f * context.zoom,
                         adjustedBounds.y + 15f * context.zoom,
                         24 * context.zoom
                     )
+                    gfx!!.disableScissor()
                 }
             }
-//            //render the level and block position
-//            val levelText = "Level: ${worldPos.level.location()}"
-//            val positionText = "Position: ${worldPos.pos.x}, ${worldPos.pos.y}, ${worldPos.pos.z}"
-//            bodyFont.use {
-//                drawList.addText(
-//                    bodyFont,
-//                    14f * context.zoom,
-//                    adjustedBounds.x + 10f * context.zoom,
-//                    adjustedBounds.y + 20f * context.zoom,
-//                    ImColor.rgba(255, 255, 255, 255),
-//                    levelText
-//                )
-//                drawList.addText(
-//                    bodyFont,
-//                    14f * context.zoom,
-//                    adjustedBounds.x + 10f * context.zoom,
-//                    adjustedBounds.y + 35f * context.zoom,
-//                    ImColor.rgba(255, 255, 255, 255),
-//                    positionText
-//                )
-//            }
-
         }
 
         // Hover effect (enhanced for proxy nodes)
@@ -1422,7 +1388,7 @@ class CanvasGraphics(
     }
 
     private fun renderToolTips() {
-        if (context.isDraggingNode) return
+        if (context.isDraggingNode || !ImGui.isWindowHovered()) return
         // Show tooltip for hovered node
         if (context.hoveredTitleBar != null) {
             val node = window.workspace.getNode(context.hoveredTitleBar!!) ?: return
@@ -1432,12 +1398,13 @@ class CanvasGraphics(
             drawTooltip(node.icon.toChar().toString(), description.get())
         }
 
-        if (context.hoveredPin != null) {
-            val edge = context.hoveredPin!!.second
-            val description = edge.description
-            val color = getEdgeColor(edge.type)
-            drawTooltip(FontAwesome.Info, description, color)
-        }
+//        if (context.hoveredPin != null) {
+//            val edge = context.hoveredPin!!.second
+//            val description = edge.description
+//            val type = edge.type
+//            val color = getEdgeColor(edge.type)
+//            drawTooltip(FontAwesome.Info, "[$type]\n$description", color)
+//        }
     }
 
     fun drawDataLink(
@@ -1841,24 +1808,35 @@ class CanvasGraphics(
             ImColor.rgba(1f, 1f, 1f, 1f),
             String.format("Center: %.0f, %.0f", window.workspace.settings.center.x, window.workspace.settings.center.y)
         )
-
+        var startY = bounds.w - 30
         if (mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w) {
             drawList.addText(
                 bounds.x + 5,
-                bounds.w - 30,
+                startY,
                 ImColor.rgba(1f, 1f, 1f, 1f),
                 String.format("Mouse: %.0f, %.0f", mouseWorldPos.x, mouseWorldPos.y)
             )
+            startY -= 15
 
             nodePos?.let {
                 drawList.addText(
                     bounds.x + 5,
-                    bounds.w - 45,
+                    startY,
                     ImColor.rgba(1f, 1f, 1f, 1f),
                     String.format("Hovered Node: %.0f, %.0f", it.x, it.y)
                 )
+                startY -= 15
             }
         }
+
+        //The workspace zoom
+        drawList.addText(
+            bounds.x + 5,
+            startY,
+            ImColor.rgba(1f, 1f, 1f, 1f),
+            String.format("Zoom: %.2f", window.workspace.settings.zoom)
+        )
+
     }
 
     fun renderTooltip(text: String) {
@@ -1885,7 +1863,6 @@ class CanvasGraphics(
         //Set the mincraft gfx for this frame before rendering the panels
         this.gfx = gfx
         recordedDrawCalls.forEach { it(gfx) }
-        panels.renderPanelsPost(gfx, bounds)
         FilterScreen.renderPost(gfx, this)
         recordedDrawCalls.clear()
         this.gfx = null //Reset the gfx to null after rendering the panels

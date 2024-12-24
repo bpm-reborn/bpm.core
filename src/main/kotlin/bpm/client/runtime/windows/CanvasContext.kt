@@ -153,10 +153,6 @@ class CanvasContext : Listener {
         }
     }
 
-    fun isPointOverEdge(point: Vector2f, edgeBounds: Vector4f): Boolean {
-        return point.x >= edgeBounds.x && point.x <= edgeBounds.z && point.y >= edgeBounds.y && point.y <= edgeBounds.w
-    }
-
     fun isPointOverEdge(point: Vector2f, edgePos: Vector2f, isExec: Boolean = false): Boolean {
         if (isExec) {
             val triangleSize = 8f * zoom
@@ -317,7 +313,7 @@ class CanvasContext : Listener {
             val titleX = functionPos.x - 8 * zoom
             val titleY = ((functionPos.y - titleHeight / 2) - 8 * zoom) - 15f * zoom
 
-            Vector4f(titleX, titleY, functionPos.x + functionSize.x, titleY + titleHeight)
+            Vector4f(titleX, titleY, functionPos.x + functionSize.x, titleY + 35 * zoom)
         }
     }
 
@@ -553,7 +549,7 @@ class CanvasContext : Listener {
             }
         }
 
-        if (isLeftClickPressed && !isDraggingNode) {
+        if (isLeftClickPressed && !isDraggingNode && ImGui.isWindowHovered() && hoveredFunctionHeader == null) {
             val clickedOnNode = workspace.graph.nodes.any { node ->
                 val bounds = getNodeBounds(node)
                 mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w
@@ -844,18 +840,6 @@ class CanvasContext : Listener {
     fun isMouseOverNode(node: Node, mousePos: Vector2f): Boolean {
         val bounds = getNodeBounds(node)
         return mousePos.x in bounds.x..bounds.z && mousePos.y in bounds.y..bounds.w
-    }
-
-    fun selectLink(link: Link) {
-        selectedLinkIds.add(link.uid)
-    }
-
-    fun unselectLink(link: Link) {
-        selectedLinkIds.remove(link.uid)
-    }
-
-    fun clearLinkSelection() {
-        selectedLinkIds.clear()
     }
 
     fun getSelectedLinks(): Set<UUID> {
@@ -1218,20 +1202,6 @@ class CanvasContext : Listener {
         return Vector2f(minX + (maxX - minX) / 2, minY + (maxY - minY) / 2)
     }
 
-    fun handleEdgeClick(node: Node, edge: Edge) {
-        if (!isLinking) {
-            start(node, edge)
-        } else {
-            val (sourceNode, sourceEdge) = selectedEdge ?: return
-            if (canConnect(sourceEdge, edge)) {
-                createLink(sourceNode, sourceEdge, node, edge)
-            }
-            selectedEdge = null
-            dragStartPos = null
-            isLinking = false
-        }
-    }
-
 
     private fun processNewNode(node: Node) {
         workspace.addNode(node)
@@ -1354,32 +1324,18 @@ class CanvasContext : Listener {
         client.send(LinkCreateRequest(link))
     }
 
-    private fun isMouseOverEdge(edgeBounds: Vector4f): Boolean {
-        val mousePos = ImGui.getMousePos()
-        val edgeCenter = Vector2f(edgeBounds.x, edgeBounds.y)
-        val hitboxRadius = 5f * zoom // Adjust this value to change the hitbox size
-
-        // Calculate the distance between the mouse and the edge center
-        val dx = mousePos.x - edgeCenter.x
-        val dy = mousePos.y - edgeCenter.y
-        val distanceSquared = dx * dx + dy * dy
-
-        // Check if the mouse is within the circular hitbox
-        return distanceSquared <= hitboxRadius * hitboxRadius
-    }
-
     fun handleEdgeDragging() {
         val draggedEdge = draggedEdge
         val dragStartPos = dragStartPos
-
+        var connected = false
         if (draggedEdge != null && dragStartPos != null) {
             val mousePos = ImGui.getMousePos()
 
             if (ImGui.isMouseReleased(ImGuiMouseButton.Left)) {
                 val targetEdgePair = findEdgeUnderMouse()
-                if (targetEdgePair != null) {
+                connected = targetEdgePair != null
+                if (targetEdgePair != null && canConnect(draggedEdge.second, targetEdgePair.second)) {
                     val (targetOwner, targetEdgeObj) = targetEdgePair
-
                     when (draggedEdge.first) {
                         is Node -> {
                             when (targetOwner) {
@@ -1415,7 +1371,9 @@ class CanvasContext : Listener {
                             }
                         }
                     }
-                } else {
+                }
+
+                if (!connected) {
                     // Open action menu with compatible nodes when dropped over empty space
                     draggedSourceEdge = when (val source = draggedEdge.first) {
                         is Node -> Pair(source, draggedEdge.second)
@@ -1425,6 +1383,7 @@ class CanvasContext : Listener {
                         openActionMenuWithCompatibleNodes(draggedEdge.second, Vector2f(mousePos.x, mousePos.y))
                     }
                 }
+
                 this.draggedEdge = null
                 this.dragStartPos = null
                 isLinking = false
@@ -1454,7 +1413,6 @@ class CanvasContext : Listener {
 
         //If the node position is within a function body, we need to add it to the function
         val function = workspace.graph.functions.find { function ->
-            val functionBounds = getFunctionBounds(function)
             val functionPos = convertToScreenCoordinates(Vector2f(function.x, function.y))
             val functionSize = convertToScreenSize(Vector2f(function.width, function.height))
             val functionScreenBounds = Vector4f(
@@ -1546,10 +1504,6 @@ class CanvasContext : Listener {
         val yPos = edgeStartY + index * edgeSpacing
         val xPos = if (edge.direction == "input") nodeBounds.x + 8f * zoom else nodeBounds.z - 8f * zoom
         return Vector2f(xPos, yPos)
-    }
-
-    fun isEdgeSelected(edge: Edge): Boolean {
-        return selectedEdge?.second?.uid == edge.uid
     }
 
     companion object {

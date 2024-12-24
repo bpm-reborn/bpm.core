@@ -6,6 +6,7 @@ sealed interface ASTNode {
     data class WorkspaceAST(
         val uid: String,
         val nodes: List<Node>,
+        val variables: List<Variable>,
         val builtIns: List<Pair<String, String>> // List of built-in class names
     ) {
 
@@ -20,6 +21,11 @@ sealed interface ASTNode {
         val statements: List<Statement> = emptyList(),
         val inputs: List<Input> = emptyList(),
         val outputs: List<Output> = emptyList()
+    ) : ASTNode
+
+    data class Variable(
+        val name: String,
+        val value: String
     ) : ASTNode
 
     // Input port on a node

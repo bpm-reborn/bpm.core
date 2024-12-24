@@ -9,6 +9,8 @@ import imgui.ImGui
 import imgui.flag.ImGuiCol
 import imgui.flag.ImGuiMouseButton
 import imgui.flag.ImGuiMouseCursor
+import imgui.flag.ImGuiStyleVar
+import imgui.flag.ImGuiWindowFlags
 import imgui.type.ImString
 import org.joml.Vector2f
 import java.text.SimpleDateFormat
@@ -38,13 +40,20 @@ object ConsolePanel : Panel("Console", FontAwesome.Terminal) {
     data class LogEntry(val timestamp: String, val level: LogLevel, val message: String, val calledFrom: String)
 
     override fun renderBody(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-//        renderSearchBar(drawList, position, size)
+        ImGui.setCursorScreenPos(position.x, position.y)
+        //Removes the padding from the window
+        ImGui.pushStyleVar(ImGuiStyleVar.WindowPadding, 0f, 0f)
+        ImGui.beginChild("##console", size.x, size.y, false)
+        val drawList = ImGui.getWindowDrawList()
         renderLogs(drawList, position, size)
+        ImGui.endChild()
+        ImGui.popStyleVar()
     }
 
 
 
     override fun renderFooterContent(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
+        val drawList = ImGui.getWindowDrawList()
         renderSearchBar(drawList, position, size)
         // Add variable button
         renderClearLogsButton(
@@ -130,14 +139,6 @@ object ConsolePanel : Panel("Console", FontAwesome.Terminal) {
 
 
     private fun renderLogs(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        val startCursorPos = ImGui.getCursorScreenPos().toVec2f
-        val logAreaY = startCursorPos.y + 5f
-        val logAreaHeight = size.y - 10f
-//
-//        ImGui.pushStyleColor(ImGuiCol.ChildBg, ImColor.rgba(30, 30, 30, 255).toInt())
-//        ImGui.setNextWindowPos(startCursorPos.x + 5f, logAreaY)
-//        ImGui.setNextWindowSize(size.x - 10f, logAreaHeight)
-//        if (ImGui.beginChild("ConsoleLogArea", size.x - 10f, logAreaHeight, true)) {
         val filteredLogs = logQueue.filter { it.message.contains(searchBuffer.get(), ignoreCase = true) }
         filteredLogs.forEach { logEntry ->
             renderLogEntry(drawList, logEntry)
@@ -146,9 +147,6 @@ object ConsolePanel : Panel("Console", FontAwesome.Terminal) {
         if (ImGui.getScrollY() >= ImGui.getScrollMaxY()) {
             ImGui.setScrollHereY(1.0f)
         }
-//        }
-//        ImGui.endChild()
-//        ImGui.popStyleColor()
     }
 
     private fun renderLogEntry(drawList: ImDrawList, logEntry: LogEntry) {

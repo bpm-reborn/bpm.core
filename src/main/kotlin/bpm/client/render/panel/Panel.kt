@@ -4,158 +4,147 @@ import imgui.ImDrawList
 import imgui.ImGui
 import org.joml.Vector2f
 import bpm.client.font.Fonts
+import bpm.client.render.IRender
+import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.windows.CanvasContext
 import bpm.client.runtime.windows.CanvasGraphics
-import bpm.client.utils.toVec2f
 import bpm.client.utils.use
 import bpm.common.network.Endpoint
-import bpm.common.utils.FontAwesome
 import imgui.ImColor
-import imgui.flag.ImGuiCol
-import imgui.flag.ImGuiMouseButton
-import imgui.flag.ImGuiMouseCursor
-import imgui.flag.ImGuiWindowFlags
-import imgui.type.ImString
-import net.minecraft.client.Minecraft
+import imgui.type.ImBoolean
 import net.minecraft.client.gui.GuiGraphics
-import org.joml.Vector2i
-import org.joml.Vector3f
 
-abstract class Panel(val title: String, val icon: String) {
 
-    protected lateinit var manager: PanelManager
-    protected lateinit var graphics: CanvasGraphics
-    var isDragging: Boolean = false
-        protected set
-    val iconFam = Fonts.getFamily("Fa")["Regular"]
-    val boldFam = Fonts.getFamily("Inter")["Bold"]
-    val bodyFam = Fonts.getFamily("Inter")["Regular"]
-    private val displaySize get() = ImGui.getIO().displaySize
+abstract class Panel(val title: String, val icon: String) : IRender {
+
+    protected val graphics: CanvasGraphics get() = ClientRuntime.canvasWindow!!.graphics
+    protected val iconFam = Fonts.getFamily("Fa")["Regular"]
+    protected val boldFam = Fonts.getFamily("Inter")["Bold"]
+    protected val bodyFam = Fonts.getFamily("Inter")["Regular"]
     protected val context = Endpoint.installed<CanvasContext>()
-    var position = Vector2f()
-    var panelWidth = 300f
-        internal set
-    var panelHeight = 200f
-        internal set
     protected val buttonColor = ImColor.rgba(58, 58, 60, 255)
     protected val buttonHoverColor = ImColor.rgba(68, 68, 70, 255)
-    private val lastSize = Vector2i()
-    internal fun setupPanel(graphics: CanvasGraphics, manager: PanelManager) {
-        this.manager = manager
-        this.graphics = graphics
+    protected var isDragging = false
+        set(value) {
+            //This prevents actions from being performed while dragging
+            graphics.context.isLinking = value
+            field = value
+        }
+    private var x: Int = 0
+    private var y: Int = 0
+    private var width: Int = 0
+    private var height: Int = 0
+    private var guiGfx: GuiGraphics? = null
+
+    override fun render(gfx: CanvasGraphics, guiGfx: GuiGraphics) {
+        if (this.guiGfx == null) this.guiGfx = guiGfx // This bad, but don't care for now
+
+        val drawList = ImGui.getWindowDrawList()
+        ImGui.setCursorScreenPos(ImGui.getCursorScreenPosX(), ImGui.getCursorScreenPosY() + 10)
+        renderHeader(drawList)
+        val contentStart = ImGui.getCursorScreenPos()
+        // Main content area
+        renderBody(
+            drawList,
+            Vector2f(contentStart.x, contentStart.y + 10),
+            Vector2f(
+                ImGui.getContentRegionAvail().x,
+                ImGui.getContentRegionAvail().y - 70f
+            )  // Reserve space for footer
+        )
+        // Footer area with separator
+        val footerStart = Vector2f(ImGui.getWindowPosX(), ImGui.getWindowPosY() + ImGui.getWindowHeight() - 60f)
+
+        drawList.addLine(
+            footerStart.x,
+            footerStart.y,
+            footerStart.x + ImGui.getContentRegionAvail().x,
+            footerStart.y,
+            ImColor.rgba(60, 60, 60, 255),
+            1f
+        )
+
+        renderFooterContent(
+            drawList,
+            Vector2f(footerStart.x, footerStart.y + 5f),
+            Vector2f(ImGui.getContentRegionAvail().x, 50f)
+        )
+
+
+        val width = ImGui.getWindowWidth()
+        val height = ImGui.getWindowHeight()
+        val pos = ImGui.getWindowPos()
+        val transformedPos = graphics.toScreenSpaceVector(pos.x, pos.y)
+        val transformedSize = graphics.toScreenSpaceVector(width, height - 30f) //Accounts for footer
+
+        //Store the minecraft transformed position and size
+        this.x = transformedPos.x.toInt()
+        this.y = transformedPos.y.toInt()
+        this.width = transformedSize.x.toInt()
+        this.height = transformedSize.y.toInt()
     }
 
-    fun render(drawList: ImDrawList, position: Vector2f, scale: Float) {
-        val size = Vector2f(panelWidth * scale, panelHeight * scale)
 
-        renderBackground(drawList, position, size)
-        renderTitle(drawList, position, size)
-        renderContent(drawList, position, size)
-        renderFooter(drawList, position, size)
-        checkResizeAndArrange()
-    }
-
-    private fun checkResizeAndArrange() {
-        val windowSize = ImGui.getWindowViewport().size
-        val size = Vector2i(windowSize.x.toInt(), windowSize.y.toInt())
-        if (size != lastSize) {
-            lastSize.set(size)
-            manager.arrangePanel(this)
+    protected fun recordClipped(recording: CanvasGraphics.() -> Unit) {
+        val gfx = this.graphics
+        val guiGfx = this.guiGfx!!
+        gfx.recordDrawCall {
+            guiGfx.enableScissor(
+                x,
+                y,
+                width + x,
+                height + y
+            )
+            recording(gfx)
+            guiGfx.disableScissor()
         }
     }
 
-    private fun renderContent(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        val contentStart = Vector2f(position.x + 10f, position.y + 40f)
-        val contentSize = Vector2f(size.x - 20f, size.y - 110f)
-        drawList.addRectFilled(
-            contentStart.x,
-            contentStart.y,
-            contentStart.x + contentSize.x,
-            contentStart.y + contentSize.y,
-            ImGui.colorConvertFloat4ToU32(0.1f, 0.1f, 0.1f, 1f),
-            10f
-        )
-        ImGui.pushClipRect(
-            contentStart.x, contentStart.y, contentStart.x + contentSize.x, contentStart.y + contentSize.y, true
-        )
-
-        ImGui.setNextWindowPos(contentStart.x, contentStart.y)
-        if (ImGui.beginChild("##content_$title", contentSize.x, contentSize.y, false)) {
-            renderBody(drawList, contentStart, contentSize)
+    protected fun recordUnclipped(recording: CanvasGraphics.() -> Unit) {
+        val gfx = this.graphics
+        gfx.recordDrawCall {
+            recording(gfx)
         }
-        ImGui.endChild()
-        renderAfter(graphics, drawList, Vector2f(position), size)
-        ImGui.popClipRect()
     }
 
-    protected abstract fun renderBody(drawList: ImDrawList, position: Vector2f, size: Vector2f)
 
-    protected open fun renderAfter(graphics: CanvasGraphics, drawList: ImDrawList, position: Vector2f, size: Vector2f) =
-        Unit
+    private fun renderHeader(drawList: ImDrawList) {
 
-    protected open fun renderTitle(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        val titleHeight = 30f
+        //Draw the header rect
         drawList.addRectFilled(
-            position.x,
-            position.y,
-            position.x + size.x,
-            position.y + titleHeight,
-            ImGui.colorConvertFloat4ToU32(0.3f, 0.3f, 0.3f, 1f)
+            ImGui.getCursorScreenPosX(),
+            ImGui.getCursorScreenPosY(),
+            ImGui.getCursorScreenPosX() + ImGui.getContentRegionAvail().x,
+            ImGui.getCursorScreenPosY() + 35f,
+            ImColor.rgba(60, 60, 60, 255),
+            0f
         )
-
         iconFam[32].use {
             drawList.addText(
-                it, 32f, position.x + 15f, position.y, ImGui.colorConvertFloat4ToU32(1f, 1f, 1f, 1f), icon
+                it, 32f,
+                ImGui.getCursorScreenPosX() + 15f,
+                ImGui.getCursorScreenPosY(),
+                ImColor.rgba(255, 255, 255, 255),
+                icon
             )
         }
 
         boldFam[22].use {
             drawList.addText(
-                it, 22f, position.x + 40f, position.y + 7f, ImGui.colorConvertFloat4ToU32(1f, 1f, 1f, 1f), title
+                it, 22f,
+                ImGui.getCursorScreenPosX() + 40f,
+                ImGui.getCursorScreenPosY() + 7f,
+                ImColor.rgba(255, 255, 255, 255),
+                title
             )
         }
+
+        ImGui.dummy(0f, 25f) // Space after header
     }
 
-    protected open fun renderBackground(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        drawList.addRectFilled(
-            position.x,
-            position.y,
-            position.x + size.x,
-            position.y + size.y,
-            ImGui.colorConvertFloat4ToU32(0.2f, 0.2f, 0.2f, 1f)
-        )
-    }
 
-    protected fun renderFooter(drawList: ImDrawList, position: Vector2f, size: Vector2f) {
-        val footerHeight = 50f
-        val footerY = ImGui.getCursorScreenPos().y + 5f
-
-        drawList.addRectFilled(
-            position.x,
-            footerY,
-            position.x + size.x,
-            position.y + size.y + 5f,
-            ImColor.rgba(30, 30, 30, 255),
-            10f
-        )
-        //Creats a new window for the footer
-        val sizee = Vector2f(size.x, footerHeight)
-        ImGui.setNextWindowPos(position.x, footerY)
-        ImGui.setNextWindowSize(sizee.x, sizee.y)
-        ImGui.beginChild("##footer_$title", sizee.x, sizee.y, false, ImGuiWindowFlags.NoScrollbar)
-        renderFooterContent(
-            drawList,
-            Vector2f(position.x + 15f, footerY + 5f),
-            Vector2f(size.x - 30f, footerHeight - 10f)
-        )
-        ImGui.endChild()
-    }
-
+    protected abstract fun renderBody(drawList: ImDrawList, position: Vector2f, size: Vector2f)
     protected open fun renderFooterContent(drawList: ImDrawList, position: Vector2f, size: Vector2f) = Unit
-    private fun isMouseOverTitleBar(): Boolean {
-        val titleBarHeight = 30f
-        return isMouseOver(position, panelWidth, titleBarHeight)
-    }
 
     protected fun isMouseOver(pos: Vector2f, width: Float, height: Float): Boolean {
         val mousePos = ImGui.getMousePos()
@@ -163,9 +152,4 @@ abstract class Panel(val title: String, val icon: String) {
                 mousePos.y >= pos.y && mousePos.y <= pos.y + height
     }
 
-    open fun renderPost(gfx: GuiGraphics, scaledPos: Vector3f, scaledSize: Vector3f) = Unit
-
-    fun updatePosition(newPosition: Vector2f) {
-        position = newPosition
-    }
 }

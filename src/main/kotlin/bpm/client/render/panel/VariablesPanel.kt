@@ -31,10 +31,6 @@ import org.joml.Vector4i
 
 object VariablesPanel : Panel("Variables", "\uf1ec") {
 
-    init{
-        position.x = 200f
-        position.y = 200f
-    }
     private val canvasContext by lazy { Client.installed<CanvasContext>() }
     private val workspace get() = ClientRuntime.workspace ?: error("Workspace not available")
 
@@ -180,7 +176,7 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
                 it,
                 28f,
                 position.x + 12f,
-                searchBarY ,
+                searchBarY,
                 ImColor.rgba(150, 150, 150, 255),
                 FontAwesome.MagnifyingGlass
             )
@@ -442,8 +438,8 @@ object VariablesPanel : Panel("Variables", "\uf1ec") {
     private fun getNode(type: NodeType): Node? {
         val library = listener<Schemas>(Endpoint.Side.CLIENT).library
         val type = when (type) {
-            GetVariable -> library["Variables/Get Variable"]
-            SetVariable -> library["Variables/Set Variable"]
+            GetVariable -> library["Variable/Get"]
+            SetVariable -> library["Variable/Set"]
         }
         if (type == null) {
             logger.error("Node type not found in library")

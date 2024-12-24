@@ -850,7 +850,7 @@ object CustomActionMenu {
         val startY = menuPosition.y + 50f
         val endY = menuPosition.y + menuHeight - 10f
         val filteredNodeTypes = nodeLibrary.filter {
-            it.nodeTypeName.contains(searchText, ignoreCase = true)
+            it.nodeTypeName.replace(" ", "").contains(searchText, ignoreCase = true)
         }
 
         var yOffset = startY - scrollPosition
@@ -1056,17 +1056,22 @@ object CustomActionMenu {
         // Adjust menu position to fit within window
         val windowSize = ImVec2()
         ImGui.getWindowSize(windowSize)
+        val windowPos = ImGui.getWindowPos()
 
         // Check if menu would go off the right side of the screen
-        if (position.x + menuWidth > windowSize.x) {
-            menuPosition.x = windowSize.x - menuWidth
+        if (position.x + menuWidth > windowPos.x + windowSize.x) {
+            menuPosition.x = windowPos.x + windowSize.x - menuWidth
+        } else if (position.x < windowPos.x) {
+            menuPosition.x = windowPos.x
         } else {
             menuPosition.x = position.x
         }
 
         // Check if menu would go off the bottom of the screen
-        if (position.y + menuHeight > windowSize.y) {
-            menuPosition.y = windowSize.y - menuHeight
+        if (position.y + menuHeight > windowPos.y + windowSize.y) {
+            menuPosition.y = windowPos.y + windowSize.y - menuHeight
+        } else if (position.y < windowPos.y) {
+            menuPosition.y = windowPos.y
         } else {
             menuPosition.y = position.y
         }

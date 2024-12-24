@@ -186,7 +186,7 @@ object ClientRuntime : Listener {
         if (!running) return
 
         if (canvasWindow != null) {
-            canvasWindow?.render(this.canvasWindow?.graphics!!, graphics)
+            canvasWindow?.process(graphics)
         }
 
     }
