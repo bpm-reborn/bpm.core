@@ -970,8 +970,8 @@ class CanvasGraphics(
         // Check if the mouse is over the edge
 
         if (isPointOverRect(Vector2f(mousePos.x, mousePos.y), textBounds)) {
-            drawTooltip(
-                FontAwesome.CircleInfo, "${edge.type} - ${edge.description}"
+            renderTooltip(
+               "${edge.type}\n${edge.description}"
             )
             /*}
             if (context.isPointOverEdge(Vector2f(mousePos.x, mousePos.y), pos)) {*/

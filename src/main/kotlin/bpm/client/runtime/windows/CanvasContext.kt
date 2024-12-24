@@ -1277,7 +1277,9 @@ class CanvasContext : Listener {
         if (sourceEdge.uid == targetEdge.uid) return false
 
         // Prevent connecting edges of the same direction (input to input or output to output)
-        if (sourceEdge.direction == targetEdge.direction) return false
+        if (sourceEdge.direction == targetEdge.direction &&
+            workspace.graph.getFunction(sourceEdge.owner) == null && workspace.graph.getFunction(targetEdge.owner) == null
+        ) return false
 
         // If either is "any" type and both are not exec, it's valid
         if (sourceEdge.type == "any" && targetEdge.type != "exec" || targetEdge.type == "any" && sourceEdge.type != "exec") {

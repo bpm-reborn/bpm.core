@@ -368,7 +368,9 @@ object CustomActionMenu {
 //            drawList.popClipRect()
 //        }
 //    }
-    private var searchInputState = TextInputState()
+    private var searchInputState = TextInputState(
+        isFocused = true
+    )
     private fun renderSearchBar(drawList: ImDrawList) {
         val searchBarHeight = 30f
         drawList.addRectFilled(

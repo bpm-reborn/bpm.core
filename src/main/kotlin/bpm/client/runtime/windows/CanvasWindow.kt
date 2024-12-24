@@ -355,7 +355,7 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
     }
 
     private fun handleContextMenu() {
-        if (ImGui.isMouseClicked(ImGuiMouseButton.Right) && !initialOpen) {
+        if (ImGui.isMouseClicked(ImGuiMouseButton.Right) && !initialOpen && !ImGui.getIO().keyShift) {
             val mousePos = ImGui.getMousePos()
             val selectedNodes = context.selectedNodes.ifEmpty { findNodesUnderMouse(mousePos) }.toSet()
             val selectedLinks = context.selectedLinks.ifEmpty { findLinksUnderMouse(mousePos) }.toSet()
@@ -458,7 +458,19 @@ class CanvasWindow(private val runtime: ClientRuntime) : IRender {
         // Pan (we use a zero mouse threshold when there's no context menu)
         // You may decide to make that threshold dynamic based on whether the mouse is hovering something etc.
         val mouseThresholdForPan = -1.0f
-        if (isActive && ImGui.isMouseDragging(ImGuiMouseButton.Middle, mouseThresholdForPan)) {
+
+        // Check for middle mouse button panning
+        val isMiddleMousePanning = isActive && ImGui.isMouseDragging(ImGuiMouseButton.Middle, mouseThresholdForPan)
+
+        // Check for Shift + Right click panning
+        val isShiftRightClickPanning = isActive && ImGui.isMouseDragging(
+            ImGuiMouseButton.Right,
+            mouseThresholdForPan
+        ) &&
+                ImGui.getIO().keyShift
+
+        // Apply panning if either method is active
+        if (isMiddleMousePanning || isShiftRightClickPanning) {
             position.x += io.getMouseDelta().x
             position.y += io.getMouseDelta().y
         }
