@@ -1,0 +1,56 @@
+{
+  "variants": {
+    "facing=south,on=true": {
+      "model": "bpm:block/redstone_receiver_on",
+      "x": 90
+    },
+    "facing=south,on=false": {
+      "model": "bpm:block/redstone_receiver_off",
+      "x": 90
+    },
+    "facing=north,on=true": {
+      "model": "bpm:block/redstone_receiver_on",
+      "x": 90,
+      "y": 180
+    },
+    "facing=north,on=false": {
+      "model": "bpm:block/redstone_receiver_off",
+      "x": 90,
+      "y": 180
+    },
+    "facing=west,on=true": {
+      "model": "bpm:block/redstone_receiver_on",
+      "x": 90,
+      "y": 90
+    },
+    "facing=west,on=false": {
+      "model": "bpm:block/redstone_receiver_off",
+      "x": 90,
+      "y": 90
+    },
+    "facing=east,on=true": {
+      "model": "bpm:block/redstone_receiver_on",
+      "x": 90,
+      "y": 270
+    },
+    "facing=east,on=false": {
+      "model": "bpm:block/redstone_receiver_off",
+      "x": 90,
+      "y": 270
+    },
+    "facing=down,on=true": {
+      "model": "bpm:block/redstone_receiver_on"
+    },
+    "facing=down,on=false": {
+      "model": "bpm:block/redstone_receiver_off"
+    },
+    "facing=up,on=true": {
+      "model": "bpm:block/redstone_receiver_on",
+      "x": 180
+    },
+    "facing=up,on=false": {
+      "model": "bpm:block/redstone_receiver_off",
+      "x": 180
+    }
+  }
+}

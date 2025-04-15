@@ -2,6 +2,8 @@ package bpm.common.network
 
 import bpm.common.logging.KotlinLogging
 import bpm.common.packets.Packet
+import bpm.common.packets.internal.ConnectRequest
+import bpm.common.packets.internal.ConnectResponsePacket
 import bpm.common.packets.internal.Time
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -89,9 +91,12 @@ class Worker(
     private fun tick(delta: Float, tick: Int) {
         while (packets.isNotEmpty()) {
             val packet = packets.poll()
+            if (packet.packet is ConnectRequest && isServer)
+                endpoint[packet.connection]?.let { endpoint.connected(it) }
+            if (packet.packet is ConnectResponsePacket && isClient)
+                endpoint[packet.connection]?.let { endpoint.connected(it) }
             process(packet.packet, packet.connection)
         }
-        //Only tick if connected and the endpoint is a client
         endpoint.tellListeners { onTick(delta, tick) }
     }
 

@@ -281,7 +281,6 @@ class CanvasContext : Listener {
         val outputCount = workspace.graph.getEdges(node).count { it.direction == "output" }
         val edgeCount = maxOf(inputCount, outputCount)
         val minHeight = (edgeCount) * 20f * zoom
-
         nodeSize.y = minHeight
 //
         return Vector4f(

@@ -103,7 +103,7 @@ class EnderLinkProjectile : Projectile {
                 val controller = level().getBlockEntity(pos) as? EnderControllerTileEntity
                 if (controller != null) {
                     val worldPos = WorldPos(level().dimension(), hitPos, hitDirection)
-                    EnderNet.addLink(controllerUUID!!, worldPos)
+                    EnderNet.server.addLink(controllerUUID!!, worldPos)
                 }
             }
         }

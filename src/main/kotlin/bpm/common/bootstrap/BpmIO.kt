@@ -6,6 +6,8 @@ import bpm.common.property.cast
 import bpm.common.property.value
 import bpm.common.serial.Serial
 import bpm.common.upstream.GitLoader
+import bpm.common.utils.className
+import bpm.common.utils.simpleClassName
 import bpm.common.workspace.Workspace
 import bpm.mc.links.EnderNetState
 import bpm.pipe.PipeNetManagerState
@@ -19,6 +21,8 @@ import org.eclipse.jgit.merge.MergeStrategy
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
+import kotlin.reflect.KClass
+import kotlin.reflect.full.primaryConstructor
 
 object BpmIO {
 
@@ -91,6 +95,26 @@ object BpmIO {
         val filePath = worldDataPath.resolve(levelFileName)
         Serial.write(filePath, state)
     }
+
+    fun write(level: ServerLevel, instance: Any) {
+        val levelFileName = "bpm.${level.name}.${instance.simpleClassName}.dat"
+        val filePath = worldDataPath.resolve(levelFileName)
+        try {
+            Serial.write(filePath, instance)
+        } catch (e: Exception) {
+            logger.error(e) { "Failed to write $instance to $filePath" }
+        }
+
+    }
+
+    fun <T : Any> read(level: ServerLevel, instanceClass: KClass<T>): T? {
+        val levelFileName = "bpm.${level.name}.${instanceClass.simpleClassName}.dat"
+        val filePath = worldDataPath.resolve(levelFileName)
+        if (!Files.exists(filePath)) return null
+        return Serial.read(instanceClass, filePath)
+    }
+
+    inline fun <reified T : Any> read(level: ServerLevel): T? = read(level, T::class)
 
     fun loadEnderNetState(level: ServerLevel): EnderNetState? {
         val levelFileName = "bpm.${level.name}.dat"
@@ -242,6 +266,15 @@ object BpmIO {
         } catch (e: GitAPIException) {
             logger.error(e) { "Failed to update repository" }
         }
+    }
+
+    fun worldDataPathFor(level: ServerLevel, fileName: String): Path {
+        val fileNameWithExtension = if (fileName.endsWith(".dat")) fileName else "$fileName.dat"
+        val folder = worldDataPath.resolve(level.name)
+        if (!Files.exists(folder)) Files.createDirectories(folder)
+        val filePath = folder.resolve(fileNameWithExtension)
+        if (!Files.exists(filePath)) Files.createFile(filePath)
+        return filePath
     }
 
 

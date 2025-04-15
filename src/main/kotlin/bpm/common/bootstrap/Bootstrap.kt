@@ -5,7 +5,6 @@ import bpm.Bpm.LOGGER
 import bpm.client.docs.Docs
 import bpm.client.render.inventory.BlockCache
 import bpm.client.render.world.EnderLinkProjectileRenderer
-import bpm.client.render.world.QuantumRenderer
 import bpm.client.render.world.SharedQuantumRenderer
 import bpm.client.render.world.SharedQuantumRenderer.shader
 import bpm.mc.visual.ClientGui
@@ -22,10 +21,7 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent
 import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.windows.CanvasContext
 import bpm.common.logging.KotlinLogging
-import bpm.common.network.Client
-import bpm.common.network.Endpoint
-import bpm.common.network.Network
-import bpm.common.network.Server
+import bpm.common.network.*
 import bpm.common.packets.Packet
 import bpm.common.upstream.Schemas
 import bpm.common.serial.Serialize
@@ -35,6 +31,7 @@ import bpm.mc.model.EnderLinkModel
 import bpm.mc.registries.ModEntities
 import bpm.mc.registries.ModItemRenderers
 import bpm.mc.registries.ModItems
+import bpm.mc.selection.SelectionManager
 import bpm.mc.visual.CustomBackgroundRenderer
 import bpm.mc.visual.ProxyScreen
 import bpm.pipe.PipeNetwork
@@ -48,10 +45,6 @@ import net.minecraft.client.renderer.RenderType
 import net.minecraft.client.renderer.ShaderInstance
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.server.level.ServerLevel
-import net.minecraft.server.packs.resources.PreparableReloadListener
-import net.minecraft.server.packs.resources.ResourceManager
-import net.minecraft.util.profiling.ProfilerFiller
-import net.neoforged.fml.ModWorkManager
 import net.neoforged.neoforge.client.event.*
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent
 import net.neoforged.neoforge.event.AddReloadListenerEvent
@@ -61,7 +54,6 @@ import thedarkcolour.kotlinforforge.neoforge.forge.FORGE_BUS
 import thedarkcolour.kotlinforforge.neoforge.forge.runForDist
 import java.io.IOException
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executor
 import kotlin.reflect.KClass
 import kotlin.reflect.full.createInstance
 
@@ -190,6 +182,7 @@ class Bootstrap(
     private fun renderOverlay2DPre(event: RenderGuiEvent.Pre) {
         ClientGui.renderPre(event.guiGraphics)
     }
+
     @OnlyIn(Dist.CLIENT)
     private fun renderOverlay2DPost(event: RenderGuiEvent.Post) {
         ClientGui.renderPost(event.guiGraphics)
@@ -229,7 +222,8 @@ class Bootstrap(
             .install<Docs>()
             .install<CanvasContext>()
             .install<PipeNetwork.ProxyManagerClient>()
-            .install<EnderNet>()
+            .install<EnderNet>(Endpoint.Side.CLIENT)
+            .install<SelectionManager>(Endpoint.Side.CLIENT)
             .install<ProxyScreen>()
             .install<ClientGui>()
     }
@@ -266,6 +260,7 @@ class Bootstrap(
             SharedQuantumRenderer.shader = shader
         }
     }
+
     @OnlyIn(Dist.CLIENT)
     private fun registerClientExtensions(event: RegisterClientExtensionsEvent) {
         event.registerItem(ModItemRenderers.QuantumSphereRenderer, ModItems.ENDER_LINK)
@@ -304,22 +299,26 @@ class Bootstrap(
         Server
             .install<ServerRuntime>()
             .install<Schemas>(BpmIO.schemasPath, Endpoint.Side.SERVER)
-            .install<PipeNetwork.ProxyManagerServer>()
+            .install<SelectionManager>(Endpoint.Side.SERVER)
+            .install<EnderNet>(Endpoint.Side.SERVER)
             .start()
     }
 
     private fun onLevelSave(event: net.neoforged.neoforge.event.level.LevelEvent.Save) {
         val level = event.level
         if (level !is ServerLevel) return
-        PipeNetwork.save(level)
-        EnderNet.save(level)
+//        PipeNetwork.save(level)
+        EnderNet.server.save(level)
+        SelectionManager.server.save(level)
     }
 
     private fun onLevelLoad(event: net.neoforged.neoforge.event.level.LevelEvent.Load) {
         val level = event.level
-        if (level !is ServerLevel) return
-        PipeNetwork.load(level)
-        EnderNet.load(level)
+        if (level !is ServerLevel) {
+            return
+        }
+        EnderNet.server.load(level)
+        SelectionManager.server.load(level)
     }
 
 
@@ -337,6 +336,7 @@ class Bootstrap(
         }
         throw IllegalStateException("Class $clazz is not a ModRegistry")
     }
+
 
     private fun collectLuaBuiltIns() {
         ourResults.classesImplementing<LuaBuiltin>().forEach {

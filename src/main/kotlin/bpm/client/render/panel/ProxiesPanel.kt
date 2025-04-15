@@ -30,6 +30,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
     private val titleFont = Fonts.getFamily("Inter")["Bold"]
     private val bodyFont = Fonts.getFamily("Inter")["Light"]
     private var draggedProxy: WorldPos? = null
+
     // Colors for gradients and accents
     private val gradientTopColor = ImColor.rgba(60, 60, 65, 255)      // Dark gray
     private val gradientBottomColor = ImColor.rgba(45, 45, 50, 255)   // Slightly darker gray
@@ -42,7 +43,7 @@ object ProxiesPanel : Panel("Proxies", FontAwesome.Reply) {
         drawList: ImDrawList, position: Vector2f, size: Vector2f
     ) {
 
-        EnderNet.getLinks(ClientRuntime.workspaceUUID).forEach {
+        EnderNet.client.getLinks(ClientRuntime.workspaceUUID).forEach {
             ImGui.dummy(0f, 10f) // Add some space between proxy states
             renderProxyState(drawList, it, position, size)
         }

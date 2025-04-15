@@ -5,6 +5,7 @@ import bpm.common.bootstrap.ModRegistry
 import bpm.mc.item.EnderBookItem
 import bpm.mc.item.EnderControllerItem
 import bpm.mc.item.QuantumEntanglementItem
+import bpm.mc.item.RedstoneReceiverItem
 import net.minecraft.world.item.BlockItem
 import net.minecraft.world.item.Item
 import net.neoforged.neoforge.registries.DeferredRegister
@@ -14,7 +15,7 @@ object ModItems : ModRegistry<Item> {
     override val registry = DeferredRegister.createItems(Bpm.ID)
 
     val ENDER_CONTROLLER by register {
-        registry.registerItem("ender_pipe_controller") {
+        registry.registerItem("controller") {
             EnderControllerItem()
         }
     }
@@ -22,6 +23,12 @@ object ModItems : ModRegistry<Item> {
     val ENDER_PROXY by register {
         registry.registerItem("ender_pipe_proxy") {
             BlockItem(ModBlocks.ENDER_PROXY, Item.Properties())
+        }
+    }
+
+    val RECIEVER by register {
+        registry.registerItem("redstone_receiver") {
+            RedstoneReceiverItem()
         }
     }
 

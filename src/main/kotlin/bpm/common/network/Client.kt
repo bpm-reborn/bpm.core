@@ -13,7 +13,7 @@ import java.util.*
 object Client : Endpoint<Client>() {
 
     // Gets the current player's UUID
-     val uuid by lazy { Minecraft.getInstance().player?.uuid ?: error("Player UUID not available") }
+    val uuid by lazy { Minecraft.getInstance().player?.uuid ?: error("Player UUID not available") }
 
 
     private val logger = KotlinLogging.logger {}
@@ -35,9 +35,7 @@ object Client : Endpoint<Client>() {
         private set
 
     override fun connected(id: Connection) {
-        send(new<ConnectRequest> {
-            this.uuid = this@Client.uuid
-        })
+
     }
 
     fun connect(): Client {
@@ -66,7 +64,7 @@ object Client : Endpoint<Client>() {
 
 
     internal fun disconnect() {
-        if(!connected) return
+        if (!connected) return
         send(new<DisconnectPacket> {
             this.uuid = this@Client.uuid
         })
@@ -95,6 +93,7 @@ object Client : Endpoint<Client>() {
         MinecraftNetworkAdapter.sendPacket(packet, ServerTarget)
 //        logger.info { "Sent packet of type ${packet::class.simpleName} with id ${packet.id}" }
     }
+
     /**
      * Sends the given packet to all connected endpoints.
      */
@@ -109,7 +108,7 @@ object Client : Endpoint<Client>() {
      * Retrieves the current connection.
      */
     override fun get(connectionID: UUID): Connection? {
-        return null
+        return Connection(connectionID, Side.CLIENT)
     }
 
 }

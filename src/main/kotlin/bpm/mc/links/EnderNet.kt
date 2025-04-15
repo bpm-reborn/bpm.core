@@ -2,6 +2,8 @@ package bpm.mc.links
 
 import bpm.common.bootstrap.BpmIO
 import bpm.common.logging.KotlinLogging
+import bpm.common.network.Client
+import bpm.common.network.Endpoint
 import bpm.common.network.Listener
 import bpm.common.network.Server
 import bpm.common.packets.Packet
@@ -13,10 +15,11 @@ import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.Level
 import java.util.UUID
 
-object EnderNet : Listener {
+class EnderNet(private val side: Endpoint.Side) : Listener {
 
     private val logger = KotlinLogging.logger {}
-    private var state = EnderNetState()
+    var state = EnderNetState()
+        private set
 
     fun load(level: ServerLevel) {
         state = BpmIO.loadEnderNetState(level) ?: EnderNetState()
@@ -66,10 +69,6 @@ object EnderNet : Listener {
     fun getControllerUUID(level: Level, pos: BlockPos): UUID? {
         val worldPos = WorldPos(level.dimension(), pos)
         return state.controllerLookups[worldPos]
-    }
-
-    fun getState(): EnderNetState {
-        return state
     }
 
     fun updateControllerPosition(uuid: UUID, newLevel: Level, newPos: BlockPos) {
@@ -145,6 +144,11 @@ object EnderNet : Listener {
                 logger.info { "Received load packet $packet" }
             }
         }
+    }
+
+    companion object {
+        val client: EnderNet by lazy { Client.installed() }
+        val server: EnderNet by lazy { Server.installed() }
     }
 
 }

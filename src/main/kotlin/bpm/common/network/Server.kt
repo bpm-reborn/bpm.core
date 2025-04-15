@@ -97,6 +97,7 @@ object Server : Endpoint<Server>() {
         }
     }
 
+
     private fun targetOf(uuid: UUID): PacketTarget? {
         return cachedClientPlayers.computeIfAbsent(uuid) {
             val player = server.playerList.getPlayer(uuid)
@@ -115,8 +116,9 @@ object Server : Endpoint<Server>() {
      * @return The Connection object associated with the given connection ID, or null if no such connection exists.
      */
     override fun get(connectionID: UUID): Connection? {
-        return clients[connectionID]
+        return Connection(connectionID, Side.SERVER)
     }
+
     /**
      * Disconnects the specified user by their ID.
      *

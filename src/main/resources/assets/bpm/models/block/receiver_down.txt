@@ -1,0 +1,19 @@
+public VoxelShape makeShape(){
+	VoxelShape shape = Shapes.empty();
+	shape = Shapes.join(shape, Shapes.box(0.71875, 0.25, 0.25, 0.75, 0.59375, 0.28125), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.25, 0.25, 0.25, 0.28125, 0.59375, 0.28125), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.28125, 0.59375, 0.25, 0.71875, 0.625, 0.28125), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.28125, 0.59375, 0.71875, 0.71875, 0.625, 0.75), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.25, 0.59375, 0.25, 0.28125, 0.625, 0.75), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.71875, 0.59375, 0.25, 0.75, 0.625, 0.75), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.71875, 0.59375, 0.25, 0.75, 0.625, 0.75), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.25, 0.25, 0.71875, 0.28125, 0.59375, 0.75), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.71875, 0.25, 0.71875, 0.75, 0.59375, 0.75), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.28125, 0.25, 0.28125, 0.71875, 0.625, 0.71875), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.390625, 0.25, 0.5, 0.609375, 0.5625, 0.5), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.5, 0.25, 0.390625, 0.5, 0.5625, 0.609375), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.0625, 0.0625, 0.0625, 0.9375, 0.25, 0.9375), BooleanOp.OR);
+	shape = Shapes.join(shape, Shapes.box(0.121875, -0.065625, 0.121875, 0.878125, 0.065625, 0.878125), BooleanOp.OR);
+
+	return shape;
+}

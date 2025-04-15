@@ -5,6 +5,7 @@ import bpm.common.bootstrap.ModRegistry
 import bpm.mc.block.EnderControllerBlock
 import bpm.mc.block.EnderPipeBlock
 import bpm.mc.block.EnderProxyBlock
+import bpm.mc.block.RedstoneReceiverBlock
 import net.minecraft.world.level.block.Block
 import net.minecraft.world.level.block.SoundType
 import net.minecraft.world.level.block.state.BlockBehaviour
@@ -18,7 +19,7 @@ object ModBlocks : ModRegistry<Block> {
 
     val ENDER_CONTROLLER by register {
         registry.registerBlock(
-            "ender_pipe_controller",
+            "controller",
             {
                 EnderControllerBlock(
                     BlockBehaviour.Properties.of().strength(2.0f).sound(SoundType.AMETHYST_CLUSTER)
@@ -46,6 +47,17 @@ object ModBlocks : ModRegistry<Block> {
             "ender_pipe",
             {
                 EnderPipeBlock(BlockBehaviour.Properties.of())
+            },
+            BlockBehaviour.Properties.of().strength(3.0f).sound(SoundType.AMETHYST_CLUSTER)
+                .requiresCorrectToolForDrops()
+        )
+    }
+
+    val REDSTONE_RECEIVER by register {
+        registry.registerBlock(
+            "redstone_receiver",
+            {
+                RedstoneReceiverBlock(BlockBehaviour.Properties.of())
             },
             BlockBehaviour.Properties.of().strength(3.0f).sound(SoundType.AMETHYST_CLUSTER)
                 .requiresCorrectToolForDrops()

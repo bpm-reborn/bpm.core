@@ -1,6 +1,7 @@
 package bpm.mc.block
 
 import bpm.common.logging.KotlinLogging
+import bpm.common.network.Server
 import bpm.mc.links.EnderNet
 import bpm.pipe.PipeNetwork
 import bpm.server.ServerRuntime
@@ -70,20 +71,20 @@ class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), 
             (level.getBlockEntity(p_49848_) as? EnderControllerTileEntity)?.setUUID(UUID.randomUUID())
             val tile = level.getBlockEntity(p_49848_)
             if (tile is EnderControllerTileEntity) {
-//                val workspace = tile.workspace
-//                if (workspace == null) {
+                val workspace = tile.workspace
+                if (workspace == null) {
 //                    Initialize the uuid
-//                    tile.setUUID(UUID.randomUUID())
-//                    tile.setChanged()
-//                    logger.debug { "Created new workspace for Ender Controller with uid ${tile.getUUID()}" }
-//                } else{
+                    tile.setUUID(UUID.randomUUID())
+                    tile.setChanged()
+                    logger.debug { "Created new workspace for Ender Controller with uid ${tile.getUUID()}" }
+                }
                 ServerRuntime.recompileWorkspace(tile.getUUID())
                 val uuid = tile.getUUID()
                 val playerUUID = (p_49850_ as? Player)?.uuid
                 if (playerUUID != null) {
                     ServerRuntime.openWorkspace(uuid, playerUUID)
                 }
-                EnderNet.addController(tile)
+                EnderNet.server.addController(tile)
 //                }
             }
         }
@@ -94,7 +95,7 @@ class EnderControllerBlock(properties: Properties) : BasePipeBlock(properties), 
         if (!level.isClientSide) {
             val blockEntity = level.getBlockEntity(pos) as? EnderControllerTileEntity
             if (blockEntity != null) {
-                EnderNet.removeController(blockEntity)
+                EnderNet.server.removeController(blockEntity)
                 ServerRuntime.recompileWorkspace(blockEntity.getUUID())
             }
         }
