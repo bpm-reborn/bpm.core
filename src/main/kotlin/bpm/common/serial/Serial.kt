@@ -3,7 +3,7 @@ package bpm.common.serial
 import bpm.common.logging.KotlinLogging
 import bpm.common.memory.*
 import bpm.common.property.PropertySerializer
-import bpm.common.utils.simpleClassName
+import bpm.common.utils.qualifiedShortName
 import bpm.common.utils.toFormattedString
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.WorkspaceSettings
@@ -182,7 +182,7 @@ object Serial {
         WorkspaceSettings.Serializer.register()
         //Register all serializers
 //        for (serializer in serializers) serializer.register()
-        val serializerNames = serializers.map { it.simpleClassName }.toList().toFormattedString()
+        val serializerNames = serializers.map { it.qualifiedShortName }.toList().toFormattedString()
         logger.info { "Registered ${serializers.size} serializers:\n\t$serializerNames" }
         return this
     }

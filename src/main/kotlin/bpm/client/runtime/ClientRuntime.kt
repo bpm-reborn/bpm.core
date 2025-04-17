@@ -1,6 +1,5 @@
 package bpm.client.runtime
 
-import bpm.client.docs.Docs
 import imgui.ImGui
 import imgui.ImGuiIO
 import imgui.flag.ImGuiConfigFlags
@@ -18,6 +17,7 @@ import bpm.common.network.NetUtils
 import bpm.common.network.Network.new
 import bpm.common.packets.Packet
 import bpm.common.packets.internal.ConnectResponsePacket
+import bpm.common.upstream.Docs
 import bpm.common.utils.FontAwesome
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.graph.Node
@@ -63,15 +63,17 @@ object ClientRuntime : Listener {
     private val started = AtomicBoolean(false)
     var canvasWindow: CanvasWindow? = null
         private set
+
     //    private val proxyMap = mutableMapOf<UUID, List<ProxyState>>()
     val workspaceUUID: UUID get() = workspace?.uid ?: NetUtils.DefaultUUID
     internal val logger = KotlinLogging.logger { }
+
     //    val proxies: List<ProxyState> get() = proxyMap[workspaceUUID] ?: emptyList()
     val minecraft: Minecraft get() = Minecraft.getInstance()
     val player: LocalPlayer get() = minecraft.player!!
     val level get() = minecraft.level
 
-    val markdownBrowser by lazy { MarkdownBrowser(client.installed<Docs>()) }
+    val markdownBrowser by lazy { MarkdownBrowser(client.installed()) }
 
     operator fun get(workspaceUid: UUID): Workspace? {
         val cahced = cachedWorkspaces[workspaceUid]
@@ -179,6 +181,7 @@ object ClientRuntime : Listener {
         }
         Keyboard.update()
     }
+
     /**
      * Should be called once per frame to process events from the main thread
      */
@@ -363,6 +366,7 @@ object ClientRuntime : Listener {
         companion object {
 
             private val entries = MouseButton.values().associateBy { it.value }
+
             /**
              * Retrieves the Mouse associated with the given value.
              *
@@ -410,6 +414,7 @@ object ClientRuntime : Listener {
         companion object {
 
             private val entries = values().associateBy { it.value }
+
             /**
              * Retrieves the Key associated with the given value.
              *

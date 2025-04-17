@@ -1,10 +1,10 @@
 package bpm.common.utils
 
+import bpm.common.logging.KotlinLogging
+import bpm.common.utils.Reflection.logger
 import io.github.classgraph.ClassGraph
 import io.github.classgraph.ClassInfoList
 import io.github.classgraph.ScanResult
-import bpm.common.logging.KotlinLogging
-import java.lang.RuntimeException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
 import kotlin.math.min
@@ -54,6 +54,7 @@ object Reflection {
         }
         return emptyList()
     }
+
     /**
      * Returns a list of subclasses of the given type.
      *
@@ -207,19 +208,22 @@ val KClass<*>.abbreviatedName: String
     get() = this.simpleName!!.split("(?=\\p{Upper})".toRegex()).map {
         it.take(min(4, it.length))
     }.joinToString("")
+
+
+
 /**
  * Returns the simple class name of a given Kotlin class.
  *
  * @return The simple class name of the Kotlin class.
  */
-val <T : Any> T.simpleClassName: String
+val <T : Any> T.qualifiedShortName: String
     get() = if (this::class.java.enclosingClass == null) this::class.simpleName!!
     else {
         val enclosing = this::class.java.enclosingClass.kotlin.abbreviatedName
         "${enclosing}.${this::class.simpleName!!}"
     }
 
-val <T : Any> KClass<T>.shortName: String
-    get() = if (this.java.enclosingClass != null) "${this.java.enclosingClass.kotlin.abbreviatedName}.${
-        this.simpleName!!
-    }" else this.simpleName!!
+
+val <T : Any> T.simpleName: String
+    get() = this::class.simpleName ?: throw RuntimeException("Class ${this::class} has no simple name")
+

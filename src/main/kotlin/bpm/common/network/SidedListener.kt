@@ -28,8 +28,20 @@ abstract class SidedListener(protected val side: Side) : Listener {
             inner()
         }
     }
+
     open fun onClientPacket(packet: Packet, from: UUID) = Unit
     open fun onServerPacket(packet: Packet, from: UUID) = Unit
+
+
+    // On server config load
+    open fun onServerLoad() = Unit
+
+    // Called on world unload
+    open fun onServerUnload() = Unit
+
+    // On client config load
+    open fun onClientLoad() = Unit
+
 
 }
 

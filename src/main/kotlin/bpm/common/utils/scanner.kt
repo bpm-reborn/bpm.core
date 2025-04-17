@@ -6,7 +6,10 @@ import java.io.File
 import java.io.IOException
 import java.net.URI
 import java.net.URL
-import java.nio.file.*
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
 import java.util.jar.JarFile
 import kotlin.reflect.KClass
@@ -83,6 +86,7 @@ class ClassResourceScanner private constructor(private val builder: Builder) {
             return scanner.performScan()
         }
     }
+
     private var isProduction = true
 
     private fun performScan(): ScanResults {
@@ -112,7 +116,8 @@ class ClassResourceScanner private constructor(private val builder: Builder) {
         logger.info { "Scan completed, got ${resourceIndex.size} resources and ${classIndex.size} classes" }
         val endTime = System.currentTimeMillis()
         val timeTaken = endTime - startTime
-        var results = ScanResults(builder.classLoader ?: ClassLoader.getSystemClassLoader(),
+        var results = ScanResults(
+            builder.classLoader ?: ClassLoader.getSystemClassLoader(),
             resourceIndex.values.toList(),
             classIndex.values.map {
                 ClassInfo(
@@ -345,6 +350,7 @@ class ClassResourceScanner private constructor(private val builder: Builder) {
         fun create() = Builder()
     }
 }
+
 // Extension properties for easy access
 val ClassResourceScanner.ScanResults.fromClasses get() = QueryBuilder(this, this.classes)
 
@@ -510,6 +516,17 @@ fun ClassResourceScanner.ScanResults.fromPackages(vararg packageNames: String): 
     )
 }
 
+fun ClassResourceScanner.ScanResults.excludePackages(vararg packageNames: String): ClassResourceScanner.ScanResults {
+    return ClassResourceScanner.ScanResults(
+        classLoader,
+        resources,
+        classes.filterNot { classInfo ->
+            packageNames.any { classInfo.packageName.startsWith(it) }
+        },
+        timeTaken
+    )
+}
+
 data class Resource(val resourceInfo: ClassResourceScanner.ResourceInfo, val content: ByteArray)
 
 fun ClassResourceScanner.ScanResults.readResourcesToByteArrayMap(): Map<String, Resource> {
@@ -519,7 +536,7 @@ fun ClassResourceScanner.ScanResults.readResourcesToByteArrayMap(): Map<String, 
             val resourceContent = classLoader.getResourceAsStream(resourceInfo.path)?.use { it.readBytes() }
 
             if (resourceContent != null) {
-                resourceName to Resource( resourceInfo, resourceContent)
+                resourceName to Resource(resourceInfo, resourceContent)
             } else {
                 logger.warn { "Failed to read resource: ${resourceInfo.path}" }
                 null

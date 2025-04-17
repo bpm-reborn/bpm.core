@@ -1,13 +1,11 @@
 package bpm.common.bootstrap
 
+import bpm.common.bootstrap.BpmIO.name
 import bpm.common.logging.KotlinLogging
 import bpm.common.property.Property
-import bpm.common.property.cast
 import bpm.common.property.value
 import bpm.common.serial.Serial
-import bpm.common.upstream.GitLoader
-import bpm.common.utils.className
-import bpm.common.utils.simpleClassName
+import bpm.common.utils.qualifiedShortName
 import bpm.common.workspace.Workspace
 import bpm.mc.links.EnderNetState
 import bpm.pipe.PipeNetManagerState
@@ -18,11 +16,11 @@ import org.eclipse.jgit.api.MergeCommand
 import org.eclipse.jgit.api.ResetCommand
 import org.eclipse.jgit.api.errors.GitAPIException
 import org.eclipse.jgit.merge.MergeStrategy
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.UUID
+import java.util.*
 import kotlin.reflect.KClass
-import kotlin.reflect.full.primaryConstructor
 
 object BpmIO {
 
@@ -91,13 +89,15 @@ object BpmIO {
     }
 
     fun saveEnderNetState(level: ServerLevel, state: EnderNetState) {
+        val file: File = level.getDataStorage().dataFolder
+        logger.info(file.path)
         val levelFileName = "bpm.${level.name}.dat"
         val filePath = worldDataPath.resolve(levelFileName)
         Serial.write(filePath, state)
     }
 
     fun write(level: ServerLevel, instance: Any) {
-        val levelFileName = "bpm.${level.name}.${instance.simpleClassName}.dat"
+        val levelFileName = "bpm.${level.name}.${instance.qualifiedShortName}.dat"
         val filePath = worldDataPath.resolve(levelFileName)
         try {
             Serial.write(filePath, instance)
@@ -108,7 +108,7 @@ object BpmIO {
     }
 
     fun <T : Any> read(level: ServerLevel, instanceClass: KClass<T>): T? {
-        val levelFileName = "bpm.${level.name}.${instanceClass.simpleClassName}.dat"
+        val levelFileName = "bpm.${level.name}.${instanceClass.qualifiedShortName}.dat"
         val filePath = worldDataPath.resolve(levelFileName)
         if (!Files.exists(filePath)) return null
         return Serial.read(instanceClass, filePath)
@@ -256,7 +256,6 @@ object BpmIO {
                         .setRef("origin/$branchOrTag").call()
                     logger.info { "Repository force updated to origin/$branchOrTag" }
                 }
-
                 // Inform about stashed changes
                 val stashList = git.stashList().call()
                 if (stashList.isNotEmpty()) {
@@ -279,6 +278,5 @@ object BpmIO {
 
 
     private val ServerLevel.name: String
-        get() = this.toString().removePrefix("ServerLevel[").removeSuffix("]")
-
+        get() = this.getDataStorage().dataFolder.toString()
 }

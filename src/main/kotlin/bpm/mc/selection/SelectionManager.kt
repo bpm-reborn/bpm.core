@@ -112,7 +112,6 @@ class SelectionManager(side: Endpoint.Side) : SidedListener(side) {
         }
     }
 
-
     override fun onServerPacket(packet: Packet, from: UUID) {
         // Handle server-side packets similar to client-side
         when (packet) {
@@ -134,7 +133,6 @@ class SelectionManager(side: Endpoint.Side) : SidedListener(side) {
                                 activeSelections!![packet.uuid] = updated
                             }
                         }
-
                         SelectionType.ENTITY -> {
                             if (packet.entityId != null) {
                                 val updated = selection.copy(entityId = packet.entityId)

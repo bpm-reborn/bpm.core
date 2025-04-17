@@ -14,9 +14,10 @@ data class ConnectRequest(var uuid: UUID = NetUtils.DefaultUUID) : Packet {
      * @param buffer The Buffer to be serialized.
      */
     override fun serialize(buffer: Buffer) {
-        if (NetUtils.isDefaultUUID(uuid)) logger.warn { "UUID is null before write" }
+        if (NetUtils.isDefaultUUID(uuid)) logger.warn { "UUID is default, this probably means it's the authority and thats bad" }
         buffer.writeUUID(uuid)
     }
+
     /**
      * Deserializes the given buffer.
      *
@@ -24,7 +25,7 @@ data class ConnectRequest(var uuid: UUID = NetUtils.DefaultUUID) : Packet {
      */
     override fun deserialize(buffer: Buffer) {
         uuid = buffer.readUUID() //This could throw an exception if the uuid isn't set when serializing
-        if (NetUtils.isDefaultUUID(uuid)) logger.warn { "UUID is null after read" }
+        if (NetUtils.isDefaultUUID(uuid)) logger.warn { "UUID is null after read, this probably means it's the authority, which shouldn't happen" }
     }
 
     companion object {

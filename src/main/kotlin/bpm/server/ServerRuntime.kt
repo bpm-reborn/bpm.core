@@ -10,17 +10,10 @@ import bpm.common.network.listener
 import bpm.common.packets.Packet
 import bpm.common.property.Property
 import bpm.common.property.PropertyMap
-import bpm.common.property.cast
-import bpm.common.property.configured
 import bpm.common.upstream.Schemas
-import bpm.common.utils.FontAwesome
 import bpm.common.vm.EvalContext
-import bpm.common.workspace.packets.WorkspaceCreateRequestPacket
-import bpm.common.workspace.packets.WorkspaceCreateResponsePacket
 import bpm.common.workspace.Workspace
 import bpm.common.workspace.WorkspaceSettings
-import bpm.common.workspace.graph.Edge
-import bpm.common.workspace.graph.Function
 import bpm.common.workspace.graph.Node
 import bpm.common.workspace.graph.User
 import bpm.common.workspace.packets.*
@@ -28,7 +21,6 @@ import net.minecraft.resources.ResourceKey
 import net.minecraft.world.level.Level
 import net.neoforged.neoforge.server.ServerLifecycleHooks
 import org.joml.Vector2f
-import org.joml.Vector4i
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
@@ -302,7 +294,6 @@ object ServerRuntime : Listener {
                 sendToUsersInWorkspace(workspace.uid, new<FunctionCreated> {
                     this.function = function
                 })
-
             }
 
             is FunctionResized -> {

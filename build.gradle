@@ -12,6 +12,8 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.serialization' version '2.0.10'
 }
 
+
+
 version = mod_version
 group = mod_group_id
 
@@ -44,9 +46,24 @@ configurations {
 }
 
 
-//minecraft.accessTransformers.file rootProject.file('src/main/resources/META-INF/accesstransformer.cfg')
-//minecraft.accessTransformers.entry public net.minecraft.client.Minecraft textureManager # textureManager
+minecraft.accessTransformers.file rootProject.file('src/main/resources/META-INF/accesstransformer.cfg')
 
+
+
+//add another sourceset for the java source
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java', 'src/main/kotlin']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
+}
+tasks.withType(JavaCompile).configureEach {
+    source += fileTree(dir: "src/main/java", include: "**/*.java")
+}
 // Default run configurations.
 // These can be tweaked, removed, or duplicated as needed.
 runs {
@@ -128,7 +145,6 @@ dependencies {
 
     // Use the latest version of NeoForge
     implementation "net.neoforged:neoforge:${neo_version}"
-
     // Must use the '-neoforge' version on NeoForge. If on regular forge, omit the '-neoforge'
     libraries('org.jetbrains.kotlin:kotlin-stdlib:2.0.10')
     jarJar('org.jetbrains.kotlin:kotlin-stdlib:2.0.10')
@@ -231,6 +247,23 @@ tasks.named('test') {
     }
 }
 
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = "21"
+    }
+
+
+    // Copy Java classes to Kotlin output directory after Kotlin compilation
+    doLast {
+        copy {
+            from "${buildDir}/classes/java/main"
+            into "${buildDir}/classes/kotlin/main"
+            include "**/*.class"
+        }
+    }
+}
+
+
 // Example configuration to allow publishing using the maven-publish plugin
 publishing {
     publications {
@@ -243,6 +276,10 @@ publishing {
             url "file://${project.projectDir}/repo"
         }
     }
+}
+
+jar {
+    from sourceSets.main.output
 }
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.

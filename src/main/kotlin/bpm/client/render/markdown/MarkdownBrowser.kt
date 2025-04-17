@@ -1,16 +1,18 @@
 package bpm.client.render.markdown
 
-import bpm.client.docs.Docs
+import bpm.common.upstream.Docs
 import bpm.client.font.Fonts
 import bpm.common.utils.FontAwesome
 import imgui.*
 import imgui.callback.ImGuiInputTextCallback
 import imgui.flag.*
 import imgui.type.ImString
+import net.neoforged.api.distmarker.Dist
+import net.neoforged.api.distmarker.OnlyIn
 import java.util.*
 
+@OnlyIn(Dist.CLIENT)
 class MarkdownBrowser(private val docs: Docs) {
-
     private var currentFile: String? = null
     private var currentHtml: String? = null
     private val history = LinkedList<String>()

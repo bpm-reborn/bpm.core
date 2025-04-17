@@ -2,29 +2,21 @@ package bpm.common.bootstrap
 
 import bpm.Bpm
 import bpm.Bpm.LOGGER
-import bpm.client.docs.Docs
 import bpm.client.render.inventory.BlockCache
 import bpm.client.render.world.EnderLinkProjectileRenderer
 import bpm.client.render.world.SharedQuantumRenderer
 import bpm.client.render.world.SharedQuantumRenderer.shader
-import bpm.mc.visual.ClientGui
-import bpm.mc.visual.Overlay3D
-import bpm.network.MinecraftNetworkAdapter
-import net.minecraft.client.Minecraft
-import net.neoforged.api.distmarker.Dist
-import net.neoforged.api.distmarker.OnlyIn
-import net.neoforged.bus.api.IEventBus
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent
-import net.neoforged.fml.loading.FMLPaths
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent
 import bpm.client.runtime.ClientRuntime
 import bpm.client.runtime.windows.CanvasContext
 import bpm.common.logging.KotlinLogging
-import bpm.common.network.*
+import bpm.common.network.Client
+import bpm.common.network.Endpoint
+import bpm.common.network.Network
+import bpm.common.network.Server
 import bpm.common.packets.Packet
-import bpm.common.upstream.Schemas
 import bpm.common.serial.Serialize
+import bpm.common.upstream.Docs
+import bpm.common.upstream.Schemas
 import bpm.common.utils.*
 import bpm.mc.links.EnderNet
 import bpm.mc.model.EnderLinkModel
@@ -32,23 +24,34 @@ import bpm.mc.registries.ModEntities
 import bpm.mc.registries.ModItemRenderers
 import bpm.mc.registries.ModItems
 import bpm.mc.selection.SelectionManager
+import bpm.mc.visual.ClientGui
 import bpm.mc.visual.CustomBackgroundRenderer
+import bpm.mc.visual.Overlay3D
 import bpm.mc.visual.ProxyScreen
+import bpm.network.MinecraftNetworkAdapter
 import bpm.pipe.PipeNetwork
-import bpm.server.lua.LuaBuiltin
 import bpm.server.ServerRuntime
+import bpm.server.lua.LuaBuiltin
 import bpm.server.lua.LuaEventExecutor
 import com.mojang.blaze3d.vertex.DefaultVertexFormat
 import com.mojang.blaze3d.vertex.VertexFormat
+import net.minecraft.client.Minecraft
 import net.minecraft.client.renderer.RenderStateShard
 import net.minecraft.client.renderer.RenderType
 import net.minecraft.client.renderer.ShaderInstance
 import net.minecraft.resources.ResourceLocation
 import net.minecraft.server.level.ServerLevel
+import net.neoforged.api.distmarker.Dist
+import net.neoforged.api.distmarker.OnlyIn
+import net.neoforged.bus.api.IEventBus
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent
+import net.neoforged.fml.loading.FMLPaths
 import net.neoforged.neoforge.client.event.*
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent
 import net.neoforged.neoforge.event.AddReloadListenerEvent
 import net.neoforged.neoforge.event.tick.ServerTickEvent
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent
 import org.apache.logging.log4j.Level
 import thedarkcolour.kotlinforforge.neoforge.forge.FORGE_BUS
 import thedarkcolour.kotlinforforge.neoforge.forge.runForDist
@@ -66,7 +69,7 @@ class Bootstrap(
     private val packetsList = mutableListOf<KClass<out Packet>>()
     private val serializableList = mutableListOf<KClass<out Serialize<*>>>()
     private val builtIns = mutableListOf<LuaBuiltin>()
-    private val ourResults = results.fromPackages("noderspace", "bpm")
+    private val ourResults = results.fromPackages("noderspace", "bpm").excludePackages("bpm.mixins")
     private val isRunning get() = Client.isRunning()
 
     /**
@@ -342,7 +345,11 @@ class Bootstrap(
         ourResults.classesImplementing<LuaBuiltin>().forEach {
             builtIns.add(it.objectInstance ?: it.createInstance())
         }
-        logger.info("Collected builtins:\n\t(\n\t\t${builtIns.map { it.simpleClassName }.joinToString { "\n" }}\n\t) ")
+        logger.info(
+            "Collected builtins:\n\t(\n\t\t${
+                builtIns.map { it.qualifiedShortName }.joinToString { "\n" }
+            }\n\t) "
+        )
     }
 
     private fun collectRegistries() {
